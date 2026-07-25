@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Tiers</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Tiers</div>
+        <div class="topbar-date" id="sous-titre">Clients & fournisseurs</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company">
+          <div class="company-name"></div>
+          <div class="company-ninea"></div>
+        </div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div class="pos-search" style="width:320px">
+          <i class="ti ti-search" style="font-size:18px"></i>
+          <input id="recherche" type="search" autocomplete="off" placeholder="Rechercher un tiers…">
+        </div>
+        <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-plus"></i>Nouveau tiers</button>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div class="chips" id="chips">
+          <span class="chip active" data-filtre="tous">Tous</span>
+          <span class="chip" data-filtre="client">Clients</span>
+          <span class="chip" data-filtre="fournisseur">Fournisseurs</span>
+        </div>
+        <div style="width:1px;height:22px;background:var(--border)"></div>
+        <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-2)">
+          <span title="Date de création">Créé du</span><input type="date" id="date-du" class="input-date">
+          <span>au</span><input type="date" id="date-au" class="input-date">
+          <button class="btn" id="date-reset" title="Effacer les dates" hidden><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+
+      <!-- Barre d'actions par lot (traitement par lot) -->
+      <div class="bulk-bar" id="bulk-bar" hidden>
+        <span class="bulk-count" id="bulk-count">0 sélectionné</span>
+        <div class="bulk-spacer"></div>
+        <label style="font-size:13px">Changer le rôle :</label>
+        <select id="bulk-role">
+          <option value="client">Client</option>
+          <option value="fournisseur">Fournisseur</option>
+          <option value="les_deux">Les deux</option>
+        </select>
+        <button class="btn" id="bulk-appliquer-role"><i class="ti ti-check"></i>Appliquer</button>
+        <button class="btn" id="bulk-desactiver"><i class="ti ti-trash"></i>Désactiver</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:visible">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" class="chk-tous" id="chk-tous"></th>
+              <th>Code</th><th>Nom</th><th>Rôle</th><th>Téléphone</th>
+              <th class="right">Solde</th><th class="right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="corps">
+            <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section d'aide : explique le comportement de l'écran en langage simple -->
+      <div class="aide">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Un <strong>tiers</strong>, c'est un <strong>client</strong> ou un <strong>fournisseur</strong>. Utilisez les onglets pour n'afficher que ceux qui vous intéressent.</li>
+          <li>Le <strong>solde</strong> indique l'argent en jeu : pour un <strong>client</strong>, ce qu'il vous <strong>doit encore</strong> ; pour un <strong>fournisseur</strong>, ce que vous lui devez. <strong>0</strong> = tout est réglé.</li>
+          <li>Cliquez sur l'icône <i class="ti ti-user-search"></i> <strong>Fiche</strong> d'une ligne pour voir le détail du solde, l'historique des paiements, et <strong>enregistrer un règlement</strong> (un encaissement ou un décaissement).</li>
+          <li>L'icône <i class="ti ti-edit"></i> modifie les informations, l'icône <i class="ti ti-trash"></i> désactive le tiers (il n'est pas supprimé, juste masqué).</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : créer / modifier un tiers -->
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal">
+    <div class="card-head"><span class="card-title" id="modal-titre">Nouveau tiers</span>
+      <i class="ti ti-x" id="modal-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form" class="form-grid">
+      <div class="field"><label>Code</label><input name="code" required></div>
+      <div class="field"><label>Rôle</label>
+        <select name="type_role">
+          <option value="client">Client</option>
+          <option value="fournisseur">Fournisseur</option>
+          <option value="les_deux">Les deux</option>
+        </select></div>
+      <div class="field full"><label>Nature</label>
+        <select name="nature" id="f-nature">
+          <option value="particulier">Particulier (une personne)</option>
+          <option value="entreprise">Entreprise (société, boutique, ONG…)</option>
+        </select>
+        <span class="check-hint muted">Change seulement les informations proposées ci-dessous. Rien n'est obligatoire.</span>
+      </div>
+      <div class="field full" id="lbl-nom"><label>Nom</label><input name="nom" required></div>
+      <div class="field nat-particulier"><label>Prénom</label><input name="prenom"></div>
+      <div class="field nat-particulier"><label>N° CNI <span class="muted">(facultatif)</span></label><input name="cni"></div>
+      <div class="field nat-entreprise"><label>NINEA <span class="muted">(facultatif)</span></label><input name="ninea"></div>
+      <div class="field nat-entreprise"><label>RCCM <span class="muted">(facultatif)</span></label><input name="rccm"></div>
+      <div class="field"><label>Téléphone</label><input name="telephone"></div>
+      <div class="field full"><label>Adresse</label><input name="adresse"></div>
+      <div class="field full"><div class="alert warn" id="alertes-identite" style="display:block" hidden></div></div>
+      <div class="field full">
+        <label class="check"><input type="checkbox" name="exonere_tva"> Client exonéré de TVA</label>
+        <span class="check-hint muted">Ses factures seront émises sans TVA.</span>
+      </div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="modal-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : fiche du tiers (solde + historique + règlement) -->
+<div class="modal-overlay" id="modal-fiche" hidden>
+  <div class="modal" style="max-width:720px">
+    <div class="card-head">
+      <span class="card-title" id="fiche-nom">Fiche du tiers</span>
+      <i class="ti ti-x" id="fiche-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i>
+    </div>
+
+    <!-- Bandeau solde -->
+    <div id="fiche-solde-bloc" class="solde-bloc">
+      <div>
+        <div class="solde-label" id="fiche-solde-label">Solde</div>
+        <div class="solde-montant num" id="fiche-solde">0</div>
+      </div>
+      <button class="btn btn-primary" id="fiche-reglement"><i class="ti ti-cash"></i>Enregistrer un règlement</button>
+    </div>
+
+    <!-- Formulaire règlement (masqué par défaut) -->
+    <form id="form-reglement" hidden style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px">
+      <div class="form-grid">
+        <div class="field"><label>Type de mouvement</label>
+          <select name="sens" id="reg-sens">
+            <option value="encaissement">Encaissement (le tiers vous paie)</option>
+            <option value="decaissement">Décaissement (vous payez le tiers)</option>
+          </select></div>
+        <div class="field"><label>Montant</label>
+          <input name="montant" id="reg-montant" type="number" min="0" step="0.01" required></div>
+        <div class="field"><label>Moyen de paiement</label>
+          <select name="mode" id="reg-mode">
+            <option value="espece">Espèces</option>
+            <option value="mobile_money">Mobile Money</option>
+            <option value="virement">Virement</option>
+            <option value="cheque">Chèque</option>
+          </select></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:10px">
+        <button type="button" class="btn" id="reg-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Valider le règlement</button>
+      </div>
+    </form>
+
+    <div style="font-weight:600;font-size:14px;margin-bottom:8px">Historique des paiements</div>
+    <div class="card" style="padding:0;overflow:visible;max-height:300px;overflow-y:auto">
+      <table class="table">
+        <thead><tr><th>Date</th><th>Sens</th><th>Moyen</th><th class="right">Montant</th></tr></thead>
+        <tbody id="fiche-paiements">
+          <tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="aide" style="margin-top:14px">
+      <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment lire cette fiche ?</div>
+      <ul>
+        <li>Le <strong>solde</strong> en haut se met à jour tout seul à chaque facture et à chaque paiement.</li>
+        <li>Un <strong>encaissement</strong> = de l'argent qui <strong>entre</strong> (le client règle sa facture). Un <strong>décaissement</strong> = de l'argent qui <strong>sort</strong> (vous payez un fournisseur).</li>
+        <li>Chaque règlement enregistré diminue ce que le tiers vous doit (ou ce que vous lui devez) et met la caisse à jour.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const corps = document.getElementById('corps');
+const recherche = document.getElementById('recherche');
+const chkTous = document.getElementById('chk-tous');
+const bulkBar = document.getElementById('bulk-bar');
+let filtreCourant = 'tous';
+let tiers = [];
+const selection = new Set();
+
+const ROLES = { client: 'Client', fournisseur: 'Fournisseur', les_deux: 'Les deux' };
+function badgeRole(r) {
+  const cls = r === 'fournisseur' ? 'warn' : r === 'les_deux' ? 'ok' : 'neutral';
+  return `<span class="badge ${cls}">${ROLES[r] || r}</span>`;
+}
+
+function rendre() {
+  const q = recherche.value.trim().toLowerCase();
+  const du = document.getElementById('date-du').value;
+  const au = document.getElementById('date-au').value;
+  const vus = tiers.filter(t => {
+    const okTexte = !q || t.nom.toLowerCase().includes(q) || t.code.toLowerCase().includes(q)
+       || (t.telephone || '').toLowerCase().includes(q);
+    const jour = (t.cree_le || '').slice(0, 10);
+    const okDate = (!du || jour >= du) && (!au || jour <= au);
+    return okTexte && okDate;
+  });
+  if (!vus.length) {
+    corps.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">Aucun tiers</td></tr>';
+    majBulk();
+    return;
+  }
+  corps.innerHTML = vus.map(t => `
+    <tr>
+      <td><input type="checkbox" class="chk-ligne" data-id="${t.id}" ${selection.has(t.id) ? 'checked' : ''}></td>
+      <td class="num">${Djigui.esc(t.code)}</td>
+      <td>${Djigui.esc(t.nom)}</td>
+      <td>${badgeRole(t.type_role)}</td>
+      <td class="num">${t.telephone ? Djigui.esc(t.telephone) : '<span class="muted">—</span>'}</td>
+      <td class="right num">${Djigui.fmt(t.solde)}</td>
+      <td class="right actions">
+        <button class="icon-act" data-act="fiche" data-id="${t.id}" title="Fiche : solde & paiements"><i class="ti ti-user-search"></i></button>
+        <button class="icon-act" data-act="edit" data-id="${t.id}" title="Modifier"><i class="ti ti-edit"></i></button>
+        <button class="icon-act danger" data-act="del" data-id="${t.id}" title="Désactiver"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`).join('');
+  majBulk();
+}
+
+async function charger() {
+  corps.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>';
+  try {
+    tiers = await Djigui.api(`/api/tiers?filtre=${filtreCourant}`);
+    // purge la sélection des ids disparus
+    const ids = new Set(tiers.map(t => t.id));
+    [...selection].forEach(id => { if (!ids.has(id)) selection.delete(id); });
+    rendre();
+  } catch (e) {
+    corps.innerHTML = `<tr><td colspan="7" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`;
+  }
+}
+
+// ---- Sélection & barre par lot ----
+function majBulk() {
+  const n = selection.size;
+  bulkBar.hidden = n === 0;
+  document.getElementById('bulk-count').textContent =
+    n + ' sélectionné' + (n > 1 ? 's' : '');
+  const visibles = [...corps.querySelectorAll('.chk-ligne')];
+  chkTous.checked = visibles.length > 0 && visibles.every(c => c.checked);
+}
+
+corps.addEventListener('change', e => {
+  const chk = e.target.closest('.chk-ligne'); if (!chk) return;
+  if (chk.checked) selection.add(chk.dataset.id); else selection.delete(chk.dataset.id);
+  majBulk();
+});
+chkTous.addEventListener('change', () => {
+  corps.querySelectorAll('.chk-ligne').forEach(c => {
+    c.checked = chkTous.checked;
+    if (chkTous.checked) selection.add(c.dataset.id); else selection.delete(c.dataset.id);
+  });
+  majBulk();
+});
+
+document.getElementById('bulk-appliquer-role').addEventListener('click', async () => {
+  const role = document.getElementById('bulk-role').value;
+  const ids = [...selection];
+  try {
+    const r = await Djigui.api('/api/tiers/lot/role', { method: 'POST', body: { ids, type_role: role } });
+    Djigui.toast(`${r.traites} tiers passés en « ${ROLES[role]} »`, 'ok');
+    selection.clear(); charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('bulk-desactiver').addEventListener('click', async () => {
+  const ids = [...selection];
+  if (!await Djigui.confirm(`Désactiver ${ids.length} tiers ?`)) return;
+  try {
+    const r = await Djigui.api('/api/tiers/lot/desactiver', { method: 'POST', body: { ids } });
+    Djigui.toast(`${r.traites} tiers désactivés`, 'ok');
+    selection.clear(); charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Filtres & recherche ----
+document.getElementById('chips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  document.querySelectorAll('#chips .chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  filtreCourant = chip.dataset.filtre;
+  charger();
+});
+recherche.addEventListener('input', rendre);
+// Période Du/Au (date de création)
+const dateDu = document.getElementById('date-du');
+const dateAu = document.getElementById('date-au');
+const dateReset = document.getElementById('date-reset');
+function majResetDate(){ dateReset.hidden = !(dateDu.value || dateAu.value); }
+[dateDu, dateAu].forEach(el => el.addEventListener('change', () => { majResetDate(); rendre(); }));
+dateReset.addEventListener('click', () => { dateDu.value=''; dateAu.value=''; majResetDate(); rendre(); });
+
+// ---- Modale CRUD ----
+const modal = document.getElementById('modal');
+const form = document.getElementById('form');
+const titre = document.getElementById('modal-titre');
+let editionId = null;
+
+// Affiche les champs qui ont du sens pour la nature choisie. Aucun n'est
+// obligatoire : on masque pour ne pas encombrer, jamais pour interdire.
+function appliquerNature() {
+  const entreprise = form.nature.value === 'entreprise';
+  form.querySelectorAll('.nat-particulier').forEach(e => e.hidden = entreprise);
+  form.querySelectorAll('.nat-entreprise').forEach(e => e.hidden = !entreprise);
+  document.querySelector('#lbl-nom label').textContent = entreprise ? 'Raison sociale' : 'Nom';
+  alerterIdentite();
+}
+// Avertissements jaunes — informatifs, ils n'empêchent jamais d'enregistrer.
+function alerterIdentite() {
+  const boite = document.getElementById('alertes-identite');
+  const vide = n => !(form[n].value || '').trim();
+  const msgs = [];
+  if (form.nature.value === 'entreprise') {
+    if (vide('ninea')) msgs.push("NINEA absent : il est attendu sur la facture d'une entreprise.");
+    if (vide('rccm')) msgs.push('RCCM absent : mention légale attendue pour une entreprise.');
+  } else if (vide('telephone')) {
+    msgs.push('Aucun téléphone : vous ne pourrez pas recontacter ce client.');
+  }
+  boite.hidden = msgs.length === 0;
+  boite.innerHTML = msgs.map(m => `<div><i class="ti ti-alert-triangle"></i> ${Djigui.esc(m)}</div>`).join('')
+    + (msgs.length ? '<div class="muted" style="margin-top:4px">Vous pouvez enregistrer quand même.</div>' : '');
+}
+form.addEventListener('input', alerterIdentite);
+document.getElementById('f-nature').addEventListener('change', appliquerNature);
+
+function ouvrirCreation() {
+  editionId = null; form.reset();
+  titre.textContent = 'Nouveau tiers';
+  appliquerNature();
+  modal.hidden = false; form.code.focus();
+}
+function ouvrirEdition(t) {
+  editionId = t.id; form.reset();
+  titre.textContent = 'Modifier le tiers';
+  form.code.value = t.code; form.type_role.value = t.type_role; form.nom.value = t.nom;
+  form.telephone.value = t.telephone || ''; form.ninea.value = t.ninea || '';
+  form.adresse.value = t.adresse || '';
+  form.nature.value = t.nature || 'particulier';
+  form.prenom.value = t.prenom || ''; form.cni.value = t.cni || '';
+  form.rccm.value = t.rccm || '';
+  form.exonere_tva.checked = !!t.exonere_tva;
+  appliquerNature();
+  modal.hidden = false;
+}
+const fermer = () => { modal.hidden = true; };
+document.getElementById('btn-nouveau').addEventListener('click', ouvrirCreation);
+document.getElementById('modal-fermer').addEventListener('click', fermer);
+document.getElementById('modal-annuler').addEventListener('click', fermer);
+// Le clic sur le fond ne ferme pas le formulaire (évite la perte de saisie).
+
+corps.addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act'); if (!btn) return;
+  const t = tiers.find(x => x.id === btn.dataset.id); if (!t) return;
+  if (btn.dataset.act === 'fiche') ouvrirFiche(t);
+  else if (btn.dataset.act === 'edit') ouvrirEdition(t);
+  else if (btn.dataset.act === 'del') {
+    if (!await Djigui.confirm(`Désactiver « ${t.nom} » ?`)) return;
+    try { await Djigui.api(`/api/tiers/${t.id}`, { method: 'DELETE' });
+      Djigui.toast('Tiers désactivé', 'ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData(form);
+  const payload = {
+    code: f.get('code').trim(),
+    type_role: f.get('type_role'),
+    nom: f.get('nom').trim(),
+    telephone: f.get('telephone').trim() || null,
+    ninea: f.get('ninea').trim() || null,
+    adresse: f.get('adresse').trim() || null,
+    nature: f.get('nature'),
+    prenom: f.get('prenom').trim() || null,
+    cni: f.get('cni').trim() || null,
+    rccm: f.get('rccm').trim() || null,
+    exonere_tva: form.exonere_tva.checked,
+  };
+  const [url, method] = editionId ? [`/api/tiers/${editionId}`, 'PUT'] : ['/api/tiers', 'POST'];
+  try {
+    await Djigui.api(url, { method, body: payload });
+    Djigui.toast(editionId ? 'Tiers modifié' : 'Tiers créé', 'ok');
+    fermer(); charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Fiche : solde + historique paiements + règlement ----
+const modalFiche = document.getElementById('modal-fiche');
+const formReglement = document.getElementById('form-reglement');
+let ficheTiers = null;
+
+const MODES = { espece:'Espèces', mobile_money:'Mobile Money', virement:'Virement', cheque:'Chèque' };
+const SENS = { encaissement:'Encaissement', decaissement:'Décaissement' };
+
+function afficherSolde(solde) {
+  const el = document.getElementById('fiche-solde');
+  el.textContent = Djigui.fmt(solde) + ' FCFA';
+  // solde dû > 0 (créance/dette) en rouge ; réglé = neutre
+  el.style.color = Math.abs(solde) < 0.005 ? 'var(--brand-strong)' : 'var(--danger, #b42318)';
+  document.getElementById('fiche-solde-label').textContent =
+    ficheTiers && ficheTiers.type_role === 'fournisseur' ? 'Solde — ce que vous devez' : 'Solde — ce qui vous est dû';
+}
+
+async function ouvrirFiche(t) {
+  ficheTiers = t;
+  document.getElementById('fiche-nom').textContent = `${t.nom} — ${t.code}`;
+  formReglement.hidden = true;
+  document.getElementById('reg-sens').value = t.type_role === 'fournisseur' ? 'decaissement' : 'encaissement';
+  afficherSolde(t.solde);
+  document.getElementById('fiche-paiements').innerHTML =
+    '<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Chargement…</td></tr>';
+  modalFiche.hidden = false;
+  await chargerPaiements();
+}
+
+async function chargerPaiements() {
+  const corpsP = document.getElementById('fiche-paiements');
+  try {
+    const paiements = await Djigui.api(`/api/paiements?tiers_id=${ficheTiers.id}`);
+    corpsP.innerHTML = paiements.length ? paiements.map(p => `
+      <tr>
+        <td class="num">${Djigui.dateFr(p.date)}</td>
+        <td>${SENS[p.sens] || p.sens}</td>
+        <td>${MODES[p.mode] || p.mode}</td>
+        <td class="right num">${Djigui.fmt(p.montant)}</td>
+      </tr>`).join('')
+      : '<tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Aucun paiement enregistré</td></tr>';
+  } catch (e) {
+    corpsP.innerHTML = `<tr><td colspan="4" class="badge danger" style="text-align:center;padding:18px">Erreur : ${Djigui.esc(e.message)}</td></tr>`;
+  }
+}
+
+document.getElementById('fiche-fermer').addEventListener('click', () => { modalFiche.hidden = true; });
+document.getElementById('fiche-reglement').addEventListener('click', () => {
+  formReglement.hidden = false;
+  document.getElementById('reg-montant').focus();
+});
+document.getElementById('reg-annuler').addEventListener('click', () => { formReglement.hidden = true; formReglement.reset(); });
+
+formReglement.addEventListener('submit', async e => {
+  e.preventDefault();
+  const montant = Number(document.getElementById('reg-montant').value) || 0;
+  if (montant <= 0) { Djigui.toast('Le montant doit être positif', 'warn'); return; }
+  const payload = {
+    tiers_id: ficheTiers.id,
+    sens: document.getElementById('reg-sens').value,
+    mode: document.getElementById('reg-mode').value,
+    montant,
+  };
+  try {
+    await Djigui.api('/api/paiements', { method:'POST', body: payload });
+    Djigui.toast('Règlement enregistré', 'ok');
+    formReglement.hidden = true; formReglement.reset();
+    // rafraîchit le solde local + la liste principale
+    const maj = await Djigui.api(`/api/tiers?filtre=${filtreCourant}`);
+    tiers = maj; rendre();
+    ficheTiers = tiers.find(x => x.id === ficheTiers.id) || ficheTiers;
+    afficherSolde(ficheTiers.solde);
+    await chargerPaiements();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+charger();
+</script>
+</body>
+</html>

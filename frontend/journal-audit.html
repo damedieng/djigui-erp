@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Journal d'audit</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Journal d'audit</div>
+        <div class="topbar-date">Qui a fait quoi, et quand</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div class="pos-search" style="width:300px">
+          <i class="ti ti-search" style="font-size:18px"></i>
+          <input id="recherche" type="search" autocomplete="off" placeholder="Rechercher (utilisateur, action, pièce)…">
+        </div>
+        <div class="chips" id="chips-entite">
+          <span class="chip active" data-entite="">Tout</span>
+          <span class="chip" data-entite="document">Documents</span>
+          <span class="chip" data-entite="paiement">Paiements</span>
+          <span class="chip" data-entite="tiers">Tiers</span>
+          <span class="chip" data-entite="article">Articles</span>
+          <span class="chip" data-entite="utilisateur">Utilisateurs</span>
+        </div>
+        <div style="width:1px;height:22px;background:var(--border)"></div>
+        <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-2)">
+          <span>Du</span><input type="date" id="date-du" class="input-date">
+          <span>au</span><input type="date" id="date-au" class="input-date">
+          <button class="btn" id="date-reset" title="Effacer les dates" hidden><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:visible">
+        <table class="table">
+          <thead>
+            <tr><th>Date & heure</th><th>Utilisateur</th><th>Action</th><th>Concerne</th><th>Détail</th><th class="right">Voir</th></tr>
+          </thead>
+          <tbody id="corps">
+            <tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="aide">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Ce journal enregistre <strong>chaque action importante</strong> faite dans le logiciel (créer/valider/supprimer une pièce, enregistrer un paiement, gérer les utilisateurs…).</li>
+          <li>Pour chaque ligne, vous voyez <strong>qui</strong> a agi, <strong>quand</strong>, <strong>quelle action</strong> et sur <strong>quelle pièce</strong>.</li>
+          <li>Il sert à <strong>retrouver l'auteur</strong> d'une opération et à contrôler l'activité. On ne peut pas le modifier : c'est une trace.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+// Écran réservé aux administrateurs.
+if (!Djigui.estAdmin()) { Djigui.toast('Accès réservé aux administrateurs', 'warn'); location.replace('accueil.html'); }
+
+const corps = document.getElementById('corps');
+const recherche = document.getElementById('recherche');
+let entrees = [], entiteCourante = '';
+
+const ACTIONS = {
+  creation:'Création', modification:'Modification', suppression:'Suppression',
+  desactivation:'Désactivation', validation:'Validation', transformation:'Transformation',
+  paiement:'Paiement', recalcul_soldes:'Recalcul des soldes', generation_abonnement:'Génération (abonnement)',
+};
+const ENTITES = {
+  document:'Document', paiement:'Paiement', tiers:'Tiers', article:'Article',
+  utilisateur:'Utilisateur', abonnement:'Abonnement', caisse:'Caisse',
+};
+function badgeAction(a){
+  const dangers = ['suppression','desactivation'];
+  const cls = dangers.includes(a) ? 'danger' : (a==='validation'||a==='paiement'||a==='creation' ? 'ok' : 'neutral');
+  return `<span class="badge ${cls}">${ACTIONS[a]||a}</span>`;
+}
+// Date + heure lisibles (le journal stocke un datetime ISO).
+function dateHeure(iso){
+  const d = new Date(iso);
+  if (isNaN(d)) return Djigui.esc(iso);
+  return d.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+// Écran vers lequel « voir l'enregistrement concerné » renvoie. Les documents
+// ouvrent la pièce exacte (par id) ; les autres, l'écran de la catégorie.
+function lienConcerne(e) {
+  switch (e.entite) {
+    case 'document': return e.entite_id ? 'facture.html?id=' + encodeURIComponent(e.entite_id) : 'documents.html';
+    case 'tiers': return 'tiers.html';
+    case 'article': return 'articles.html';
+    case 'utilisateur': return 'utilisateurs.html';
+    case 'abonnement': return 'abonnements.html';
+    case 'paiement':
+    case 'caisse': return 'caisse-etat.html';
+    default: return null;
+  }
+}
+
+function rendre() {
+  const q = recherche.value.trim().toLowerCase();
+  const du = document.getElementById('date-du').value;
+  const au = document.getElementById('date-au').value;
+  const vus = entrees.filter(e => {
+    const okEntite = !entiteCourante || e.entite === entiteCourante;
+    const texte = `${e.utilisateur_nom} ${ACTIONS[e.action]||e.action} ${ENTITES[e.entite]||e.entite} ${e.detail||''}`.toLowerCase();
+    const jour = (e.date || '').slice(0, 10);
+    const okDate = (!du || jour >= du) && (!au || jour <= au);
+    return okEntite && okDate && (!q || texte.includes(q));
+  });
+  corps.innerHTML = vus.length ? vus.map(e => {
+    const lien = lienConcerne(e);
+    const precis = e.entite === 'document' && e.entite_id;
+    return `
+    <tr>
+      <td class="num">${dateHeure(e.date)}</td>
+      <td>${Djigui.esc(e.utilisateur_nom)}</td>
+      <td>${badgeAction(e.action)}</td>
+      <td>${ENTITES[e.entite] || Djigui.esc(e.entite)}</td>
+      <td>${e.detail ? Djigui.esc(e.detail) : '<span class="muted">—</span>'}</td>
+      <td class="right actions">${lien
+        ? `<button class="icon-act" data-lien="${lien}" title="${precis ? 'Ouvrir la pièce concernée' : 'Ouvrir cet écran'}"><i class="ti ti-external-link"></i></button>`
+        : '<span class="muted">—</span>'}</td>
+    </tr>`;
+  }).join('')
+    : '<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">Aucune entrée</td></tr>';
+}
+
+async function charger() {
+  try { entrees = await Djigui.api('/api/journal-audit?limite=500'); rendre(); }
+  catch (e) { corps.innerHTML = `<tr><td colspan="5" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`; }
+}
+
+recherche.addEventListener('input', rendre);
+document.getElementById('chips-entite').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll('#chips-entite .chip').forEach(x => x.classList.remove('active'));
+  c.classList.add('active'); entiteCourante = c.dataset.entite; rendre();
+});
+// Période Du/Au
+const dateDu = document.getElementById('date-du');
+const dateAu = document.getElementById('date-au');
+const dateReset = document.getElementById('date-reset');
+function majResetDate(){ dateReset.hidden = !(dateDu.value || dateAu.value); }
+[dateDu, dateAu].forEach(el => el.addEventListener('change', () => { majResetDate(); rendre(); }));
+dateReset.addEventListener('click', () => { dateDu.value=''; dateAu.value=''; majResetDate(); rendre(); });
+// Ouvrir l'enregistrement concerné
+corps.addEventListener('click', e => {
+  const btn = e.target.closest('[data-lien]'); if (!btn) return;
+  location.href = btn.dataset.lien;
+});
+
+charger();
+</script>
+</body>
+</html>

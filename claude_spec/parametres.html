@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Paramètres</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-building-store"></i></div>
+      <div><div class="brand-name">Djigui</div><div class="brand-sub">Gestion commerciale</div></div>
+    </div>
+    <a class="nav-item" href="accueil.html"><i class="ti ti-home"></i>Accueil</a>
+    <div class="nav-label">Commerce</div>
+    <a class="nav-item" href="#"><i class="ti ti-shopping-cart"></i>Ventes</a>
+    <a class="nav-item" href="caisse.html"><i class="ti ti-cash"></i>Caisse</a>
+    <a class="nav-item" href="facture.html"><i class="ti ti-file-invoice"></i>Factures</a>
+    <a class="nav-item" href="#"><i class="ti ti-truck"></i>Achats</a>
+    <div class="nav-label">Catalogue</div>
+    <a class="nav-item" href="articles.html"><i class="ti ti-box"></i>Articles</a>
+    <a class="nav-item" href="#"><i class="ti ti-tools"></i>Production</a>
+    <div class="nav-label">Contacts</div>
+    <a class="nav-item" href="#"><i class="ti ti-users"></i>Tiers</a>
+    <a class="nav-item" href="#"><i class="ti ti-chart-bar"></i>Rapports</a>
+    <div class="sidebar-foot">
+      <a class="nav-item active"><i class="ti ti-settings"></i>Paramètres</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Paramètres de l'entreprise</div>
+        <div class="topbar-date">Ces informations apparaissent sur chaque facture</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary"><i class="ti ti-device-floppy"></i>Enregistrer</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="card" style="max-width:760px">
+        <div class="card-head"><span class="card-title">Identité de l'entreprise</span></div>
+
+        <div style="display:flex;gap:20px;align-items:center;margin-bottom:22px">
+          <div class="doc-logo" style="width:64px;height:64px;font-size:32px"><i class="ti ti-building-store"></i></div>
+          <div class="logo-drop" style="flex:1"><i class="ti ti-upload" style="font-size:20px"></i>&nbsp; Glissez un logo ici, ou cliquez pour choisir un fichier</div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field full">
+            <label>Raison sociale</label>
+            <input type="text" value="Boutique Thierno">
+          </div>
+          <div class="field">
+            <label>NINEA</label>
+            <input type="text" value="004521789" class="num">
+          </div>
+          <div class="field">
+            <label>RCCM</label>
+            <input type="text" value="SN-DKR-2021-A-4412" class="num">
+          </div>
+          <div class="field full">
+            <label>Adresse</label>
+            <input type="text" value="Marché Castors, Dakar">
+          </div>
+          <div class="field">
+            <label>Téléphone</label>
+            <input type="text" value="+221 77 123 45 67" class="num">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" value="contact@boutiquethierno.sn">
+          </div>
+          <div class="field">
+            <label>Devise</label>
+            <select><option selected>FCFA (XOF)</option><option>Euro (EUR)</option></select>
+          </div>
+          <div class="field">
+            <label>Taux de TVA par défaut</label>
+            <select><option selected>18 %</option><option>10 %</option><option>0 % (exonéré)</option></select>
+          </div>
+          <div class="field full">
+            <label>Pied de facture (mentions légales)</label>
+            <textarea rows="3">Merci de votre confiance. Paiement par espèce, mobile money ou virement.</textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

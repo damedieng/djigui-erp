@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Facture</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-building-store"></i></div>
+      <div><div class="brand-name">Djigui</div><div class="brand-sub">Gestion commerciale</div></div>
+    </div>
+    <a class="nav-item" href="accueil.html"><i class="ti ti-home"></i>Accueil</a>
+    <div class="nav-label">Commerce</div>
+    <a class="nav-item" href="#"><i class="ti ti-shopping-cart"></i>Ventes</a>
+    <a class="nav-item" href="caisse.html"><i class="ti ti-cash"></i>Caisse</a>
+    <a class="nav-item active"><i class="ti ti-file-invoice"></i>Factures</a>
+    <a class="nav-item" href="#"><i class="ti ti-truck"></i>Achats</a>
+    <div class="nav-label">Catalogue</div>
+    <a class="nav-item" href="articles.html"><i class="ti ti-box"></i>Articles</a>
+    <a class="nav-item" href="#"><i class="ti ti-tools"></i>Production</a>
+    <div class="nav-label">Contacts</div>
+    <a class="nav-item" href="#"><i class="ti ti-users"></i>Tiers</a>
+    <a class="nav-item" href="#"><i class="ti ti-chart-bar"></i>Rapports</a>
+    <div class="sidebar-foot">
+      <a class="nav-item" href="parametres.html"><i class="ti ti-settings"></i>Paramètres</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Facture FA‑2026‑0412</div>
+        <div class="topbar-date">Créée le 21 juillet 2026 · issue du devis DV‑2026‑0090</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn"><i class="ti ti-printer"></i>Imprimer</button>
+        <button class="btn"><i class="ti ti-download"></i>PDF</button>
+        <button class="btn btn-primary"><i class="ti ti-check"></i>Encaisser</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="doc">
+        <div class="doc-head">
+          <div style="display:flex;gap:16px;align-items:center">
+            <div class="doc-logo"><i class="ti ti-building-store"></i></div>
+            <div>
+              <div style="font-size:18px;font-weight:600">Boutique Thierno</div>
+              <div class="muted" style="font-size:12.5px;line-height:1.6">
+                Marché Castors, Dakar<br>
+                NINEA 004521789 · RCCM SN‑DKR‑2021‑A‑4412<br>
+                +221 77 123 45 67
+              </div>
+            </div>
+          </div>
+          <div class="doc-title">
+            <h2>FACTURE</h2>
+            <div class="muted num" style="font-size:13px;margin-top:4px">N° FA‑2026‑0412</div>
+          </div>
+        </div>
+
+        <div class="doc-meta">
+          <div>
+            <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.05em">Facturé à</div>
+            <div style="font-weight:600;margin-top:4px">Restaurant Teranga</div>
+            <div class="muted" style="font-size:12.5px;line-height:1.6">Sicap Liberté 6, Dakar<br>NINEA 007788221</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12.5px;line-height:1.9">
+              <span class="muted">Date&nbsp;&nbsp;</span><span class="num">21/07/2026</span><br>
+              <span class="muted">Échéance&nbsp;&nbsp;</span><span class="num">04/08/2026</span><br>
+              <span class="muted">Conditions&nbsp;&nbsp;</span>Net 15 jours
+            </div>
+          </div>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr><th>Désignation</th><th class="right">Qté</th><th class="right">P.U. HT</th><th class="right">TVA</th><th class="right">Total HT</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Riz brisé 1kg</td><td class="right num">20</td><td class="right num">650</td><td class="right num">18%</td><td class="right num">13 000</td></tr>
+            <tr><td>Huile végétale 1L</td><td class="right num">12</td><td class="right num">1 200</td><td class="right num">18%</td><td class="right num">14 400</td></tr>
+            <tr><td>Sucre en poudre 1kg</td><td class="right num">10</td><td class="right num">1 100</td><td class="right num">18%</td><td class="right num">11 000</td></tr>
+            <tr><td>Livraison à domicile</td><td class="right num">1</td><td class="right num">1 500</td><td class="right muted">—</td><td class="right num">1 500</td></tr>
+          </tbody>
+        </table>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:18px">
+          <div style="width:260px;display:flex;flex-direction:column;gap:8px">
+            <div class="tot-row"><span>Total HT</span><span class="num">39 900</span></div>
+            <div class="tot-row"><span>TVA (18%)</span><span class="num">6 912</span></div>
+            <div class="tot-grand" style="border-top:1px solid var(--border);padding-top:10px"><span>Total TTC</span><span class="num">46 812 FCFA</span></div>
+          </div>
+        </div>
+
+        <div class="doc-foot">
+          Merci de votre confiance. Paiement par espèce, mobile money ou virement.<br>
+          Boutique Thierno · NINEA 004521789 · Arrêtée la présente facture à la somme de quarante‑six mille huit cent douze francs CFA.
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

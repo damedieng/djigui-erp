@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Projets</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+<style>
+.proj-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.proj-carte { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow); padding: 0; overflow: hidden; cursor: pointer; transition: box-shadow .15s, transform .1s; }
+.proj-carte:hover { box-shadow: 0 4px 14px rgba(20,40,30,.1); transform: translateY(-1px); }
+.proj-bandeau { height: 6px; background: var(--brand); }
+.proj-corps { padding: 16px 18px; }
+.proj-nom { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+.proj-meta { font-size: 12.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 3px; margin: 8px 0 12px; }
+.proj-meta i { width: 16px; color: var(--text-muted); }
+.barre { height: 8px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.barre > div { height: 100%; background: var(--brand); border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Projets</div>
+        <div class="topbar-date">Suivi de vos projets, tâches et échéances</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-plus"></i>Nouveau projet</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="tabs-folder" id="tabs-statut">
+        <div class="tab active" data-statut="">Tous</div>
+        <div class="tab" data-statut="planifie">Planifiés</div>
+        <div class="tab" data-statut="en_cours">En cours</div>
+        <div class="tab" data-statut="suspendu">Suspendus</div>
+        <div class="tab" data-statut="cloture">Clôturés</div>
+      </div>
+
+      <div class="proj-grille" id="grille"><div class="muted">Chargement…</div></div>
+
+      <div class="aide" style="margin-top:20px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Chaque <strong>carte</strong> est un projet : cliquez dessus pour ouvrir son détail (tâches, avancement).</li>
+          <li>La <strong>barre verte</strong> montre l'avancement global (moyenne de l'avancement des tâches).</li>
+          <li>Filtrez par <strong>statut</strong> avec les onglets. Créez un projet avec <strong>Nouveau projet</strong>.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale projet -->
+<div class="modal-overlay" id="modal-proj" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title" id="proj-titre-modal">Nouveau projet</span>
+      <i class="ti ti-x" id="proj-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-proj" class="form-grid">
+      <input type="hidden" id="proj-id">
+      <div class="field full"><label>Nom du projet</label>
+        <input id="proj-nom" required placeholder="ex. Refonte boutique, Chantier Villa Fann…" autocomplete="off"></div>
+      <div class="field full"><label>Client</label><div id="proj-client-mount"></div></div>
+      <div class="field"><label>Chef de projet</label><select id="proj-chef"><option value="">—</option></select></div>
+      <div class="field"><label>Statut</label>
+        <select id="proj-statut">
+          <option value="planifie">Planifié</option>
+          <option value="en_cours">En cours</option>
+          <option value="suspendu">Suspendu</option>
+          <option value="cloture">Clôturé</option>
+        </select></div>
+      <div class="field"><label>Début prévu</label><input type="date" id="proj-debut"></div>
+      <div class="field"><label>Fin prévue</label><input type="date" id="proj-fin"></div>
+      <div class="field full"><label>Budget global (FCFA)</label>
+        <input type="number" id="proj-budget" min="0" step="1" value="0"></div>
+      <div class="field full"><label>Note</label><textarea id="proj-note" rows="2"></textarea></div>
+      <div class="field full" id="proj-alertes"></div>
+      <div class="field full" style="flex-direction:row;justify-content:space-between;gap:10px">
+        <button type="button" class="btn" id="proj-supprimer" style="color:var(--danger);display:none"><i class="ti ti-trash"></i>Supprimer</button>
+        <div style="display:flex;gap:10px;margin-left:auto">
+          <button type="button" class="btn" id="proj-annuler">Annuler</button>
+          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const STATUT_PROJ = { planifie:['#4a72a8','Planifié'], en_cours:['#16794f','En cours'],
+  suspendu:['#9a6a12','Suspendu'], cloture:['#5c6a61','Clôturé'] };
+let projets = [], tiersListe = [], users = [], clientSel = null, filtreStatut = '';
+
+async function charger() {
+  const qs = filtreStatut ? '?statut=' + filtreStatut : '';
+  try { projets = await Djigui.api('/api/projets' + qs); }
+  catch (e) { projets = []; Djigui.toast('Erreur : ' + e.message, 'danger'); }
+  rendre();
+}
+function rendre() {
+  const g = document.getElementById('grille');
+  if (!projets.length) { g.innerHTML = '<div class="muted">Aucun projet. Cliquez sur « Nouveau projet ».</div>'; return; }
+  g.innerHTML = projets.map(p => {
+    const [coul, lbl] = STATUT_PROJ[p.statut] || ['#5c6a61', p.statut];
+    const periode = [p.date_debut_prevue, p.date_fin_prevue].filter(Boolean)
+      .map(d => Djigui.dateFr ? Djigui.dateFr(d) : d).join(' → ') || 'Dates non définies';
+    return `<div class="proj-carte" data-id="${p.id}">
+      <div class="proj-bandeau" style="background:${coul}"></div>
+      <div class="proj-corps">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div class="proj-nom">${Djigui.esc(p.nom)}</div>
+          <span class="badge" style="background:${coul}22;color:${coul};white-space:nowrap">${lbl}</span>
+        </div>
+        <div class="proj-meta">
+          <span><i class="ti ti-user"></i> ${Djigui.esc(p.client_nom || 'Sans client')}</span>
+          <span><i class="ti ti-user-star"></i> ${Djigui.esc(p.chef_nom || 'Sans chef de projet')}</span>
+          <span><i class="ti ti-calendar"></i> ${Djigui.esc(periode)}</span>
+          <span><i class="ti ti-coin"></i> ${Djigui.fmt(p.budget_global)} FCFA</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:4px">
+          <span>${p.nb_terminees}/${p.nb_taches} tâche(s)</span><span>${p.avancement_physique ?? p.avancement}%</span></div>
+        <div class="barre"><div style="width:${p.avancement_physique ?? p.avancement}%;background:${coul}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('grille').addEventListener('click', e => {
+  const c = e.target.closest('.proj-carte'); if (!c) return;
+  location.href = 'projet-detail.html?id=' + encodeURIComponent(c.dataset.id);
+});
+document.getElementById('tabs-statut').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('#tabs-statut .tab').forEach(x => x.classList.toggle('active', x === t));
+  filtreStatut = t.dataset.statut; charger();
+});
+
+// ---- Modale projet ----
+const modal = document.getElementById('modal-proj');
+function ouvrir(p) {
+  document.getElementById('form-proj').reset();
+  document.getElementById('proj-alertes').innerHTML = '';
+  const est = !!p;
+  document.getElementById('proj-titre-modal').textContent = est ? 'Modifier le projet' : 'Nouveau projet';
+  document.getElementById('proj-supprimer').style.display = est ? '' : 'none';
+  document.getElementById('proj-id').value = est ? p.id : '';
+  document.getElementById('proj-nom').value = est ? p.nom : '';
+  document.getElementById('proj-chef').value = est && p.chef_de_projet_id ? p.chef_de_projet_id : '';
+  document.getElementById('proj-statut').value = est ? p.statut : 'planifie';
+  document.getElementById('proj-debut').value = est ? (p.date_debut_prevue || '') : '';
+  document.getElementById('proj-fin').value = est ? (p.date_fin_prevue || '') : '';
+  document.getElementById('proj-budget').value = est ? p.budget_global : 0;
+  document.getElementById('proj-note').value = est ? (p.note || '') : '';
+  clientSel.setValue(est && p.client_id ? p.client_id : '');
+  modal.hidden = false;
+  document.getElementById('proj-nom').focus();
+}
+document.getElementById('btn-nouveau').addEventListener('click', () => ouvrir(null));
+document.getElementById('proj-fermer').addEventListener('click', () => modal.hidden = true);
+document.getElementById('proj-annuler').addEventListener('click', () => modal.hidden = true);
+
+document.getElementById('form-proj').addEventListener('submit', async e => {
+  e.preventDefault();
+  const debut = document.getElementById('proj-debut').value;
+  const fin = document.getElementById('proj-fin').value;
+  // Alerte non bloquante : fin avant début.
+  if (debut && fin && fin < debut)
+    document.getElementById('proj-alertes').innerHTML = '<div class="badge warn">La fin prévue est avant le début prévu.</div>';
+  const body = {
+    nom: document.getElementById('proj-nom').value.trim(),
+    client_id: (clientSel && clientSel.value) || null,
+    chef_de_projet_id: document.getElementById('proj-chef').value || null,
+    date_debut_prevue: debut || null, date_fin_prevue: fin || null,
+    statut: document.getElementById('proj-statut').value,
+    budget_global: Number(document.getElementById('proj-budget').value) || 0,
+    note: document.getElementById('proj-note').value.trim() || null,
+  };
+  const id = document.getElementById('proj-id').value;
+  try {
+    if (id) await Djigui.api('/api/projets/' + id, { method:'PUT', body });
+    else await Djigui.api('/api/projets', { method:'POST', body });
+    Djigui.toast('Projet enregistré', 'ok'); modal.hidden = true; charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('proj-supprimer').addEventListener('click', async () => {
+  const id = document.getElementById('proj-id').value; if (!id) return;
+  if (!await Djigui.confirm('Supprimer ce projet et toutes ses tâches ?', { titre:'Supprimer le projet', okLabel:'Supprimer', danger:true })) return;
+  try { await Djigui.api('/api/projets/' + id, { method:'DELETE' });
+    Djigui.toast('Projet supprimé', 'ok'); modal.hidden = true; charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+async function init() {
+  clientSel = Djigui.selectRecherche(document.getElementById('proj-client-mount'),
+    { items: [], placeholder: 'Aucun (facultatif)…' });
+  [tiersListe, users] = await Promise.all([
+    Djigui.api('/api/tiers?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/utilisateurs').catch(()=>[]),
+  ]);
+  clientSel.setItems([{ value:'', label:'— Aucun —' }].concat(
+    tiersListe.map(t => ({ value: t.id, label: t.nom, sub: t.code }))));
+  const chef = document.getElementById('proj-chef');
+  users.filter(u => u.actif !== false).forEach(u =>
+    chef.insertAdjacentHTML('beforeend', `<option value="${u.id}">${Djigui.esc(u.nom)}</option>`));
+  await charger();
+}
+init();
+</script>
+</body>
+</html>

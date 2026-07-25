@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Abonnements</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Abonnements</div>
+        <div class="topbar-date">Facturation cyclique — une facture générée automatiquement à chaque échéance</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn" id="btn-generer"><i class="ti ti-player-play"></i>Générer les factures dues</button>
+        <button class="btn btn-primary" id="btn-nouvel"><i class="ti ti-plus"></i>Nouvel abonnement</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <div class="pos-search" style="width:280px">
+          <i class="ti ti-search" style="font-size:18px"></i>
+          <input id="recherche" type="search" autocomplete="off" placeholder="Rechercher (client, libellé, objet)…">
+        </div>
+        <div style="width:1px;height:22px;background:var(--border)"></div>
+        <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-2)">
+          <span title="Prochaine échéance">Échéance du</span><input type="date" id="date-du" class="input-date">
+          <span>au</span><input type="date" id="date-au" class="input-date">
+          <button class="btn" id="date-reset" title="Effacer les dates" hidden><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:visible">
+        <table class="table">
+          <thead>
+            <tr><th>Client</th><th>Libellé</th><th>Fréquence</th><th class="right">Montant TTC</th><th>Début</th><th>Prochaine échéance</th><th class="right">Statut</th><th class="right">Actions</th></tr>
+          </thead>
+          <tbody id="corps">
+            <tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:13px">
+        À chaque échéance (mensuelle, trimestrielle ou annuelle), les lignes de l'abonnement
+        génèrent une nouvelle facture en <strong>brouillon</strong>, prête à être validée et envoyée.
+      </p>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : nouvel/édition abonnement -->
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal" style="max-width:640px">
+    <div class="card-head"><span class="card-title" id="modal-titre">Nouvel abonnement</span>
+      <i class="ti ti-x" id="modal-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form" class="form-grid">
+      <div class="field"><label>Client</label>
+        <select name="tiers_id" id="sel-tiers" required></select></div>
+      <div class="field"><label>N° de dossier (optionnel)</label>
+        <input name="reference_dossier" id="in-dossier" placeholder="ex. DOS-2026-007" autocomplete="off"></div>
+      <div class="field full"><label>Objet (apparaît sur la facture)</label>
+        <input name="objet" placeholder="ex. Maintenance parc informatique"></div>
+      <div class="field"><label>Libellé interne (optionnel)</label>
+        <input name="libelle" placeholder="ex. Contrat maintenance 2026"></div>
+      <div class="field"><label>Fréquence</label>
+        <select name="frequence" id="sel-freq">
+          <option value="mensuel">Mensuelle</option>
+          <option value="trimestriel">Trimestrielle</option>
+          <option value="annuel">Annuelle</option>
+        </select></div>
+      <div class="field"><label>Début de facturation</label>
+        <input name="date_debut" id="in-debut" type="date" required></div>
+      <div class="field"><label>Durée</label>
+        <select id="sel-duree">
+          <option value="">Indéterminée (sans fin)</option>
+          <option value="1">1 an</option>
+          <option value="2">2 ans</option>
+          <option value="3">3 ans</option>
+          <option value="5">5 ans</option>
+          <option value="custom">Personnalisé…</option>
+        </select></div>
+      <div class="field"><label>Nombre d'échéances</label>
+        <input name="nb_echeances" id="in-nb" type="number" min="1" step="1" placeholder="illimité">
+        <span class="check-hint muted" id="nb-hint">Calculé depuis la durée et la fréquence.</span></div>
+      <div class="field full">
+        <label>Échéancier prévisionnel</label>
+        <div id="echeancier" class="muted" style="font-size:13px">—</div></div>
+
+      <div class="field full">
+        <label>Lignes à facturer</label>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:2;min-width:180px">
+            <input id="art-search" list="art-list" placeholder="Rechercher un article…" autocomplete="off"
+                   style="width:100%;font:inherit;padding:9px 11px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+            <datalist id="art-list"></datalist>
+          </div>
+          <input id="art-qte" type="number" min="0" step="0.01" value="1" title="Quantité"
+                 style="width:72px;font:inherit;padding:9px 11px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+          <input id="art-prix" type="number" min="0" step="0.01" placeholder="Prix" title="Prix unitaire HT"
+                 style="width:100px;font:inherit;padding:9px 11px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+          <button type="button" class="btn" id="art-ajouter"><i class="ti ti-plus"></i>Ajouter</button>
+        </div>
+        <div id="lignes-liste" style="margin-top:10px"></div>
+      </div>
+
+      <div class="field full alert warn" id="alertes-saisie" hidden style="flex-direction:column;align-items:flex-start;gap:4px"></div>
+
+      <div class="field full" style="flex-direction:row;justify-content:space-between;align-items:center;gap:10px">
+        <span class="muted num" id="apercu-total">Total TTC : 0 FCFA</span>
+        <div style="display:flex;gap:10px">
+          <button type="button" class="btn" id="modal-annuler">Annuler</button>
+          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const corps = document.getElementById('corps');
+const FREQ = { mensuel:'Mensuelle', trimestriel:'Trimestrielle', annuel:'Annuelle' };
+let editionId = null;
+let abosCache = [];
+let articles = [];      // catalogue pour l'éditeur de lignes
+let lignes = [];        // lignes de l'abonnement en cours d'édition
+const tiersExo = {};    // id client -> exonéré de TVA
+
+// Total d'un jeu de lignes. Si `exonere`, on ignore la TVA (montant = HT).
+function totalTTC(ls, exonere = false) {
+  return ls.reduce((s, l) => {
+    const ht = l.quantite * l.prix_unitaire * (1 - (l.remise||0)/100);
+    return s + ht * (exonere ? 1 : (1 + (l.taux_tva||0)/100));
+  }, 0);
+}
+
+async function charger() {
+  corps.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>';
+  try {
+    abosCache = await Djigui.api('/api/abonnements');
+    rendre();
+  } catch (e) {
+    corps.innerHTML = `<tr><td colspan="8" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`;
+  }
+}
+
+function rendre() {
+  const q = (document.getElementById('recherche').value || '').trim().toLowerCase();
+  const du = document.getElementById('date-du').value;
+  const au = document.getElementById('date-au').value;
+  const vus = abosCache.filter(a => {
+    const okTexte = !q || (a.tiers_nom||'').toLowerCase().includes(q)
+      || (a.libelle||'').toLowerCase().includes(q) || (a.objet||'').toLowerCase().includes(q);
+    const ech = (a.prochaine_echeance || '').slice(0, 10);
+    const okDate = (!du || ech >= du) && (!au || ech <= au);
+    return okTexte && okDate;
+  });
+  corps.innerHTML = vus.length ? vus.map(a => `
+      <tr data-id="${a.id}">
+        <td>${Djigui.esc(a.tiers_nom || '—')}</td>
+        <td>${Djigui.esc(a.libelle || '—')}</td>
+        <td>${FREQ[a.frequence] || a.frequence}</td>
+        <td class="right num">${Djigui.fmt(Math.round(totalTTC(a.lignes, a.tiers_exonere)))} FCFA${a.tiers_exonere?' <span class="muted" style="font-size:11px">(exonéré)</span>':''}</td>
+        <td class="num">${Djigui.dateFr(a.date_debut)}</td>
+        <td class="num">${Djigui.dateFr(a.prochaine_echeance)}</td>
+        <td class="right">${a.actif ? '<span class="badge ok">Actif</span>' : '<span class="badge neutral">Inactif</span>'}</td>
+        <td class="right actions">
+          <button class="icon-act" data-act="edit" title="Modifier"><i class="ti ti-edit"></i></button>
+          <button class="icon-act danger" data-act="del" title="Supprimer"><i class="ti ti-trash"></i></button>
+        </td>
+      </tr>`).join('')
+      : '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Aucun abonnement</td></tr>';
+}
+
+// ---- Recherche & période ----
+document.getElementById('recherche').addEventListener('input', rendre);
+{
+  const dateDu = document.getElementById('date-du');
+  const dateAu = document.getElementById('date-au');
+  const dateReset = document.getElementById('date-reset');
+  const majReset = () => { dateReset.hidden = !(dateDu.value || dateAu.value); };
+  [dateDu, dateAu].forEach(el => el.addEventListener('change', () => { majReset(); rendre(); }));
+  dateReset.addEventListener('click', () => { dateDu.value=''; dateAu.value=''; majReset(); rendre(); });
+}
+
+async function chargerCatalogue() {
+  try {
+    const [tiers, arts] = await Promise.all([
+      Djigui.api('/api/tiers?filtre=tous').catch(()=>[]),
+      Djigui.api('/api/articles?filtre=tous').catch(()=>[]),
+    ]);
+    document.getElementById('sel-tiers').innerHTML =
+      tiers.map(t => `<option value="${t.id}">${Djigui.esc(t.nom)}${t.exonere_tva?' (exonéré TVA)':''}</option>`).join('');
+    tiers.forEach(t => { tiersExo[t.id] = !!t.exonere_tva; });
+    articles = arts;
+    // Datalist : on étiquette le type (Bien / Service) à côté de chaque article.
+    document.getElementById('art-list').innerHTML =
+      arts.map(a => `<option value="${Djigui.esc(a.designation)}">${a.type === 'service' ? 'Service' : 'Bien'}${a.code ? ' · ' + Djigui.esc(a.code) : ''}</option>`).join('');
+  } catch (e) { /* non bloquant */ }
+}
+
+// ---- Éditeur de lignes ----
+const artSearch = document.getElementById('art-search');
+const artQte = document.getElementById('art-qte');
+const artPrix = document.getElementById('art-prix');
+
+function articleParDesignation(txt) {
+  const q = txt.trim().toLowerCase();
+  return articles.find(a => a.designation.toLowerCase() === q)
+      || articles.find(a => (a.code||'').toLowerCase() === q);
+}
+artSearch.addEventListener('change', () => {
+  const a = articleParDesignation(artSearch.value);
+  if (a && !artPrix.value) artPrix.value = a.prix_vente;
+});
+document.getElementById('art-ajouter').addEventListener('click', ajouterLigne);
+function ajouterLigne() {
+  const a = articleParDesignation(artSearch.value);
+  if (!a) { Djigui.toast('Article introuvable — choisis dans la liste', 'warn'); return; }
+  const qte = Number(artQte.value) || 0;
+  const prix = artPrix.value === '' ? a.prix_vente : Number(artPrix.value);
+  if (qte <= 0) { Djigui.toast('Quantité invalide', 'warn'); return; }
+  lignes.push({
+    article_id: a.id, designation: a.designation,
+    quantite: qte, prix_unitaire: prix, taux_tva: a.taux_tva || 0, remise: 0,
+  });
+  artSearch.value = ''; artQte.value = '1'; artPrix.value = '';
+  artSearch.focus();
+  rendreLignes();
+}
+function rendreLignes() {
+  const box = document.getElementById('lignes-liste');
+  box.innerHTML = lignes.length ? lignes.map((l, i) => {
+    const art = articles.find(a => a.id === l.article_id);
+    const typeBadge = art ? `<span class="badge ${art.type==='service'?'ok':'neutral'}" style="font-size:10px;margin-left:6px">${art.type==='service'?'Service':'Bien'}</span>` : '';
+    return `
+    <div class="cat-ligne" data-i="${i}">
+      <span style="flex:1">${Djigui.esc(l.designation)}${typeBadge}
+        <span class="muted num" style="font-size:12px">${Djigui.fmt(l.quantite)} × ${Djigui.fmt(l.prix_unitaire)}${l.taux_tva?` · TVA ${l.taux_tva}%`:''}</span></span>
+      <span class="num" style="min-width:90px;text-align:right">${Djigui.fmt(Math.round(l.quantite*l.prix_unitaire))}</span>
+      <button type="button" class="icon-act danger" data-del="${i}" title="Retirer"><i class="ti ti-x"></i></button>
+    </div>`;
+  }).join('') : '<div class="muted" style="font-size:13px">Aucune ligne — ajoutez au moins un article.</div>';
+  verifierSaisie();
+}
+
+// Alertes de cohérence NON bloquantes (chiffres suspects) + total du contrat.
+function verifierSaisie() {
+  const box = document.getElementById('alertes-saisie');
+  const nbRaw = document.getElementById('in-nb').value;
+  const nb = Number(nbRaw) || 0;
+  const exo = !!tiersExo[document.getElementById('sel-tiers').value];
+  const ttc = totalTTC(lignes, exo);
+  const msgs = [];
+  if (lignes.some(l => l.prix_unitaire <= 0)) msgs.push('Une ligne a un prix nul ou négatif.');
+  if (lignes.some(l => l.quantite <= 0)) msgs.push('Une ligne a une quantité nulle ou négative.');
+  if (nbRaw && nb < 1) msgs.push('Le nombre d’échéances doit être au moins 1.');
+  if (!lignes.length) msgs.push('Aucune ligne : ajoutez au moins un article.');
+  box.innerHTML = msgs.map(m => `<span><i class="ti ti-alert-triangle"></i> ${m}</span>`).join('');
+  box.hidden = msgs.length === 0;
+  const el = document.getElementById('apercu-total');
+  el.textContent = nb > 0
+    ? `Par échéance : ${Djigui.fmt(Math.round(ttc))} FCFA · Total contrat (${nb}×) : ${Djigui.fmt(Math.round(ttc*nb))} FCFA`
+    : `Total TTC / échéance : ${Djigui.fmt(Math.round(ttc))} FCFA`;
+  rendreEcheancier();
+}
+
+// Échéance FIN de période k (k ≥ 1) = début + k périodes − 1 jour.
+function finPeriode(iso, freq, k) {
+  const mois = { mensuel:1, trimestriel:3, annuel:12 }[freq] * k;
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, (m-1)+mois, d);
+  dt.setDate(dt.getDate() - 1);
+  const p = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`;
+}
+// Échéancier prévisionnel (facturation en fin de période), calculé depuis le début.
+function rendreEcheancier() {
+  const box = document.getElementById('echeancier');
+  const debut = document.getElementById('in-debut').value;
+  const freq = document.getElementById('sel-freq').value;
+  const label = { mensuel:'Mois', trimestriel:'Trimestre', annuel:'Année' }[freq];
+  const nb = Number(document.getElementById('in-nb').value) || 0;
+  if (!debut) { box.textContent = '—'; return; }
+  const total = nb > 0 ? nb : 6; // aperçu 6 échéances si illimité
+  const lignes = [];
+  for (let k = 1; k <= total; k++)
+    lignes.push(`${label} ${k} : <span class="num">${Djigui.dateFr(finPeriode(debut, freq, k))}</span>`);
+  box.innerHTML = lignes.join(' &nbsp;·&nbsp; ') + (nb > 0 ? '' : ' &nbsp;·&nbsp; …');
+}
+// Durée → nombre d'échéances (selon la fréquence). Borne la génération.
+const PERIODES_AN = { mensuel: 12, trimestriel: 4, annuel: 1 };
+function appliquerDuree() {
+  const dv = document.getElementById('sel-duree').value;
+  const freq = document.getElementById('sel-freq').value;
+  const nbInput = document.getElementById('in-nb');
+  const hint = document.getElementById('nb-hint');
+  if (dv === '') {                       // indéterminée
+    nbInput.value = ''; nbInput.readOnly = true; hint.textContent = 'Sans fin — génère indéfiniment.';
+  } else if (dv === 'custom') {           // saisie libre
+    nbInput.readOnly = false; hint.textContent = 'Nombre d’échéances à générer.';
+  } else {                               // durée en années
+    nbInput.value = Number(dv) * PERIODES_AN[freq];
+    nbInput.readOnly = true;
+    hint.textContent = `${dv} an(s) × ${PERIODES_AN[freq]} / an = ${nbInput.value} échéance(s).`;
+  }
+  verifierSaisie();
+}
+// Déduit la durée (préréglage) depuis un nombre d'échéances existant.
+function dureeDepuisNb(nb, freq) {
+  if (!nb) return '';
+  const ans = nb / PERIODES_AN[freq];
+  return (Number.isInteger(ans) && [1,2,3,5].includes(ans)) ? String(ans) : 'custom';
+}
+document.getElementById('sel-duree').addEventListener('change', appliquerDuree);
+['in-debut','sel-freq'].forEach(id => document.getElementById(id).addEventListener('change', () => { appliquerDuree(); rendreEcheancier(); }));
+document.getElementById('in-nb').addEventListener('input', verifierSaisie);
+document.getElementById('sel-tiers').addEventListener('change', verifierSaisie);
+document.getElementById('lignes-liste').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  lignes.splice(Number(b.dataset.del), 1); rendreLignes();
+});
+
+// ---- Modale ----
+const modal = document.getElementById('modal');
+const form = document.getElementById('form');
+function ouvrir(edition) {
+  editionId = edition ? edition.id : null;
+  document.getElementById('modal-titre').textContent = edition ? 'Modifier l\'abonnement' : 'Nouvel abonnement';
+  form.reset();
+  lignes = edition ? edition.lignes.map(l => ({...l})) : [];
+  if (edition) {
+    form.tiers_id.value = edition.tiers_id;
+    form.reference_dossier.value = edition.reference_dossier || '';
+    form.objet.value = edition.objet || '';
+    form.libelle.value = edition.libelle || '';
+    form.frequence.value = edition.frequence;
+    form.date_debut.value = edition.date_debut;
+    form.nb_echeances.value = edition.nb_echeances ?? '';
+    document.getElementById('sel-duree').value = dureeDepuisNb(edition.nb_echeances, edition.frequence);
+  } else {
+    form.date_debut.value = new Date().toISOString().slice(0,10);
+    document.getElementById('sel-duree').value = '';
+  }
+  appliquerDuree();
+  rendreLignes();
+  modal.hidden = false;
+}
+const fermer = () => { modal.hidden = true; };
+document.getElementById('btn-nouvel').addEventListener('click', () => ouvrir(null));
+document.getElementById('modal-fermer').addEventListener('click', fermer);
+document.getElementById('modal-annuler').addEventListener('click', fermer);
+// Le clic sur le fond ne ferme pas le formulaire (évite la perte de saisie).
+
+corps.addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act'); if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  const abo = abosCache.find(a => a.id === id); if (!abo) return;
+  if (btn.dataset.act === 'edit') { ouvrir(abo); }
+  else if (btn.dataset.act === 'del') {
+    if (!await Djigui.confirm('Supprimer cet abonnement ? Les factures déjà générées sont conservées.')) return;
+    try { await Djigui.api(`/api/abonnements/${id}`, { method:'DELETE' }); Djigui.toast('Abonnement supprimé','ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!lignes.length) { Djigui.toast('Ajoutez au moins une ligne', 'warn'); return; }
+  const f = new FormData(form);
+  const nb = (f.get('nb_echeances') || '').trim();
+  const payload = {
+    tiers_id: f.get('tiers_id'),
+    reference_dossier: (f.get('reference_dossier') || '').trim() || null,
+    objet: (f.get('objet') || '').trim() || null,
+    libelle: (f.get('libelle') || '').trim() || null,
+    frequence: f.get('frequence'),
+    date_debut: f.get('date_debut'),
+    nb_echeances: nb ? Number(nb) : null,
+    lignes,
+    actif: true,
+  };
+  const [url, method] = editionId ? [`/api/abonnements/${editionId}`, 'PUT'] : ['/api/abonnements', 'POST'];
+  try {
+    await Djigui.api(url, { method, body: payload });
+    Djigui.toast(editionId ? 'Abonnement mis à jour' : 'Abonnement créé', 'ok');
+    fermer(); charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+document.getElementById('btn-generer').addEventListener('click', async () => {
+  try {
+    const r = await Djigui.api('/api/abonnements/generer', { method:'POST' });
+    if (r.generees === 0) Djigui.toast('Aucune facture due aujourd\'hui', 'ok');
+    else Djigui.toast(`${r.generees} facture(s) générée(s) en brouillon`, 'ok');
+    charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+chargerCatalogue();
+charger();
+</script>
+</body>
+</html>

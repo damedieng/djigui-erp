@@ -1,0 +1,32 @@
+# Artefacts de compilation Rust — 14 Go, régénérés par `cargo build`.
+/target/
+**/target/
+
+# Dépendances des tests d'interface (réinstallées par `npm install`).
+node_modules/
+frontend/tests/reel-*.png
+
+# Base de données de travail : elle contient les données réelles du commerçant
+# (clients, ventes, empreintes de mots de passe). Elle se recrée toute seule au
+# premier lancement, migrations comprises.
+djigui.db
+djigui.db-shm
+djigui.db-wal
+*.sqlite
+*.sqlite3
+
+# Pièces jointes des projets : fichiers de l'utilisateur, stockés à côté de la
+# base et jamais versionnés.
+/documents/
+
+# Exports générés (classeurs, agendas).
+*.xlsx
+*.ics
+
+# Divers système / éditeurs
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp

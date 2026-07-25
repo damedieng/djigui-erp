@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Articles</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-building-store"></i></div>
+      <div><div class="brand-name">Djigui</div><div class="brand-sub">Gestion commerciale</div></div>
+    </div>
+    <a class="nav-item" href="accueil.html"><i class="ti ti-home"></i>Accueil</a>
+    <div class="nav-label">Commerce</div>
+    <a class="nav-item" href="#"><i class="ti ti-shopping-cart"></i>Ventes</a>
+    <a class="nav-item" href="caisse.html"><i class="ti ti-cash"></i>Caisse</a>
+    <a class="nav-item" href="facture.html"><i class="ti ti-file-invoice"></i>Factures</a>
+    <a class="nav-item" href="#"><i class="ti ti-truck"></i>Achats</a>
+    <div class="nav-label">Catalogue</div>
+    <a class="nav-item active"><i class="ti ti-box"></i>Articles</a>
+    <a class="nav-item" href="#"><i class="ti ti-tools"></i>Production</a>
+    <div class="nav-label">Contacts</div>
+    <a class="nav-item" href="#"><i class="ti ti-users"></i>Tiers</a>
+    <a class="nav-item" href="#"><i class="ti ti-chart-bar"></i>Rapports</a>
+    <div class="sidebar-foot">
+      <a class="nav-item" href="parametres.html"><i class="ti ti-settings"></i>Paramètres</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Articles</div>
+        <div class="topbar-date">128 références · 5 en rupture</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company">
+          <div class="company-name">Boutique Thierno</div>
+          <div class="company-ninea">NINEA 004521789</div>
+        </div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div class="pos-search" style="width:320px"><i class="ti ti-search" style="font-size:18px"></i>Rechercher un article…</div>
+        <button class="btn btn-primary"><i class="ti ti-plus"></i>Nouvel article</button>
+      </div>
+
+      <div class="chips">
+        <span class="chip active">Tous</span>
+        <span class="chip">Biens</span>
+        <span class="chip">Services</span>
+        <span class="chip">En rupture</span>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="table">
+          <thead>
+            <tr><th>Code</th><th>Désignation</th><th>Type</th><th class="right">Prix vente</th><th class="right">Stock</th><th class="right">Statut</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">ART-0012</td><td>Café Mèw 100g</td><td>Bien</td><td class="right num">950</td><td class="right num">2</td><td class="right"><span class="badge warn">Stock bas</span></td></tr>
+            <tr><td class="num">ART-0007</td><td>Huile végétale 1L</td><td>Bien</td><td class="right num">1 200</td><td class="right num">3</td><td class="right"><span class="badge warn">Stock bas</span></td></tr>
+            <tr><td class="num">ART-0021</td><td>Sucre en poudre 1kg</td><td>Bien</td><td class="right num">1 100</td><td class="right num">0</td><td class="right"><span class="badge danger">Rupture</span></td></tr>
+            <tr><td class="num">ART-0034</td><td>Lait concentré Saba</td><td>Bien</td><td class="right num">1 000</td><td class="right num">48</td><td class="right"><span class="badge ok">En stock</span></td></tr>
+            <tr><td class="num">ART-0002</td><td>Riz brisé 1kg</td><td>Bien</td><td class="right num">650</td><td class="right num">120</td><td class="right"><span class="badge ok">En stock</span></td></tr>
+            <tr><td class="num">SRV-0003</td><td>Livraison à domicile</td><td>Service</td><td class="right num">1 500</td><td class="right muted">—</td><td class="right"><span class="badge neutral">Sans stock</span></td></tr>
+            <tr><td class="num">ART-0056</td><td>Savon de Marseille</td><td>Bien</td><td class="right num">400</td><td class="right num">64</td><td class="right"><span class="badge ok">En stock</span></td></tr>
+            <tr><td class="num">ART-0018</td><td>Thé Lipton 25 sachets</td><td>Bien</td><td class="right num">1 400</td><td class="right num">31</td><td class="right"><span class="badge ok">En stock</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

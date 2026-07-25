@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Caisse</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-building-store"></i></div>
+      <div><div class="brand-name">Djigui</div><div class="brand-sub">Gestion commerciale</div></div>
+    </div>
+    <a class="nav-item" href="accueil.html"><i class="ti ti-home"></i>Accueil</a>
+    <div class="nav-label">Commerce</div>
+    <a class="nav-item" href="#"><i class="ti ti-shopping-cart"></i>Ventes</a>
+    <a class="nav-item active"><i class="ti ti-cash"></i>Caisse</a>
+    <a class="nav-item" href="facture.html"><i class="ti ti-file-invoice"></i>Factures</a>
+    <a class="nav-item" href="#"><i class="ti ti-truck"></i>Achats</a>
+    <div class="nav-label">Catalogue</div>
+    <a class="nav-item" href="articles.html"><i class="ti ti-box"></i>Articles</a>
+    <a class="nav-item" href="#"><i class="ti ti-tools"></i>Production</a>
+    <div class="nav-label">Contacts</div>
+    <a class="nav-item" href="#"><i class="ti ti-users"></i>Tiers</a>
+    <a class="nav-item" href="#"><i class="ti ti-chart-bar"></i>Rapports</a>
+    <div class="sidebar-foot">
+      <a class="nav-item" href="parametres.html"><i class="ti ti-settings"></i>Paramètres</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Caisse</div>
+        <div class="topbar-date">Session ouverte · 08:12</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company">
+          <div class="company-name">Boutique Thierno</div>
+          <div class="company-ninea">NINEA 004521789</div>
+        </div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <div class="pos">
+      <div class="pos-products">
+        <div class="pos-search"><i class="ti ti-search" style="font-size:18px"></i>Rechercher un article ou scanner un code‑barres…</div>
+        <div class="chips">
+          <span class="chip active">Tout</span>
+          <span class="chip">Boissons</span>
+          <span class="chip">Épicerie</span>
+          <span class="chip">Hygiène</span>
+          <span class="chip">Divers</span>
+        </div>
+        <div class="tiles">
+          <div class="tile"><span class="tile-name">Café Mèw</span><span class="tile-price num">950 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Huile 1L</span><span class="tile-price num">1 200 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Lait Saba</span><span class="tile-price num">1 000 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Sucre 1kg</span><span class="tile-price num">1 100 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Savon</span><span class="tile-price num">400 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Thé Lipton</span><span class="tile-price num">1 400 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Riz 1kg</span><span class="tile-price num">650 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Eau 1,5L</span><span class="tile-price num">500 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Pain</span><span class="tile-price num">150 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Bissap 50cl</span><span class="tile-price num">300 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Allumettes</span><span class="tile-price num">100 FCFA</span></div>
+          <div class="tile"><span class="tile-name">Café Touba</span><span class="tile-price num">250 FCFA</span></div>
+        </div>
+      </div>
+
+      <aside class="ticket">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <strong>Ticket</strong>
+          <span class="muted" style="font-size:12px">Client comptoir</span>
+        </div>
+        <div class="ticket-line"><span><span class="muted">2 ×</span> Café Mèw</span><span class="num">1 900</span></div>
+        <div class="ticket-line"><span><span class="muted">1 ×</span> Huile 1L</span><span class="num">1 200</span></div>
+        <div class="ticket-line"><span><span class="muted">3 ×</span> Lait Saba</span><span class="num">3 000</span></div>
+        <div class="ticket-tot">
+          <div class="tot-row"><span>Sous‑total</span><span class="num">6 100</span></div>
+          <div class="tot-row"><span>TVA (18%)</span><span class="num">1 098</span></div>
+          <div class="tot-grand"><span>Total</span><span class="num">7 198 FCFA</span></div>
+        </div>
+        <div class="pay">
+          <span class="pay-opt active">Espèce</span>
+          <span class="pay-opt">Mobile</span>
+          <span class="pay-opt">Virement</span>
+        </div>
+        <button class="btn btn-primary btn-lg" style="margin-top:14px;width:100%;justify-content:center">
+          <i class="ti ti-check"></i>Encaisser · <span class="num">7 198</span>
+        </button>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>

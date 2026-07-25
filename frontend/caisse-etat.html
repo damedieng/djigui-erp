@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · État de caisse</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">État de caisse</div>
+        <div class="topbar-date">Soldes des caisses et journal des mouvements d'argent</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <!-- Barre d'actions (réservée à l'admin) -->
+      <div class="page-head" data-admin>
+        <div style="font-weight:600;font-size:15px">Mes caisses</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-primary" id="btn-nouvelle-caisse"><i class="ti ti-plus"></i>Nouvelle caisse</button>
+          <button class="btn" id="btn-recalcul" title="Reconstruire les soldes depuis les journaux">
+            <i class="ti ti-refresh"></i>Recalculer les soldes</button>
+        </div>
+      </div>
+
+      <!-- Bandeau de PÉRIODE (partagé : cartes + Journal + Bénéfices + Export) -->
+      <div class="periode-bandeau">
+        <div class="periode-titre"><i class="ti ti-calendar-stats"></i> Période analysée</div>
+        <div class="chips periode-chips" id="chips-periode">
+          <span class="chip" data-plage="semaine">Cette semaine</span>
+          <span class="chip" data-plage="mois">Ce mois</span>
+          <span class="chip" data-plage="3mois">3 derniers mois</span>
+          <span class="chip" data-plage="annee">Année en cours</span>
+          <span class="chip" data-plage="tout">Tout</span>
+        </div>
+        <div class="periode-dates">
+          <span>Du</span><input type="date" id="date-du" class="input-date">
+          <span>au</span><input type="date" id="date-au" class="input-date">
+          <button class="btn" id="date-reset" title="Effacer les dates" hidden><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+
+      <!-- Soldes des caisses (impactés par la période) -->
+      <div id="caisses" class="metrics-row" style="display:flex;gap:14px;flex-wrap:wrap"></div>
+
+      <!-- Onglets « dossier » (comme l'écran Factures) -->
+      <div class="tabs-folder" id="tabs-etat">
+        <div class="tab active" data-vue="journal"><i class="ti ti-list-details"></i> Journal</div>
+        <div class="tab" data-vue="sessions"><i class="ti ti-clock-hour-4"></i> Sessions</div>
+        <div class="tab" data-vue="benefices"><i class="ti ti-report-money"></i> Bénéfices</div>
+      </div>
+
+      <!-- Panneau JOURNAL -->
+      <div class="card" data-vue="journal" style="padding:0;overflow:visible">
+        <div class="panel-toolbar">
+          <div class="pos-search" style="width:260px">
+            <i class="ti ti-search" style="font-size:18px"></i>
+            <input id="recherche" type="search" autocomplete="off" placeholder="Rechercher (tiers, moyen)…">
+          </div>
+          <div class="chips" id="chips-sens">
+            <span class="chip active" data-sens="">Tous</span>
+            <span class="chip" data-sens="encaissement">Encaissements</span>
+            <span class="chip" data-sens="decaissement">Décaissements</span>
+          </div>
+        </div>
+        <table class="table">
+          <thead>
+            <tr><th>Date</th><th>Tiers</th><th>Sens</th><th>Moyen</th><th class="right">Montant</th><th data-admin></th></tr>
+          </thead>
+          <tbody id="corps">
+            <tr><td colspan="6" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+          <tfoot>
+            <tr><td colspan="4" class="right" style="font-weight:600">Total de la période</td>
+                <td class="right num" id="total-periode" style="font-weight:700">0</td><td data-admin></td></tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Panneau SESSIONS -->
+      <div class="card" data-vue="sessions" style="padding:0;overflow:visible" hidden>
+        <table class="table">
+          <thead>
+            <tr><th>Caisse</th><th>Ouverte le</th><th>Fermée le</th><th class="right">Fond</th>
+                <th class="right">Encaissé</th><th class="right">Théorique</th><th class="right">Compté</th>
+                <th class="right">Écart</th><th class="right">Statut</th></tr>
+          </thead>
+          <tbody id="corps-sessions">
+            <tr><td colspan="9" class="muted" style="text-align:center;padding:18px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Panneau BÉNÉFICES -->
+      <div data-vue="benefices" hidden>
+        <div class="panel-toolbar" style="border:0;padding-left:0;padding-right:0;justify-content:space-between">
+          <span class="muted" style="font-size:13px">Bénéfice par mois et par caisse (ventes validées ; les ventes annulées sont exclues).</span>
+          <button class="btn btn-primary" id="btn-export"><i class="ti ti-file-spreadsheet"></i>Exporter en Excel</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead>
+              <tr><th>Mois</th><th>Caisse</th><th class="right">Nb ventes</th><th class="right">CA HT</th>
+                  <th class="right">CA TTC</th><th class="right">Coût d'achat</th><th class="right">Bénéfice</th></tr>
+            </thead>
+            <tbody id="corps-benef">
+              <tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Section d'aide -->
+      <div class="aide">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>En haut, le <strong>solde de chaque caisse</strong> : l'argent qui s'y trouve (encaissements +, décaissements −).</li>
+          <li>Onglet <strong>Journal</strong> : chaque mouvement d'argent. Filtrez par période ou par sens. Un admin peut <strong>annuler une vente</strong> encaissée (bouton rouge).</li>
+          <li>Onglet <strong>Sessions</strong> : l'historique des ouvertures/fermetures de caisse avec les écarts.</li>
+          <li>Onglet <strong>Bénéfices</strong> : votre gain par mois et par caisse (chiffre d'affaires − coût d'achat). Le bouton <strong>Exporter en Excel</strong> télécharge un fichier complet (Mouvements, Sessions, Bénéfices).</li>
+          <li>Le bouton <strong>Recalculer les soldes</strong> reconstruit les soldes depuis les factures et paiements — seulement si un solde vous semble faux.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : nouvelle caisse -->
+<div class="modal-overlay" id="modal-caisse" hidden>
+  <div class="modal" style="max-width:400px">
+    <div class="card-head"><span class="card-title">Nouvelle caisse</span>
+      <i class="ti ti-x" id="caisse-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-caisse" class="form-grid">
+      <div class="field full"><label>Nom de la caisse</label>
+        <input name="nom" id="caisse-nom" required placeholder="ex. Caisse 2, Caisse boutique…"></div>
+      <div class="field full"><label>Magasin rattaché</label>
+        <select id="caisse-depot"></select>
+        <span class="check-hint muted">Les ventes de cette caisse déduiront le stock de ce magasin.</span></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="caisse-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : annulation d'une vente -->
+<div class="modal-overlay" id="modal-annuler" hidden>
+  <div class="modal" style="max-width:440px">
+    <div class="card-head"><span class="card-title">Annuler la vente</span>
+      <i class="ti ti-x" id="annuler-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <p class="muted" style="margin-top:0;font-size:13px">
+      La vente sera annulée : le <strong>stock est réintégré</strong>, l'argent encaissé est
+      <strong>ressorti de la caisse</strong> (rendu au client) et tout reste tracé. L'opération est irréversible.
+    </p>
+    <form id="form-annuler" class="form-grid">
+      <input type="hidden" id="annuler-doc-id">
+      <div class="field full"><label>Motif de l'annulation (obligatoire)</label>
+        <textarea id="annuler-motif" required rows="2" placeholder="ex. Le client a changé d'avis, erreur de saisie…"></textarea></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="annuler-annuler">Retour</button>
+        <button type="submit" class="btn btn-primary" style="background:var(--danger);border-color:var(--danger)">
+          <i class="ti ti-arrow-back-up"></i>Confirmer l'annulation</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const corps = document.getElementById('corps');
+const recherche = document.getElementById('recherche');
+let paiements = [], tiersMap = {}, sensCourant = '';
+
+const MODES = { espece:'Espèces', mobile_money:'Mobile Money', virement:'Virement', cheque:'Chèque' };
+const SENS = { encaissement:'Encaissement', decaissement:'Décaissement' };
+let moyensMap = {};
+
+function initialesMoyen(nom) {
+  return (nom || '?').trim().split(/\s+/).slice(0,2).map(m => m[0]||'').join('').toUpperCase() || '?';
+}
+// Cellule « Moyen » : nom exact + vignette (image ou pastille), repli sur la famille.
+function celluleMoyen(p) {
+  const m = p.moyen_paiement_id ? moyensMap[p.moyen_paiement_id] : null;
+  const nom = m ? m.nom : (MODES[p.mode] || p.mode);
+  const vign = m && m.image
+    ? `<span style="width:22px;height:22px;border-radius:5px;background:url('${m.image}') center/cover;flex-shrink:0"></span>`
+    : `<span style="width:22px;height:22px;border-radius:5px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;background:${Djigui.esc((m&&m.couleur)||'#64748b')}">${Djigui.esc(initialesMoyen(nom))}</span>`;
+  return `<span style="display:inline-flex;align-items:center;gap:8px">${vign}<span>${Djigui.esc(nom)}</span></span>`;
+}
+
+let depotMap = {}, caissesListe = [];
+
+// Net (encaissé − décaissé) d'une caisse sur la période courante, depuis le journal.
+function netPeriodeCaisse(caisseId) {
+  const du = document.getElementById('date-du').value;
+  const au = document.getElementById('date-au').value;
+  return paiements.reduce((s, p) => {
+    if (p.caisse_id !== caisseId) return s;
+    const jour = (p.date || '').slice(0, 10);
+    if (du && jour < du) return s;
+    if (au && jour > au) return s;
+    return s + (p.sens === 'encaissement' ? p.montant : -p.montant);
+  }, 0);
+}
+// Libellé lisible de la période (raccourci actif, sinon dates, sinon tout).
+function libellePeriode() {
+  const chip = document.querySelector('#chips-periode .chip.active');
+  if (chip) return chip.textContent.trim();
+  const du = document.getElementById('date-du').value, au = document.getElementById('date-au').value;
+  if (du || au) return 'Période choisie';
+  return 'Depuis toujours';
+}
+
+// Chaque carte : NET de la période en grand + solde total en petit.
+function rendreCaisses() {
+  const admin = Djigui.estAdmin();
+  const lib = libellePeriode();
+  document.getElementById('caisses').innerHTML = caissesListe.map(c => {
+    const net = netPeriodeCaisse(c.id);
+    const coul = net >= 0 ? 'var(--brand-strong)' : 'var(--danger)';
+    return `<div class="metric" style="min-width:210px">
+      <div class="metric-label">${Djigui.esc(c.nom)} <span class="muted" style="font-weight:500">· ${Djigui.esc(lib)}</span></div>
+      <div class="metric-value num" style="color:${coul}">${net>=0?'+':'−'} ${Djigui.fmt(Math.abs(net))} <span class="metric-unit">FCFA</span></div>
+      <div class="metric-unit">Solde total : <strong>${Djigui.fmt(c.solde)}</strong> · <i class="ti ti-building-warehouse"></i> ${Djigui.esc(depotMap[c.depot_id] || 'Magasin par défaut')}</div>
+      ${admin ? `<div style="display:flex;gap:6px;margin-top:10px">
+        <button class="icon-act" data-cact="edit" data-id="${c.id}" title="Modifier"><i class="ti ti-edit"></i></button>
+        ${(!c.a_activite && caissesListe.length > 1) ? `<button class="icon-act danger" data-cact="del" data-id="${c.id}" title="Supprimer"><i class="ti ti-trash"></i></button>` : ''}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function rendre() {
+  const q = recherche.value.trim().toLowerCase();
+  const du = document.getElementById('date-du').value;
+  const au = document.getElementById('date-au').value;
+  const vus = paiements.filter(p => {
+    const nom = (tiersMap[p.tiers_id] || '').toLowerCase();
+    const moyenNom = ((p.moyen_paiement_id && moyensMap[p.moyen_paiement_id]?.nom) || MODES[p.mode] || '').toLowerCase();
+    const okTexte = !q || nom.includes(q) || moyenNom.includes(q);
+    const okSens = !sensCourant || p.sens === sensCourant;
+    const jour = (p.date || '').slice(0, 10);
+    const okDate = (!du || jour >= du) && (!au || jour <= au);
+    return okTexte && okSens && okDate;
+  });
+  const admin = Djigui.estAdmin();
+  // Une vente est annulée si un décaissement (contre-passation) existe sur son document.
+  const docsAnnules = new Set(paiements.filter(p => p.sens === 'decaissement' && p.document_id).map(p => p.document_id));
+  let total = 0;
+  corps.innerHTML = vus.length ? vus.map(p => {
+    total += p.sens === 'encaissement' ? p.montant : -p.montant;
+    const signe = p.sens === 'encaissement' ? '+' : '−';
+    const coul = p.sens === 'encaissement' ? 'var(--brand-strong)' : 'var(--danger)';
+    const annulee = p.document_id && docsAnnules.has(p.document_id);
+    let action = '';
+    if (admin) {
+      if (p.sens === 'encaissement' && p.document_id) {
+        action = annulee
+          ? '<span class="badge neutral">Annulée</span>'
+          : `<button class="btn" data-annuler="${p.document_id}" style="padding:4px 10px;color:var(--danger)"><i class="ti ti-arrow-back-up"></i>Annuler</button>`;
+      } else if (p.sens === 'decaissement' && p.document_id) {
+        action = '<span class="muted" style="font-size:12px">contre-passation</span>';
+      }
+    }
+    return `<tr${annulee?' style="opacity:.6"':''}>
+      <td class="num">${Djigui.dateFr(p.date)}</td>
+      <td>${Djigui.esc(tiersMap[p.tiers_id] || '—')}</td>
+      <td>${SENS[p.sens] || p.sens}</td>
+      <td>${celluleMoyen(p)}</td>
+      <td class="right num" style="color:${coul}">${signe} ${Djigui.fmt(p.montant)}</td>
+      ${admin ? `<td class="right">${action}</td>` : ''}
+    </tr>`;
+  }).join('') : `<tr><td colspan="${admin?6:5}" class="muted" style="text-align:center;padding:24px">Aucun mouvement</td></tr>`;
+  document.getElementById('total-periode').textContent = Djigui.fmt(Math.round(total*100)/100) + ' FCFA';
+}
+
+let caissesMap = {};
+async function charger() {
+  try {
+    const [caisses, tiers, paies, sessions, depots, moyens] = await Promise.all([
+      Djigui.api('/api/caisses').catch(()=>[]),
+      Djigui.api('/api/tiers?filtre=tous').catch(()=>[]),
+      Djigui.api('/api/paiements').catch(()=>[]),
+      Djigui.api('/api/sessions').catch(()=>[]),
+      Djigui.api('/api/depots').catch(()=>[]),
+      Djigui.api('/api/moyens-paiement').catch(()=>[]),
+    ]);
+    moyensMap = {}; moyens.forEach(m => moyensMap[m.id] = m);
+    depotMap = {}; depots.forEach(d => depotMap[d.id] = d.nom);
+    depotsListe = depots;
+    caissesListe = caisses;
+    caissesMap = {}; caisses.forEach(c => caissesMap[c.id] = c.nom);
+    tiersMap = {}; tiers.forEach(t => tiersMap[t.id] = t.nom);
+    paiements = paies;
+    rendreCaisses(); // après paiements : le net de période est calculable
+    rendre();
+    rendreSessions(sessions);
+    // Recharge les bénéfices si l'onglet est déjà ouvert (ex. après une annulation).
+    benefChargees = false;
+    const panelBenef = [...document.querySelectorAll('[data-vue="benefices"]')].find(p => !p.closest('#tabs-etat'));
+    if (panelBenef && !panelBenef.hidden) chargerBenefices();
+  } catch (e) {
+    corps.innerHTML = `<tr><td colspan="5" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`;
+  }
+}
+
+function dateHeure(iso) {
+  if (!iso) return '<span class="muted">—</span>';
+  const d = new Date(iso); if (isNaN(d)) return Djigui.esc(iso);
+  return d.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+function rendreSessions(sessions) {
+  const corpsS = document.getElementById('corps-sessions');
+  corpsS.innerHTML = sessions.length ? sessions.map(s => {
+    const ecart = s.ecart;
+    const ecartTxt = ecart == null ? '<span class="muted">—</span>'
+      : `<span style="color:${Math.abs(ecart)<0.005?'var(--brand-strong)':'var(--danger)'}">${ecart>=0?'+':''}${Djigui.fmt(ecart)}</span>`;
+    return `<tr>
+      <td>${Djigui.esc(caissesMap[s.caisse_id] || '—')}</td>
+      <td class="num">${dateHeure(s.ouvert_le)}</td>
+      <td class="num">${dateHeure(s.ferme_le)}</td>
+      <td class="right num">${Djigui.fmt(s.fond_ouverture)}</td>
+      <td class="right num">${Djigui.fmt(s.encaissements)}</td>
+      <td class="right num">${Djigui.fmt(s.theorique)}</td>
+      <td class="right num">${s.montant_compte==null?'<span class="muted">—</span>':Djigui.fmt(s.montant_compte)}</td>
+      <td class="right num">${ecartTxt}</td>
+      <td class="right">${s.statut==='ouverte'?'<span class="badge ok">Ouverte</span>':'<span class="badge neutral">Fermée</span>'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="muted" style="text-align:center;padding:18px">Aucune session</td></tr>';
+}
+
+// ---- Caisses : création / modification / suppression ----
+let depotsListe = [], editCaisseId = null;
+const modalCaisse = document.getElementById('modal-caisse');
+function optionsDepots(selId) {
+  return depotsListe.map(d =>
+    `<option value="${d.id}" ${selId ? (d.id===selId?'selected':'') : (d.par_defaut?'selected':'')}>${Djigui.esc(d.nom)}</option>`).join('');
+}
+document.getElementById('btn-nouvelle-caisse').addEventListener('click', () => {
+  editCaisseId = null;
+  document.querySelector('#modal-caisse .card-title').textContent = 'Nouvelle caisse';
+  document.getElementById('caisse-nom').value = '';
+  document.getElementById('caisse-depot').innerHTML = optionsDepots(null);
+  modalCaisse.hidden = false;
+  document.getElementById('caisse-nom').focus();
+});
+document.getElementById('caisse-fermer').addEventListener('click', () => { modalCaisse.hidden = true; });
+document.getElementById('caisse-annuler').addEventListener('click', () => { modalCaisse.hidden = true; });
+
+// Actions sur une carte de caisse (modifier / supprimer).
+document.getElementById('caisses').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-cact]'); if (!btn) return;
+  const c = caissesListe.find(x => x.id === btn.dataset.id); if (!c) return;
+  if (btn.dataset.cact === 'edit') {
+    editCaisseId = c.id;
+    document.querySelector('#modal-caisse .card-title').textContent = 'Modifier la caisse';
+    document.getElementById('caisse-nom').value = c.nom;
+    document.getElementById('caisse-depot').innerHTML = optionsDepots(c.depot_id);
+    modalCaisse.hidden = false;
+  } else if (btn.dataset.cact === 'del') {
+    if (c.a_activite) {
+      Djigui.alert('Cette caisse a déjà servi (sessions ou paiements). Elle ne peut pas être supprimée : son historique doit être conservé.', { titre:'Suppression impossible', danger:true });
+      return;
+    }
+    if (!await Djigui.confirm(`Supprimer la caisse « ${c.nom} » ? (elle n'a jamais servi)`,
+        { titre:'Supprimer la caisse', okLabel:'Supprimer', danger:true })) return;
+    try { await Djigui.api(`/api/caisses/${c.id}`, { method:'DELETE' });
+      Djigui.toast('Caisse supprimée', 'ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+document.getElementById('form-caisse').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {
+    nom: document.getElementById('caisse-nom').value.trim(),
+    depot_id: document.getElementById('caisse-depot').value || null,
+  };
+  try {
+    if (editCaisseId) {
+      const c = caissesListe.find(x => x.id === editCaisseId);
+      // Caisse déjà utilisée → on confirme (elle est en service).
+      if (c && c.a_activite && !await Djigui.confirm(
+          'Cette caisse a déjà servi. Confirmer la modification ? (le nom et le magasin changeront pour les prochaines opérations)',
+          { titre:'Modifier une caisse en service', okLabel:'Modifier' })) return;
+      await Djigui.api(`/api/caisses/${editCaisseId}`, { method:'PUT', body });
+      Djigui.toast('Caisse modifiée', 'ok');
+    } else {
+      await Djigui.api('/api/caisses', { method:'POST', body });
+      Djigui.toast('Caisse créée', 'ok');
+    }
+    modalCaisse.hidden = true; charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Onglets (Journal / Sessions / Bénéfices) ----
+let benefChargees = false;
+document.getElementById('tabs-etat').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('#tabs-etat .tab').forEach(x => x.classList.toggle('active', x === t));
+  const vue = t.dataset.vue;
+  document.querySelectorAll('[data-vue]').forEach(p => {
+    if (p.closest('#tabs-etat')) return;           // ne pas masquer les onglets eux-mêmes
+    p.hidden = p.dataset.vue !== vue;
+  });
+  if (vue === 'benefices' && !benefChargees) chargerBenefices();
+});
+
+// ---- Bénéfices par mois × caisse ----
+async function chargerBenefices() {
+  const corpsB = document.getElementById('corps-benef');
+  corpsB.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Chargement…</td></tr>';
+  try {
+    const lignes = await Djigui.api('/api/rapports/benefices' + queryPeriode());
+    if (!lignes.length) {
+      corpsB.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Aucune vente validée</td></tr>';
+    } else {
+      let ttHt=0, ttTtc=0, ttCout=0, ttBen=0;
+      corpsB.innerHTML = lignes.map(l => {
+        ttHt+=l.ca_ht; ttTtc+=l.ca_ttc; ttCout+=l.cout_achat; ttBen+=l.benefice;
+        const coul = l.benefice >= 0 ? 'var(--brand-strong)' : 'var(--danger)';
+        return `<tr>
+          <td class="num">${Djigui.esc(l.mois)}</td>
+          <td>${Djigui.esc(l.caisse_nom)}</td>
+          <td class="right num">${l.nb_ventes}</td>
+          <td class="right num">${Djigui.fmt(l.ca_ht)}</td>
+          <td class="right num">${Djigui.fmt(l.ca_ttc)}</td>
+          <td class="right num">${Djigui.fmt(l.cout_achat)}</td>
+          <td class="right num" style="color:${coul};font-weight:600">${Djigui.fmt(l.benefice)}</td>
+        </tr>`;
+      }).join('') + `<tr style="border-top:2px solid var(--border-strong)">
+        <td colspan="3" class="right" style="font-weight:700">TOTAL</td>
+        <td class="right num" style="font-weight:700">${Djigui.fmt(ttHt)}</td>
+        <td class="right num" style="font-weight:700">${Djigui.fmt(ttTtc)}</td>
+        <td class="right num" style="font-weight:700">${Djigui.fmt(ttCout)}</td>
+        <td class="right num" style="font-weight:700;color:${ttBen>=0?'var(--brand-strong)':'var(--danger)'}">${Djigui.fmt(ttBen)}</td>
+      </tr>`;
+    }
+    benefChargees = true;
+  } catch (e) { corpsB.innerHTML = `<tr><td colspan="7" class="badge danger" style="text-align:center;padding:18px">Erreur : ${Djigui.esc(e.message)}</td></tr>`; }
+}
+
+// ---- Export Excel (.xlsx multi-feuilles) ----
+document.getElementById('btn-export').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-export');
+  btn.disabled = true; const html = btn.innerHTML; btn.innerHTML = '<i class="ti ti-loader"></i>Génération…';
+  try {
+    // Le serveur local écrit le fichier dans « Téléchargements » et l'ouvre :
+    // fiable en desktop (le WebView bloque les téléchargements par lien).
+    const r = await Djigui.api('/api/export/xlsx/enregistrer' + queryPeriode(), { method:'POST' });
+    if (r.nb_ventes === 0) {
+      Djigui.alert(`Aucune vente sur la période choisie : le fichier ne contient que les en-têtes.\n\nÉlargissez la période (ex. « Ce mois » ou « Tout »), puis réexportez.\n\nFichier : ${r.chemin}`,
+        { titre:'Export — période vide', danger:true });
+    } else {
+      Djigui.alert(`${r.nb_ventes} vente(s) exportée(s). Le fichier Excel a été enregistré et ouvert :\n\n${r.chemin}`,
+        { titre:'Export réussi' });
+    }
+    Djigui.toast(r.nb_ventes ? `${r.nb_ventes} vente(s) exportée(s)` : 'Aucune vente sur la période', r.nb_ventes ? 'ok' : 'warn');
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+  finally { btn.disabled = false; btn.innerHTML = html; }
+});
+
+// ---- Annulation d'une vente (Admin) ----
+const modalAnnuler = document.getElementById('modal-annuler');
+corps.addEventListener('click', e => {
+  const btn = e.target.closest('[data-annuler]'); if (!btn) return;
+  document.getElementById('annuler-doc-id').value = btn.dataset.annuler;
+  document.getElementById('annuler-motif').value = '';
+  modalAnnuler.hidden = false;
+  document.getElementById('annuler-motif').focus();
+});
+document.getElementById('annuler-fermer').addEventListener('click', () => modalAnnuler.hidden = true);
+document.getElementById('annuler-annuler').addEventListener('click', () => modalAnnuler.hidden = true);
+document.getElementById('form-annuler').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('annuler-doc-id').value;
+  const motif = document.getElementById('annuler-motif').value.trim();
+  if (!motif) { Djigui.toast('Le motif est obligatoire', 'warn'); return; }
+  try {
+    await Djigui.api(`/api/documents/${id}/annuler`, { method:'POST', body:{ motif } });
+    Djigui.toast('Vente annulée · argent rendu et stock réintégré', 'ok');
+    modalAnnuler.hidden = true; charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Filtres ----
+recherche.addEventListener('input', rendre);
+document.getElementById('chips-sens').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll('#chips-sens .chip').forEach(x => x.classList.remove('active'));
+  c.classList.add('active'); sensCourant = c.dataset.sens; rendre();
+});
+const dateDu = document.getElementById('date-du');
+const dateAu = document.getElementById('date-au');
+const dateReset = document.getElementById('date-reset');
+function majResetDate(){ dateReset.hidden = !(dateDu.value || dateAu.value); }
+
+// Chaîne de requête ?du=&au= depuis les dates courantes (pour bénéfices + export).
+function queryPeriode() {
+  const qs = new URLSearchParams();
+  if (dateDu.value) qs.set('du', dateDu.value);
+  if (dateAu.value) qs.set('au', dateAu.value);
+  const s = qs.toString();
+  return s ? '?' + s : '';
+}
+
+// La période a changé : rafraîchit le journal, et les bénéfices s'ils sont ouverts.
+function periodeChangee() {
+  majResetDate();
+  rendreCaisses();                // cartes = net de la période
+  rendre();                       // journal (filtre côté client)
+  benefChargees = false;
+  const panelBenef = [...document.querySelectorAll('[data-vue="benefices"]')].find(p => !p.closest('#tabs-etat'));
+  if (panelBenef && !panelBenef.hidden) chargerBenefices();
+}
+
+// Raccourcis de période (préremplissent les dates).
+const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+function appliquerPlage(nom) {
+  const now = new Date();
+  let du = '', au = iso(now);
+  if (nom === 'semaine') { const d = new Date(now); const j = (d.getDay()+6)%7; d.setDate(d.getDate()-j); du = iso(d); }      // depuis lundi
+  else if (nom === 'mois')  { du = iso(new Date(now.getFullYear(), now.getMonth(), 1)); }
+  else if (nom === '3mois') { du = iso(new Date(now.getFullYear(), now.getMonth()-2, 1)); }                                  // mois courant + 2 précédents
+  else if (nom === 'annee') { du = iso(new Date(now.getFullYear(), 0, 1)); }
+  else if (nom === 'tout')  { du = ''; au = ''; }
+  dateDu.value = du; dateAu.value = au;
+}
+document.getElementById('chips-periode').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll('#chips-periode .chip').forEach(x => x.classList.toggle('active', x === c));
+  appliquerPlage(c.dataset.plage);
+  periodeChangee();
+});
+// Saisie manuelle d'une date ⇒ on retire la sélection de raccourci.
+[dateDu, dateAu].forEach(el => el.addEventListener('change', () => {
+  document.querySelectorAll('#chips-periode .chip').forEach(x => x.classList.remove('active'));
+  periodeChangee();
+}));
+dateReset.addEventListener('click', () => {
+  dateDu.value = ''; dateAu.value = '';
+  document.querySelectorAll('#chips-periode .chip').forEach(x => x.classList.remove('active'));
+  periodeChangee();
+});
+
+document.getElementById('btn-recalcul').addEventListener('click', async () => {
+  if (!await Djigui.confirm('Recalculer tous les soldes depuis les factures et paiements ?')) return;
+  try {
+    await Djigui.api('/api/recalcul-soldes', { method:'POST' });
+    Djigui.toast('Soldes recalculés', 'ok'); charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+charger();
+</script>
+</body>
+</html>

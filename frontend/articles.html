@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Articles</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Articles</div>
+        <div class="topbar-date" id="compteur">—</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company">
+          <div class="company-name"></div>
+          <div class="company-ninea"></div>
+        </div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div class="pos-search" style="width:320px">
+          <i class="ti ti-search" style="font-size:18px"></i>
+          <input id="recherche" type="search" autocomplete="off" placeholder="Rechercher un article…">
+        </div>
+        <button class="btn btn-primary" id="btn-nouvel"><i class="ti ti-plus"></i>Nouvel article</button>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div class="chips" id="chips">
+          <span class="chip active" data-filtre="tous">Tous</span>
+          <span class="chip" data-filtre="biens">Biens</span>
+          <span class="chip" data-filtre="services">Services</span>
+          <span class="chip" data-filtre="en_rupture">En rupture</span>
+        </div>
+        <button class="btn" id="btn-cats"><i class="ti ti-tag"></i>Gérer les catégories</button>
+      </div>
+
+      <!-- Barre d'actions par lot -->
+      <div class="bulk-bar" id="bulk-bar" hidden>
+        <span class="bulk-count" id="bulk-count">0 sélectionné</span>
+        <div class="bulk-spacer"></div>
+        <label style="font-size:13px">Catégorie :</label>
+        <select id="bulk-categorie"><option value="">— Non classé —</option></select>
+        <button class="btn" id="bulk-appliquer-cat"><i class="ti ti-check"></i>Affecter</button>
+        <button class="btn" id="bulk-desactiver"><i class="ti ti-eye-off"></i>Désactiver</button>
+        <button class="btn" id="bulk-supprimer"><i class="ti ti-trash"></i>Supprimer</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:visible">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" class="chk-tous" id="chk-tous"></th>
+              <th>Code</th><th>Désignation</th><th>Type</th><th>Catégorie</th><th class="right">Prix vente</th><th class="right">Stock</th><th class="right">Statut</th><th class="right">Actions</th></tr>
+          </thead>
+          <tbody id="corps-articles">
+            <tr><td colspan="9" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="pager" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px">
+        <span class="muted" id="pager-info" style="font-size:13px">—</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="btn-prec"><i class="ti ti-chevron-left"></i>Précédent</button>
+          <button class="btn" id="btn-suiv">Suivant<i class="ti ti-chevron-right"></i></button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : nouvel article -->
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal">
+    <div class="card-head"><span class="card-title" id="modal-titre">Nouvel article</span>
+      <i class="ti ti-x" id="modal-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-article" class="form-grid">
+      <div class="field"><label>Code</label><input name="code" required></div>
+      <div class="field"><label>Type</label>
+        <select name="type"><option value="bien">Bien</option><option value="service">Service</option></select></div>
+      <div class="field full"><label>Désignation</label><input name="designation" required></div>
+      <div class="field full"><label>Code-barres (scan)</label><input name="code_barre" placeholder="EAN / UPC — optionnel"></div>
+      <div class="field full"><label>Catégorie</label>
+        <select name="categorie_id" id="sel-categorie"><option value="">— Non classé —</option></select></div>
+      <div class="field full"><label>Image du produit</label>
+        <div class="img-upload">
+          <div class="img-preview" id="img-preview"><i class="ti ti-photo"></i></div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label class="btn" style="cursor:pointer;width:max-content">
+              <i class="ti ti-upload"></i>Choisir une image
+              <input type="file" id="img-file" accept="image/*" hidden>
+            </label>
+            <button type="button" class="btn" id="img-suppr" hidden style="width:max-content"><i class="ti ti-x"></i>Retirer</button>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>Prix de vente (HT)</label><input name="prix_vente" type="number" step="0.01" value="0"></div>
+      <div class="field"><label>Prix d'achat (HT)</label><input name="prix_achat" type="number" step="0.01"></div>
+      <div class="field full"><label>Taxes appliquées</label><div id="sel-taxes" class="taxes-choices"></div></div>
+      <div class="field"><label>Seuil d'alerte stock</label><input name="stock_alerte" type="number" step="0.01"></div>
+      <div class="field full" id="champ-stock">
+        <label class="check"><input name="gere_stock" type="checkbox" checked> Gérer le stock de cet article</label>
+        <span class="check-hint muted" id="hint-service" hidden>Un service ne gère jamais de stock.</span>
+      </div>
+      <div class="field full alert warn" id="alerte-prix" hidden>
+        <i class="ti ti-alert-triangle"></i>
+        <span>Le prix d'achat est supérieur ou égal au prix de vente : la marge sera nulle ou négative.</span>
+      </div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="modal-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : gestion des catégories -->
+<div class="modal-overlay" id="modal-cats" hidden>
+  <div class="modal" style="max-width:480px">
+    <div class="card-head"><span class="card-title">Gérer les catégories</span>
+      <i class="ti ti-x" id="cats-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-cat-add" style="display:flex;gap:10px;margin-bottom:16px">
+      <input name="nom" placeholder="Nouvelle catégorie…" required
+             style="flex:1;font:inherit;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius)">
+      <button type="submit" class="btn btn-primary"><i class="ti ti-plus"></i>Ajouter</button>
+    </form>
+    <div id="cats-liste"></div>
+    <input type="file" id="cat-img-file" accept="image/*" hidden>
+    <div class="aide" style="margin-top:14px">
+      <div class="aide-titre"><i class="ti ti-info-circle"></i> Image de catégorie (facultatif)</div>
+      <ul>
+        <li>Cliquez sur la <strong>vignette</strong> à gauche d'une catégorie pour lui ajouter une image (max 1 Mo).</li>
+        <li>L'image s'affiche <strong>en fond des tuiles à la caisse</strong>. Sans image, l'affichage reste normal.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const corps = document.getElementById('corps-articles');
+const recherche = document.getElementById('recherche');
+let filtreCourant = 'tous';
+let articles = [];
+const LIMITE = 50;   // taille de page (recherche/pagination serveur, échelle « supermarché »)
+let offset = 0;      // décalage de la page courante
+let total = 0;       // total de résultats (filtre + recherche) renvoyé par le serveur
+
+function badgeStatut(a) {
+  if (!a.gere_stock) return '<span class="badge neutral">Sans stock</span>';
+  const s = a.stock ?? 0, seuil = a.stock_alerte ?? 0;
+  if (s <= 0) return '<span class="badge danger">Rupture</span>';
+  if (s <= seuil) return '<span class="badge warn">Stock bas</span>';
+  return '<span class="badge ok">En stock</span>';
+}
+
+function majPager() {
+  const debut = total === 0 ? 0 : offset + 1;
+  const fin = Math.min(offset + articles.length, total);
+  document.getElementById('pager-info').textContent =
+    total === 0 ? 'Aucun résultat' : `${debut}–${fin} sur ${total}`;
+  document.getElementById('compteur').textContent =
+    total === 0 ? 'Aucune référence' : `${total} référence${total > 1 ? 's' : ''}`;
+  document.getElementById('btn-prec').disabled = offset <= 0;
+  document.getElementById('btn-suiv').disabled = offset + LIMITE >= total;
+}
+
+function rendre() {
+  majPager();
+  if (!articles.length) {
+    corps.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">Aucun article</td></tr>';
+    majBulk();
+    return;
+  }
+  corps.innerHTML = articles.map(a => `
+    <tr>
+      <td><input type="checkbox" class="chk-ligne" data-id="${a.id}" ${selection.has(a.id) ? 'checked' : ''}></td>
+      <td class="num">${Djigui.esc(a.code)}</td>
+      <td><div class="cell-article">
+        ${a.image ? `<img class="thumb" src="${Djigui.esc(a.image)}" alt="">` : '<span class="thumb thumb-vide"><i class="ti ti-photo"></i></span>'}
+        <span>${Djigui.esc(a.designation)}</span>
+      </div></td>
+      <td>${a.type === 'service' ? 'Service' : 'Bien'}</td>
+      <td>${a.categorie_nom ? Djigui.esc(a.categorie_nom) : '<span class="muted">—</span>'}</td>
+      <td class="right num">${Djigui.fmt(a.prix_vente)}</td>
+      <td class="right ${a.gere_stock ? 'num' : 'muted'}">${a.gere_stock ? Djigui.fmt(a.stock ?? 0) : '—'}</td>
+      <td class="right">${badgeStatut(a)}</td>
+      <td class="right actions">
+        <button class="icon-act" data-act="edit" data-id="${a.id}" title="Modifier"><i class="ti ti-edit"></i></button>
+        <button class="icon-act danger" data-act="del" data-id="${a.id}" title="Désactiver"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`).join('');
+  majBulk();
+}
+
+async function charger() {
+  corps.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>';
+  try {
+    const params = new URLSearchParams({ filtre: filtreCourant, limite: LIMITE, offset });
+    const q = recherche.value.trim();
+    if (q) params.set('recherche', q);
+    const page = await Djigui.api(`/api/articles/page?${params}`);
+    articles = page.items;
+    total = page.total;
+    selection.clear();  // la sélection porte sur la page affichée
+    // garde-fou : si l'offset dépasse le total (ex. après filtrage), on recadre
+    if (offset > 0 && !articles.length && total > 0) { offset = 0; return charger(); }
+    rendre();
+  } catch (e) {
+    corps.innerHTML = `<tr><td colspan="9" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`;
+  }
+}
+
+// ---- Sélection multiple & barre par lot (traitement par lot) ----
+const selection = new Set();
+const bulkBar = document.getElementById('bulk-bar');
+const chkTous = document.getElementById('chk-tous');
+let categoriesDispo = [];
+
+function majBulk() {
+  const n = selection.size;
+  bulkBar.hidden = n === 0;
+  document.getElementById('bulk-count').textContent = n + ' sélectionné' + (n > 1 ? 's' : '');
+  const visibles = [...corps.querySelectorAll('.chk-ligne')];
+  chkTous.checked = visibles.length > 0 && visibles.every(c => c.checked);
+}
+corps.addEventListener('change', e => {
+  const chk = e.target.closest('.chk-ligne'); if (!chk) return;
+  if (chk.checked) selection.add(chk.dataset.id); else selection.delete(chk.dataset.id);
+  majBulk();
+});
+chkTous.addEventListener('change', () => {
+  corps.querySelectorAll('.chk-ligne').forEach(c => {
+    c.checked = chkTous.checked;
+    if (chkTous.checked) selection.add(c.dataset.id); else selection.delete(c.dataset.id);
+  });
+  majBulk();
+});
+
+document.getElementById('bulk-appliquer-cat').addEventListener('click', async () => {
+  const categorie_id = document.getElementById('bulk-categorie').value || null;
+  const ids = [...selection];
+  try {
+    const r = await Djigui.api('/api/articles/lot/categorie', { method:'POST', body:{ ids, categorie_id } });
+    Djigui.toast(`${r.traites} article(s) reclassé(s)`, 'ok');
+    selection.clear(); charger(); rafraichirBulkCats();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('bulk-desactiver').addEventListener('click', async () => {
+  const ids = [...selection];
+  if (!await Djigui.confirm(`Désactiver ${ids.length} article(s) ? Ils seront masqués, l'historique est conservé.`,
+      { titre:'Désactiver', okLabel:'Désactiver' })) return;
+  try {
+    const r = await Djigui.api('/api/articles/lot/desactiver', { method:'POST', body:{ ids } });
+    Djigui.toast(`${r.traites} article(s) désactivé(s)`, 'ok');
+    selection.clear(); charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('bulk-supprimer').addEventListener('click', async () => {
+  const ids = [...selection];
+  if (!await Djigui.confirm(
+      `Supprimer ${ids.length} article(s) ?\n\nSeuls les articles jamais utilisés (aucune vente, aucun stock) seront supprimés définitivement. Les autres seront automatiquement archivés (désactivés) pour préserver l'historique.`,
+      { titre:'Supprimer les articles', okLabel:'Supprimer', danger:true })) return;
+  try {
+    const r = await Djigui.api('/api/articles/lot/supprimer', { method:'POST', body:{ ids } });
+    Djigui.toast(`${r.supprimes} supprimé(s), ${r.archives} archivé(s)`, 'ok');
+    selection.clear(); charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+function rafraichirBulkCats() {
+  const sel = document.getElementById('bulk-categorie');
+  sel.innerHTML = '<option value="">— Non classé —</option>' +
+    categoriesDispo.map(c => `<option value="${Djigui.esc(c.id)}">${Djigui.esc(c.nom)}</option>`).join('');
+}
+
+let taxesDispo = [], taxesDefaut = [];
+async function chargerTaxes() {
+  try {
+    taxesDispo = await Djigui.api('/api/taxes');
+    taxesDefaut = taxesDispo.filter(t => t.par_defaut).map(t => t.id);
+    rendreChoixTaxes([]);
+  } catch (e) { /* indisponible : aucune taxe proposée */ }
+}
+function rendreChoixTaxes(cochees) {
+  const box = document.getElementById('sel-taxes');
+  box.innerHTML = taxesDispo.map(t => `
+    <label class="taxe-choice"><input type="checkbox" value="${t.id}" ${cochees.includes(t.id)?'checked':''}>
+      ${Djigui.esc(t.nom)} <span class="muted num">${t.taux}${t.type==='fixe'?' FCFA':' %'}</span></label>`).join('')
+    || '<span class="muted">Aucune taxe — ajoutez-en dans Paramètres</span>';
+}
+function taxesCochees() {
+  return [...document.querySelectorAll('#sel-taxes input:checked')].map(i => i.value);
+}
+// taux « principal » conservé dans article.taux_tva (compat) : 1re taxe pourcentage cochée
+function taxePrincipale() {
+  const ids = taxesCochees();
+  const p = taxesDispo.find(t => ids.includes(t.id) && t.type === 'pourcentage');
+  return p ? p.taux : 0;
+}
+
+async function chargerCategories() {
+  try {
+    const cats = await Djigui.api('/api/categories');
+    categoriesDispo = cats;
+    const sel = document.getElementById('sel-categorie');
+    sel.insertAdjacentHTML('beforeend',
+      cats.map(c => `<option value="${Djigui.esc(c.id)}">${Djigui.esc(c.nom)}</option>`).join(''));
+    rafraichirBulkCats();
+  } catch (e) { /* pas bloquant : la catégorie reste optionnelle */ }
+}
+
+document.getElementById('chips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  document.querySelectorAll('#chips .chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  filtreCourant = chip.dataset.filtre;
+  offset = 0;
+  charger();
+});
+
+// Recherche serveur, temporisée pour ne pas requêter à chaque frappe.
+let debounce;
+recherche.addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => { offset = 0; charger(); }, 250);
+});
+
+document.getElementById('btn-prec').addEventListener('click', () => {
+  if (offset <= 0) return;
+  offset = Math.max(0, offset - LIMITE); charger();
+});
+document.getElementById('btn-suiv').addEventListener('click', () => {
+  if (offset + LIMITE >= total) return;
+  offset += LIMITE; charger();
+});
+
+// Modale
+const modal = document.getElementById('modal');
+const form = document.getElementById('form-article');
+const titre = document.getElementById('modal-titre');
+let editionId = null; // null = création, sinon id de l'article modifié
+let imageCourante = null; // data-URI base64 de l'image, ou null
+
+const imgPreview = document.getElementById('img-preview');
+const imgFile = document.getElementById('img-file');
+const imgSuppr = document.getElementById('img-suppr');
+
+function majPreviewImage() {
+  if (imageCourante) {
+    imgPreview.innerHTML = `<img src="${imageCourante}" alt="">`;
+    imgSuppr.hidden = false;
+  } else {
+    imgPreview.innerHTML = '<i class="ti ti-photo"></i>';
+    imgSuppr.hidden = true;
+  }
+}
+imgFile.addEventListener('change', () => {
+  const file = imgFile.files[0]; if (!file) return;
+  if (file.size > 1024 * 1024) { Djigui.alert('Image trop lourde (max 1 Mo).'); imgFile.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => { imageCourante = reader.result; majPreviewImage(); };
+  reader.readAsDataURL(file);
+});
+imgSuppr.addEventListener('click', () => { imageCourante = null; imgFile.value = ''; majPreviewImage(); });
+
+function majEtatStock() {
+  const service = form.type.value === 'service';
+  if (service) form.gere_stock.checked = false;
+  form.gere_stock.disabled = service;             // service ⇒ pas de stock (pari §3.2)
+  document.getElementById('hint-service').hidden = !service;
+}
+
+// Alerte cohérence non bloquante : prix d'achat >= prix de vente
+function majAlertePrix() {
+  const pv = Number(form.prix_vente.value) || 0;
+  const pa = form.prix_achat.value === '' ? null : Number(form.prix_achat.value);
+  const incoherent = pa != null && pa >= pv && pv > 0;
+  document.getElementById('alerte-prix').hidden = !incoherent;
+}
+
+function ouvrirCreation() {
+  editionId = null;
+  form.reset();
+  rendreChoixTaxes(taxesDefaut);
+  imageCourante = null; majPreviewImage();
+  titre.textContent = 'Nouvel article';
+  majEtatStock(); majAlertePrix();
+  modal.hidden = false;
+  form.code.focus();
+}
+
+function ouvrirEdition(a) {
+  editionId = a.id;
+  form.reset();
+  titre.textContent = 'Modifier l’article';
+  form.code.value = a.code;
+  form.type.value = a.type;
+  form.designation.value = a.designation;
+  form.categorie_id.value = a.categorie_id || '';
+  form.prix_vente.value = a.prix_vente ?? 0;
+  form.prix_achat.value = a.prix_achat ?? '';
+  rendreChoixTaxes((a.taxes || []).map(t => t.id));
+  form.stock_alerte.value = a.stock_alerte ?? '';
+  form.code_barre.value = a.code_barre || '';
+  form.gere_stock.checked = !!a.gere_stock;
+  imageCourante = a.image || null; majPreviewImage();
+  majEtatStock(); majAlertePrix();
+  modal.hidden = false;
+}
+
+const fermer = () => { modal.hidden = true; };
+document.getElementById('btn-nouvel').addEventListener('click', ouvrirCreation);
+document.getElementById('modal-fermer').addEventListener('click', fermer);
+document.getElementById('modal-annuler').addEventListener('click', fermer);
+// Le clic sur le fond ne ferme pas le formulaire (évite la perte de saisie).
+form.type.addEventListener('change', majEtatStock);
+form.prix_vente.addEventListener('input', majAlertePrix);
+form.prix_achat.addEventListener('input', majAlertePrix);
+
+// Actions sur les lignes (modifier / désactiver)
+corps.addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act'); if (!btn) return;
+  const a = articles.find(x => x.id === btn.dataset.id); if (!a) return;
+  if (btn.dataset.act === 'edit') {
+    ouvrirEdition(a);
+  } else if (btn.dataset.act === 'del') {
+    if (!await Djigui.confirm(`Désactiver « ${a.designation} » ? Il n’apparaîtra plus dans la liste.`)) return;
+    try { await Djigui.api(`/api/articles/${a.id}`, { method: 'DELETE' }); charger(); }
+    catch (err) { Djigui.alert('Erreur : ' + err.message); }
+  }
+});
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData(form);
+  const num = v => v === '' || v == null ? null : Number(v);
+  const payload = {
+    code: f.get('code').trim(),
+    type: f.get('type'),
+    designation: f.get('designation').trim(),
+    prix_vente: num(f.get('prix_vente')) ?? 0,
+    prix_achat: num(f.get('prix_achat')),
+    taux_tva: taxePrincipale(),
+    gere_stock: form.gere_stock.checked,
+    stock_alerte: num(f.get('stock_alerte')),
+    categorie_id: f.get('categorie_id') || null,
+    image: imageCourante,
+    code_barre: f.get('code_barre').trim() || null,
+    taxes: taxesCochees(),
+  };
+  const [url, method] = editionId
+    ? [`/api/articles/${editionId}`, 'PUT']
+    : ['/api/articles', 'POST'];
+  try {
+    await Djigui.api(url, { method, body: payload });
+    fermer();
+    if (!editionId) { offset = 0;
+      if (filtreCourant !== 'tous') { filtreCourant = 'tous';
+        document.querySelectorAll('#chips .chip').forEach(c => c.classList.remove('active'));
+        document.querySelector('#chips .chip[data-filtre="tous"]').classList.add('active'); } }
+    charger();
+  } catch (err) { Djigui.alert('Erreur : ' + err.message); }
+});
+
+// ---- Gestion des catégories ----
+const modalCats = document.getElementById('modal-cats');
+const catsListe = document.getElementById('cats-liste');
+const formCatAdd = document.getElementById('form-cat-add');
+
+async function rendreCats() {
+  try {
+    const cats = await Djigui.api('/api/categories');
+    catsListe.innerHTML = cats.length ? cats.map(c => `
+      <div class="cat-ligne" data-id="${c.id}">
+        <button class="cat-thumb" data-act="img" title="Ajouter / changer l'image">
+          ${c.image ? `<img src="${Djigui.esc(c.image)}" alt="">` : '<i class="ti ti-photo"></i>'}
+        </button>
+        <input class="cat-nom" value="${Djigui.esc(c.nom)}">
+        <span class="muted" style="font-size:12px;white-space:nowrap">${c.nb_articles} article${c.nb_articles > 1 ? 's' : ''}</span>
+        ${c.image ? '<button class="icon-act" data-act="img-del" title="Retirer l\'image"><i class="ti ti-photo-off"></i></button>' : ''}
+        <button class="icon-act" data-act="save" title="Renommer"><i class="ti ti-device-floppy"></i></button>
+        <button class="icon-act danger" data-act="del" title="Supprimer"><i class="ti ti-trash"></i></button>
+      </div>`).join('') : '<div class="muted" style="text-align:center;padding:12px">Aucune catégorie</div>';
+  } catch (e) { catsListe.innerHTML = `<div class="badge danger">Erreur : ${Djigui.esc(e.message)}</div>`; }
+}
+
+// Fichier image pour une catégorie : on retient la ligne ciblée puis on PUT.
+const catImgFile = document.getElementById('cat-img-file');
+let catImgCibleId = null;
+catImgFile.addEventListener('change', async () => {
+  const file = catImgFile.files[0]; const id = catImgCibleId; catImgFile.value = '';
+  if (!file || !id) return;
+  if (file.size > 1024 * 1024) { Djigui.alert('Image trop lourde (max 1 Mo).'); return; }
+  const ligne = catsListe.querySelector(`.cat-ligne[data-id="${id}"]`);
+  const nom = ligne ? ligne.querySelector('.cat-nom').value.trim() : '';
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try { await Djigui.api(`/api/categories/${id}`, { method:'PUT', body: { nom, image: reader.result } });
+      Djigui.toast('Image ajoutée', 'ok'); rendreCats(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('btn-cats').addEventListener('click', () => { modalCats.hidden = false; rendreCats(); });
+document.getElementById('cats-fermer').addEventListener('click', () => {
+  modalCats.hidden = true; rafraichirSelectCats(); charger();
+});
+// Clic sur le fond : ne ferme pas (fermeture via le X seulement).
+
+formCatAdd.addEventListener('submit', async e => {
+  e.preventDefault();
+  const nom = formCatAdd.nom.value.trim(); if (!nom) return;
+  try { await Djigui.api('/api/categories', { method: 'POST', body: { nom } });
+    formCatAdd.reset(); Djigui.toast('Catégorie ajoutée', 'ok'); rendreCats(); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+catsListe.addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act, .cat-thumb'); if (!btn) return;
+  const ligne = btn.closest('.cat-ligne'); const id = ligne.dataset.id;
+  if (btn.dataset.act === 'img') {
+    catImgCibleId = id; catImgFile.click(); return;
+  }
+  if (btn.dataset.act === 'img-del') {
+    const nom = ligne.querySelector('.cat-nom').value.trim();
+    try { await Djigui.api(`/api/categories/${id}`, { method:'PUT', body: { nom, image: null } });
+      Djigui.toast('Image retirée', 'ok'); rendreCats(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+    return;
+  }
+  if (btn.dataset.act === 'save') {
+    const nom = ligne.querySelector('.cat-nom').value.trim(); if (!nom) return;
+    try { await Djigui.api(`/api/categories/${id}`, { method: 'PUT', body: { nom } });
+      Djigui.toast('Catégorie renommée', 'ok'); rendreCats(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  } else if (btn.dataset.act === 'del') {
+    if (!await Djigui.confirm('Supprimer cette catégorie ? Les articles concernés repasseront en « non classé ».')) return;
+    try { await Djigui.api(`/api/categories/${id}`, { method: 'DELETE' });
+      Djigui.toast('Catégorie supprimée', 'ok'); rendreCats(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+// recharge le menu déroulant de catégories de la modale article
+function rafraichirSelectCats() {
+  const sel = document.getElementById('sel-categorie');
+  const courant = sel.value;
+  sel.innerHTML = '<option value="">— Non classé —</option>';
+  chargerCategories().then(() => { sel.value = courant; });
+}
+
+chargerTaxes();
+chargerCategories();
+charger();
+</script>
+</body>
+</html>

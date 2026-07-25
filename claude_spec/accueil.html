@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Tableau de bord</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-building-store"></i></div>
+      <div><div class="brand-name">Djigui</div><div class="brand-sub">Gestion commerciale</div></div>
+    </div>
+    <a class="nav-item active"><i class="ti ti-home"></i>Accueil</a>
+    <div class="nav-label">Commerce</div>
+    <a class="nav-item" href="#"><i class="ti ti-shopping-cart"></i>Ventes</a>
+    <a class="nav-item" href="caisse.html"><i class="ti ti-cash"></i>Caisse</a>
+    <a class="nav-item" href="facture.html"><i class="ti ti-file-invoice"></i>Factures</a>
+    <a class="nav-item" href="#"><i class="ti ti-truck"></i>Achats</a>
+    <div class="nav-label">Catalogue</div>
+    <a class="nav-item" href="articles.html"><i class="ti ti-box"></i>Articles</a>
+    <a class="nav-item" href="#"><i class="ti ti-tools"></i>Production</a>
+    <div class="nav-label">Contacts</div>
+    <a class="nav-item" href="#"><i class="ti ti-users"></i>Tiers</a>
+    <a class="nav-item" href="#"><i class="ti ti-chart-bar"></i>Rapports</a>
+    <div class="sidebar-foot">
+      <a class="nav-item" href="parametres.html"><i class="ti ti-settings"></i>Paramètres</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Tableau de bord</div>
+        <div class="topbar-date">Lundi 21 juillet 2026</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company">
+          <div class="company-name">Boutique Thierno</div>
+          <div class="company-ninea">NINEA 004521789</div>
+        </div>
+        <button class="icon-btn" aria-label="Notifications"><i class="ti ti-bell"></i></button>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">Ventes du jour</div><div class="metric-value num">84 500</div><div class="metric-unit">FCFA</div></div>
+        <div class="metric"><div class="metric-label">Ventes du mois</div><div class="metric-value num">1 245 000</div><div class="metric-unit">FCFA</div></div>
+        <div class="metric"><div class="metric-label">Encaisse caisse</div><div class="metric-value num">312 000</div><div class="metric-unit">FCFA</div></div>
+        <div class="metric"><div class="metric-label">Articles en rupture</div><div class="metric-value num warn">5</div><div class="metric-unit">à réapprovisionner</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Ventes des 7 derniers jours</span></div>
+          <div class="bars">
+            <div class="bar-col"><div class="bar" style="height:52px"></div><span class="bar-label">Mar</span></div>
+            <div class="bar-col"><div class="bar" style="height:78px"></div><span class="bar-label">Mer</span></div>
+            <div class="bar-col"><div class="bar" style="height:44px"></div><span class="bar-label">Jeu</span></div>
+            <div class="bar-col"><div class="bar" style="height:96px"></div><span class="bar-label">Ven</span></div>
+            <div class="bar-col"><div class="bar" style="height:70px"></div><span class="bar-label">Sam</span></div>
+            <div class="bar-col"><div class="bar" style="height:32px"></div><span class="bar-label">Dim</span></div>
+            <div class="bar-col"><div class="bar" style="height:112px"></div><span class="bar-label">Lun</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Alertes de stock</span><i class="ti ti-alert-triangle" style="color:var(--warning);font-size:19px"></i></div>
+          <table class="table">
+            <tbody>
+              <tr><td>Café Mèw 100g</td><td class="right"><span class="badge warn">2 restants</span></td></tr>
+              <tr><td>Huile 1L</td><td class="right"><span class="badge warn">3 restants</span></td></tr>
+              <tr><td>Sucre 1kg</td><td class="right"><span class="badge danger">Rupture</span></td></tr>
+              <tr><td>Lait Saba</td><td class="right"><span class="badge warn">4 restants</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Dernières ventes</span><a class="btn" href="facture.html"><i class="ti ti-list"></i>Tout voir</a></div>
+        <table class="table">
+          <thead><tr><th>Numéro</th><th>Client</th><th>Mode</th><th class="right">Montant</th><th class="right">Statut</th></tr></thead>
+          <tbody>
+            <tr><td class="num">FA-2026-0412</td><td>Client comptoir</td><td>Espèce</td><td class="right num">12 400</td><td class="right"><span class="badge ok">Payée</span></td></tr>
+            <tr><td class="num">FA-2026-0411</td><td>Boutique Aïda</td><td>Mobile money</td><td class="right num">7 900</td><td class="right"><span class="badge ok">Payée</span></td></tr>
+            <tr><td class="num">FA-2026-0410</td><td>Restaurant Teranga</td><td>Virement</td><td class="right num">54 000</td><td class="right"><span class="badge warn">En attente</span></td></tr>
+            <tr><td class="num">FA-2026-0409</td><td>Client comptoir</td><td>Espèce</td><td class="right num">3 100</td><td class="right"><span class="badge ok">Payée</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

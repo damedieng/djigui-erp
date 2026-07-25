@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Documents</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title" id="titre-page">Documents</div>
+        <div class="topbar-date" id="sous-titre">Devis, factures, avoirs…</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company"><div class="company-name"></div>
+          <div class="company-ninea"></div></div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div class="pos-search" style="width:320px">
+          <i class="ti ti-search" style="font-size:18px"></i>
+          <input id="recherche" type="search" autocomplete="off" placeholder="Rechercher (n°, tiers, objet, dossier)…">
+        </div>
+        <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-plus"></i>Nouveau document</button>
+      </div>
+
+      <!-- Onglets « dossier » : type de document (filtre principal) -->
+      <div class="tabs-folder" id="tabs-type">
+        <div class="tab active" data-type="">Tous</div>
+        <div class="tab" data-type="devis">Devis</div>
+        <div class="tab" data-type="facture">Factures</div>
+        <div class="tab" data-type="avoir">Avoirs</div>
+        <div class="tab" data-type="commande">Commandes</div>
+        <div class="tab" data-type="livraison">Livraisons</div>
+        <div class="tab" data-type="proforma">Proformas</div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:visible">
+        <!-- Sous-filtres (sens + période), soudés aux onglets dans le panneau blanc -->
+        <div class="panel-toolbar">
+          <div class="chips" id="chips-sens">
+            <span class="chip" data-sens="">Tous</span>
+            <span class="chip active" data-sens="vente">Ventes</span>
+            <span class="chip" data-sens="achat">Achats</span>
+          </div>
+          <div class="tb-sep"></div>
+          <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text-2)">
+            <span>Du</span><input type="date" id="date-du" class="input-date">
+            <span>au</span><input type="date" id="date-au" class="input-date">
+            <button class="btn" id="date-reset" title="Effacer les dates" hidden><i class="ti ti-x"></i></button>
+          </div>
+        </div>
+        <table class="table">
+          <thead>
+            <tr><th>N°</th><th>Date</th><th>Tiers</th><th>Type</th><th>Objet</th><th class="right">Statut</th>
+                <th class="right">Total TTC</th><th class="right">Actions</th></tr>
+          </thead>
+          <tbody id="corps">
+            <tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : nouveau document -->
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal" style="max-width:820px">
+    <div class="card-head"><span class="card-title">Nouveau document</span>
+      <i class="ti ti-x" id="modal-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form">
+      <div class="form-grid">
+        <div class="field"><label>Type</label>
+          <select name="type_document">
+            <option value="facture">Facture</option><option value="devis">Devis</option>
+            <option value="proforma">Proforma</option><option value="commande">Bon de commande</option>
+            <option value="livraison">Bon de livraison</option><option value="avoir">Avoir</option>
+          </select></div>
+        <div class="field"><label>Sens</label>
+          <select name="sens"><option value="vente">Vente</option><option value="achat">Achat</option></select></div>
+        <div class="field"><label>Tiers</label>
+          <select name="tiers_id" id="sel-tiers" required></select></div>
+        <div class="field"><label>Dépôt (si mouvement de stock)</label>
+          <select name="depot_id" id="sel-depot"><option value="">— Par défaut —</option></select></div>
+      </div>
+
+      <div style="margin:18px 0 6px;font-weight:600;font-size:14px">Lignes</div>
+      <table class="table" id="tbl-lignes">
+        <thead><tr>
+          <th style="width:30%">Article</th><th class="right">Qté</th><th class="right">P.U. HT</th>
+          <th>Taxes</th><th class="right">Remise %</th><th class="right">Total HT</th><th></th>
+        </tr></thead>
+        <tbody id="corps-lignes"></tbody>
+      </table>
+      <button type="button" class="btn" id="btn-ajouter-ligne" style="margin-top:10px"><i class="ti ti-plus"></i>Ajouter une ligne</button>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:18px">
+        <div style="width:260px;display:flex;flex-direction:column;gap:8px">
+          <div class="tot-row"><span>Total HT</span><span class="num" id="t-ht">0</span></div>
+          <div class="tot-row"><span>TVA</span><span class="num" id="t-tva">0</span></div>
+          <div class="tot-grand" style="border-top:1px solid var(--border);padding-top:10px"><span>Total TTC</span><span class="num" id="t-ttc">0</span></div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">
+        <button type="button" class="btn" id="modal-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer (brouillon)</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const corps = document.getElementById('corps');
+const recherche = document.getElementById('recherche');
+let sensCourant = params.get('sens') ?? 'vente';
+let typeCourant = '';
+let documents = [];
+let tiersMap = {}, tiersListe = [], articlesListe = [], depotsListe = [], articlesById = {}, taxesActives = [];
+
+// montant d'une taxe sur une ligne (pourcentage sur HT, ou fixe × quantité)
+function montantTaxe(ht, qte, t) {
+  return t.type === 'fixe' ? Math.round(t.taux*qte*100)/100 : Math.round(ht*t.taux/100*100)/100;
+}
+
+const TYPES = { devis:'Devis', facture:'Facture', avoir:'Avoir', commande:'Commande', livraison:'Livraison', proforma:'Proforma' };
+const STATUTS = { brouillon:['neutral','Brouillon'], valide:['ok','Validé'], accepte:['ok','Accepté'], transforme:['warn','Transformé'], annule:['danger','Annulé'] };
+
+function badgeStatut(s){ const [c,l]=STATUTS[s]||['neutral',s]; return `<span class="badge ${c}">${l}</span>`; }
+
+function rendre() {
+  const q = recherche.value.trim().toLowerCase();
+  const du = document.getElementById('date-du').value;   // '' ou 'YYYY-MM-DD'
+  const au = document.getElementById('date-au').value;
+  const vus = documents.filter(d => {
+    const nom = (tiersMap[d.tiers_id]||'').toLowerCase();
+    const objet = (d.objet||'').toLowerCase();
+    const dossier = (d.reference_dossier||'').toLowerCase();
+    const okTexte = !q || d.numero.toLowerCase().includes(q) || nom.includes(q)
+        || objet.includes(q) || dossier.includes(q);
+    // dates ISO ⇒ comparaison lexicographique correcte
+    const okDate = (!du || d.date >= du) && (!au || d.date <= au);
+    return okTexte && okDate;
+  });
+  if (!vus.length) { corps.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Aucun document</td></tr>'; return; }
+  corps.innerHTML = vus.map(d => {
+    const peutValider = d.statut === 'brouillon';
+    const peutTransformer = (d.statut === 'valide' || d.statut === 'accepte')
+      && (d.type_document === 'devis' || d.type_document === 'proforma' || d.type_document === 'commande');
+    return `<tr>
+      <td class="num">${Djigui.esc(d.numero)}</td>
+      <td class="num">${Djigui.dateFr(d.date)}</td>
+      <td>${Djigui.esc(tiersMap[d.tiers_id] || '—')}</td>
+      <td>${TYPES[d.type_document]||d.type_document}</td>
+      <td>${d.objet ? Djigui.esc(d.objet) : (d.reference_dossier ? Djigui.esc(d.reference_dossier) : '<span class="muted">—</span>')}</td>
+      <td class="right">${badgeStatut(d.statut)}</td>
+      <td class="right num">${Djigui.fmt(d.total_ttc)}</td>
+      <td class="right actions">
+        <button class="icon-act" data-act="voir" data-id="${d.id}" title="Voir / imprimer"><i class="ti ti-eye"></i></button>
+        ${peutValider ? `<button class="icon-act" data-act="valider" data-id="${d.id}" title="Valider"><i class="ti ti-check"></i></button>`:''}
+        ${peutTransformer ? `<button class="icon-act" data-act="transformer" data-id="${d.id}" title="Transformer en facture"><i class="ti ti-arrow-right"></i></button>`:''}
+        ${peutValider ? `<button class="icon-act danger" data-act="supprimer" data-id="${d.id}" title="Supprimer le brouillon"><i class="ti ti-trash"></i></button>`:''}
+      </td></tr>`;
+  }).join('');
+}
+
+async function charger() {
+  corps.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>';
+  try {
+    const qs = new URLSearchParams();
+    if (sensCourant) qs.set('sens', sensCourant);
+    if (typeCourant) qs.set('type_document', typeCourant);
+    documents = await Djigui.api('/api/documents?' + qs.toString());
+    rendre();
+  } catch (e) { corps.innerHTML = `<tr><td colspan="8" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`; }
+}
+
+async function chargerReferences() {
+  [tiersListe, articlesListe, depotsListe, taxesActives] = await Promise.all([
+    Djigui.api('/api/tiers?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/articles?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/depots').catch(()=>[]),
+    Djigui.api('/api/taxes').catch(()=>[]),
+  ]);
+  tiersMap = {}; tiersListe.forEach(t => tiersMap[t.id] = t.nom);
+  articlesById = {}; articlesListe.forEach(a => articlesById[a.id] = a);
+  document.getElementById('sel-tiers').innerHTML =
+    '<option value="" disabled selected>Choisir un tiers…</option>' +
+    tiersListe.map(t => `<option value="${t.id}">${Djigui.esc(t.nom)}</option>`).join('');
+  document.getElementById('sel-depot').innerHTML =
+    '<option value="">— Par défaut —</option>' +
+    depotsListe.map(d => `<option value="${d.id}">${Djigui.esc(d.nom)}</option>`).join('');
+}
+
+// ---- Onglets (type), sous-filtre sens, période & recherche ----
+document.getElementById('tabs-type').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('#tabs-type .tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); typeCourant = t.dataset.type; charger();
+});
+document.getElementById('chips-sens').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll('#chips-sens .chip').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active'); sensCourant = c.dataset.sens; charger();
+});
+recherche.addEventListener('input', rendre);
+// Période Du/Au : filtrage client immédiat
+const dateDu = document.getElementById('date-du');
+const dateAu = document.getElementById('date-au');
+const dateReset = document.getElementById('date-reset');
+function majResetDate(){ dateReset.hidden = !(dateDu.value || dateAu.value); }
+[dateDu, dateAu].forEach(el => el.addEventListener('change', () => { majResetDate(); rendre(); }));
+dateReset.addEventListener('click', () => { dateDu.value=''; dateAu.value=''; majResetDate(); rendre(); });
+// active la bonne chip sens selon l'URL
+document.querySelectorAll('#chips-sens .chip').forEach(c => {
+  c.classList.toggle('active', c.dataset.sens === sensCourant);
+});
+
+// ---- Actions ligne (voir / valider / transformer) ----
+corps.addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act'); if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.dataset.act === 'voir') { location.href = 'facture.html?id=' + id; return; }
+  if (btn.dataset.act === 'valider') {
+    if (!await Djigui.confirm('Valider ce document ? (impacte le stock selon le type)')) return;
+    try { await Djigui.api(`/api/documents/${id}/valider`, { method:'POST' });
+      Djigui.toast('Document validé', 'ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+  if (btn.dataset.act === 'supprimer') {
+    const d = documents.find(x => x.id === id);
+    if (!await Djigui.confirm(`Supprimer définitivement le brouillon ${d ? d.numero : ''} ? Cette action est irréversible.`)) return;
+    try { await Djigui.api(`/api/documents/${id}`, { method:'DELETE' });
+      Djigui.toast('Brouillon supprimé', 'ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+    return;
+  }
+  if (btn.dataset.act === 'transformer') {
+    if (!await Djigui.confirm('Transformer cette pièce en facture ?')) return;
+    try { const f = await Djigui.api(`/api/documents/${id}/transformer`, { method:'POST', body:{ type_cible:'facture' } });
+      Djigui.toast('Facture ' + f.numero + ' créée', 'ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+// ---- Modale : éditeur de lignes ----
+const modal = document.getElementById('modal');
+const form = document.getElementById('form');
+const corpsLignes = document.getElementById('corps-lignes');
+
+// Applique un article choisi à une ligne (prix + taxes + désignation).
+function appliquerArticle(tr, a) {
+  if (!a) return;
+  tr.querySelector('.l-pu').value = a.prix_vente ?? 0;
+  const src = (a.taxes && a.taxes.length) ? a.taxes : taxesActives;
+  tr._taxes = src.map(t => ({ nom: t.nom, taux: t.taux, type: t.type }));
+  tr.querySelector('.l-taxes').textContent = tr._taxes.length ? tr._taxes.map(t => t.nom).join(', ') : 'Aucune';
+  tr.dataset.des = a.designation;
+  recalculer();
+}
+
+function ajouterLigne() {
+  const tr = document.createElement('tr');
+  tr._taxes = [];
+  tr.innerHTML = `
+    <td><div class="l-art-mount"></div></td>
+    <td><input class="l-qte num" type="number" step="0.01" value="1" style="width:70px;text-align:right"></td>
+    <td><input class="l-pu num" type="number" step="0.01" value="0" style="width:90px;text-align:right"></td>
+    <td class="l-taxes muted" style="font-size:12px">—</td>
+    <td><input class="l-rem num" type="number" step="0.01" value="0" style="width:64px;text-align:right"></td>
+    <td class="right num l-total">0</td>
+    <td><button type="button" class="icon-act danger l-suppr" title="Retirer"><i class="ti ti-x"></i></button></td>`;
+  corpsLignes.appendChild(tr);
+  // Sélecteur d'article cherchable (même composant partout).
+  tr._artSel = Djigui.selectRecherche(tr.querySelector('.l-art-mount'), {
+    items: articlesListe.map(a => ({ id: a.id, label: a.designation, sub: a.code })),
+    placeholder: 'Article…',
+    onChange: id => appliquerArticle(tr, articlesById[id]),
+  });
+  recalculer();
+}
+
+corpsLignes.addEventListener('input', recalculer);
+corpsLignes.addEventListener('click', e => {
+  const s = e.target.closest('.l-suppr'); if (!s) return;
+  s.closest('tr').remove(); recalculer();
+});
+
+function ligneToObj(tr) {
+  const id = tr._artSel ? tr._artSel.value : '';
+  return {
+    article_id: id,
+    designation: tr.dataset.des || (articlesById[id] ? articlesById[id].designation : ''),
+    quantite: Number(tr.querySelector('.l-qte').value) || 0,
+    prix_unitaire: Number(tr.querySelector('.l-pu').value) || 0,
+    remise: Number(tr.querySelector('.l-rem').value) || 0,
+    taxes: (tr._taxes || []).map(t => ({ nom: t.nom, taux: t.taux, type: t.type })),
+  };
+}
+
+function recalculer() {
+  let ht = 0, taxes = 0;
+  corpsLignes.querySelectorAll('tr').forEach(tr => {
+    const l = ligneToObj(tr);
+    const lht = Math.round(l.quantite * l.prix_unitaire * (1 - l.remise/100) * 100) / 100;
+    const lt = (tr._taxes || []).reduce((s,t) => s + montantTaxe(lht, l.quantite, t), 0);
+    tr.querySelector('.l-total').textContent = Djigui.fmt(lht);
+    ht += lht; taxes += lt;
+  });
+  document.getElementById('t-ht').textContent = Djigui.fmt(Math.round(ht*100)/100);
+  document.getElementById('t-tva').textContent = Djigui.fmt(Math.round(taxes*100)/100);
+  document.getElementById('t-ttc').textContent = Djigui.fmt(Math.round((ht+taxes)*100)/100);
+}
+
+function ouvrir() {
+  form.reset(); corpsLignes.innerHTML = '';
+  form.sens.value = sensCourant || 'vente';
+  ajouterLigne();
+  modal.hidden = false;
+}
+const fermer = () => { modal.hidden = true; };
+document.getElementById('btn-nouveau').addEventListener('click', ouvrir);
+document.getElementById('modal-fermer').addEventListener('click', fermer);
+document.getElementById('modal-annuler').addEventListener('click', fermer);
+document.getElementById('btn-ajouter-ligne').addEventListener('click', ajouterLigne);
+// Le clic sur le fond ne ferme pas le formulaire (évite la perte de saisie).
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const lignes = [...corpsLignes.querySelectorAll('tr')].map(ligneToObj).filter(l => l.article_id);
+  if (!lignes.length) { Djigui.toast('Ajoutez au moins une ligne avec un article', 'warn'); return; }
+  const payload = {
+    type_document: form.type_document.value,
+    sens: form.sens.value,
+    tiers_id: form.tiers_id.value,
+    depot_id: form.depot_id.value || null,
+    lignes,
+  };
+  try {
+    const d = await Djigui.api('/api/documents', { method:'POST', body: payload });
+    // On bascule le filtre pour que le document créé reste VISIBLE (sinon il
+    // « disparaît » quand son sens/type ne correspond pas au filtre actif).
+    afficherFiltrePour(d);
+    const sensLbl = d.sens === 'achat' ? 'Achats' : 'Ventes';
+    Djigui.toast(`${TYPES[d.type_document]||'Document'} ${d.numero} créé — affiché dans « ${sensLbl} »`, 'ok');
+    fermer(); charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// Aligne les filtres (sens + type) sur un document, pour qu'il soit visible.
+function afficherFiltrePour(d) {
+  sensCourant = d.sens;
+  document.querySelectorAll('#chips-sens .chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.sens === sensCourant));
+  // si un filtre de type masquait ce document, on repasse à « Tous »
+  if (typeCourant && typeCourant !== d.type_document) {
+    typeCourant = '';
+    document.querySelectorAll('#tabs-type .tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.type === ''));
+  }
+}
+
+(async () => { await chargerReferences(); await charger(); })();
+</script>
+</body>
+</html>

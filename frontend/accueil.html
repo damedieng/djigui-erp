@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Tableau de bord</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+<style>
+/* Cartes indicateurs (thème Djigui vert) */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 16px; }
+.kpi { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: var(--radius-lg);
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.kpi-ic { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  background: var(--brand-tint); color: var(--brand); font-size: 24px; flex-shrink: 0; }
+.kpi-label { font-size: 12.5px; color: var(--text-2); font-weight: 500; }
+.kpi-val { font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.kpi-val span { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.kpi-val.warn { color: var(--warning); }
+.kpi-val.danger { color: var(--danger); }
+/* Carte d'accent pleine (mise en avant) */
+.kpi.accent { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+  border-color: transparent; color: #fff; }
+.kpi.accent .kpi-ic { background: rgba(255,255,255,.2); color: #fff; }
+.kpi.accent .kpi-label { color: rgba(255,255,255,.85); }
+.kpi.accent .kpi-val span { color: rgba(255,255,255,.8); }
+/* Barres du graphique */
+.bars { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; height: 150px; padding-top: 8px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+.bar { width: 100%; max-width: 34px; border-radius: 6px 6px 0 0; background: var(--brand);
+  transition: height .3s; min-height: 3px; }
+.bar-col:hover .bar { background: var(--brand-strong); }
+.bar-val { font-size: 10px; color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-label { font-size: 11px; color: var(--text-muted); }
+.mini-rdv-h { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.mini-rdv-h:last-child { border-bottom: 0; }
+.mini-rdv-h .pt { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Tableau de bord</div>
+        <div class="topbar-date" id="date-jour"></div>
+      </div>
+      <div class="topbar-right">
+        <div class="company">
+          <div class="company-name"></div>
+          <div class="company-ninea"></div>
+        </div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <section class="content">
+      <!-- Indicateurs clés (données réelles) -->
+      <div class="kpi-row" id="kpis">
+        <div class="kpi"><div class="kpi-ic"><i class="ti ti-loader"></i></div><div><div class="kpi-label">Chargement…</div></div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Ventes des 7 derniers jours <span class="muted" id="bars-unite" style="font-weight:500;font-size:12px"></span></span>
+            <i class="ti ti-chart-bar" style="color:var(--brand);font-size:19px"></i></div>
+          <div class="bars" id="bars"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Prochains rendez-vous</span>
+            <a class="btn" href="agenda.html" style="padding:5px 10px"><i class="ti ti-calendar-event"></i>Agenda</a></div>
+          <div id="rdv-liste"><div class="muted" style="padding:10px 0">Chargement…</div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Alertes de stock</span>
+            <i class="ti ti-alert-triangle" style="color:var(--warning);font-size:19px"></i></div>
+          <table class="table"><tbody id="stock-liste">
+            <tr><td class="muted" style="padding:12px 0">Chargement…</td></tr>
+          </tbody></table>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Dernières ventes</span>
+            <a class="btn" href="documents.html" style="padding:5px 10px"><i class="ti ti-list"></i>Tout voir</a></div>
+          <table class="table">
+            <thead><tr><th>N°</th><th>Client</th><th class="right">Montant</th><th class="right">Statut</th></tr></thead>
+            <tbody id="ventes-liste">
+              <tr><td colspan="4" class="muted" style="text-align:center;padding:12px">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const STATUT_DOC = { valide:['ok','Validée'], brouillon:['neutral','Brouillon'],
+  transforme:['warn','Transformée'], annule:['danger','Annulée'], accepte:['ok','Acceptée'] };
+const STATUT_RDV = { planifie:'#4a72a8', confirme:'#16794f', honore:'#5c6a61', reporte:'#9a6a12', annule:'#b23a2c' };
+const MOISJ = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+const pad = n => String(n).padStart(2,'0');
+const isoJour = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+document.getElementById('date-jour').textContent =
+  new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+function kpi(icone, label, valeur, unite, accent, cls) {
+  return `<div class="kpi ${accent?'accent':''}">
+    <div class="kpi-ic"><i class="ti ${icone}"></i></div>
+    <div><div class="kpi-label">${label}</div>
+      <div class="kpi-val ${cls||''}">${valeur}${unite?` <span>${unite}</span>`:''}</div></div>
+  </div>`;
+}
+
+async function charger() {
+  const auj = new Date();
+  const cléJour = isoJour(auj);
+  const cléMois = cléJour.slice(0, 7);
+  const [docs, caisses, articles, tiers, rdvs, params] = await Promise.all([
+    Djigui.api('/api/documents?sens=vente').catch(()=>[]),
+    Djigui.api('/api/caisses').catch(()=>[]),
+    Djigui.api('/api/articles?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/tiers?filtre=tous').catch(()=>[]),
+    Djigui.api(`/api/rendez-vous?du=${cléJour}`).catch(()=>[]),
+    Djigui.api('/api/parametres').catch(()=>({})),
+  ]);
+  const dev = params.devise || 'FCFA';
+  const tiersMap = {}; tiers.forEach(t => tiersMap[t.id] = t.nom);
+  // Factures de vente comptabilisées (validées / transformées).
+  const factures = docs.filter(d => d.type_document === 'facture' && ['valide','transforme'].includes(d.statut));
+
+  // --- KPI ---
+  const ventesJour = factures.filter(d => (d.date||'').slice(0,10) === cléJour).reduce((s,d) => s + d.total_ttc, 0);
+  const ventesMois = factures.filter(d => (d.date||'').slice(0,7) === cléMois).reduce((s,d) => s + d.total_ttc, 0);
+  const encaisse = caisses.reduce((s,c) => s + (c.solde||0), 0);
+  const alertes = articles.filter(a => a.gere_stock && a.stock_alerte != null && (a.stock||0) <= a.stock_alerte);
+  const ruptures = articles.filter(a => a.gere_stock && (a.stock||0) <= 0);
+  const nbAlerte = new Set([...alertes, ...ruptures].map(a => a.id)).size;
+  document.getElementById('kpis').innerHTML =
+    kpi('ti-cash', 'Ventes du jour', Djigui.fmt(ventesJour), dev, true) +
+    kpi('ti-calendar-dollar', 'Ventes du mois', Djigui.fmt(ventesMois), dev) +
+    kpi('ti-wallet', 'Encaisse (caisses)', Djigui.fmt(encaisse), dev) +
+    kpi('ti-alert-triangle', 'Alertes de stock', nbAlerte, nbAlerte>0?'à réappro.':'tout va bien', false, nbAlerte>0?'warn':'');
+
+  // --- Graphique 7 jours ---
+  const jours = [];
+  for (let i = 6; i >= 0; i--) { const d = new Date(auj); d.setDate(auj.getDate()-i); jours.push(d); }
+  const totJour = jours.map(d => factures.filter(f => (f.date||'').slice(0,10) === isoJour(d)).reduce((s,f)=>s+f.total_ttc,0));
+  const maxJ = Math.max(1, ...totJour);
+  document.getElementById('bars-unite').textContent = `(en ${dev})`;
+  document.getElementById('bars').innerHTML = jours.map((d,i) => {
+    const h = Math.round(totJour[i] / maxJ * 118);
+    const lbl = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][d.getDay()];
+    return `<div class="bar-col" title="${lbl} ${d.getDate()} : ${Djigui.fmt(totJour[i])} ${dev}">
+      <span class="bar-val">${totJour[i] ? Djigui.fmt(totJour[i]) : ''}</span>
+      <div class="bar" style="height:${h}px"></div><span class="bar-label">${lbl}</span></div>`;
+  }).join('');
+
+  // --- Prochains rendez-vous (non annulés, à venir) ---
+  const prochains = rdvs.filter(r => r.statut !== 'annule').sort((a,b)=>(a.debut||'').localeCompare(b.debut||'')).slice(0,5);
+  document.getElementById('rdv-liste').innerHTML = prochains.length ? prochains.map(r => {
+    const c = STATUT_RDV[r.statut] || '#5c6a61';
+    const d = r.debut || '';
+    const quand = `${Number(d.slice(8,10))} ${MOISJ[Number(d.slice(5,7))-1]}${r.journee_entiere?'':' · '+d.slice(11,16)}`;
+    return `<div class="mini-rdv-h"><span class="pt" style="background:${c}"></span>
+      <div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${Djigui.esc(r.titre)}</div>
+        <div class="muted" style="font-size:12px">${quand}${r.tiers_nom?' · '+Djigui.esc(r.tiers_nom):''}</div></div></div>`;
+  }).join('') : '<div class="muted" style="padding:12px 0">Aucun rendez-vous à venir. <a href="agenda.html">Planifier</a></div>';
+
+  // --- Alertes de stock ---
+  const listeAlerte = articles.filter(a => a.gere_stock && ((a.stock_alerte != null && (a.stock||0) <= a.stock_alerte) || (a.stock||0) <= 0))
+    .sort((a,b)=>(a.stock||0)-(b.stock||0)).slice(0,6);
+  document.getElementById('stock-liste').innerHTML = listeAlerte.length ? listeAlerte.map(a => {
+    const rupture = (a.stock||0) <= 0;
+    return `<tr><td>${Djigui.esc(a.designation)}</td>
+      <td class="right">${rupture?'<span class="badge danger">Rupture</span>':`<span class="badge warn">${Djigui.fmt(a.stock)} restant(s)</span>`}</td></tr>`;
+  }).join('') : '<tr><td class="muted" style="padding:12px 0">Aucune alerte de stock 👍</td></tr>';
+
+  // --- Dernières ventes ---
+  const dernieres = [...factures].sort((a,b)=>(b.cree_le||b.date||'').localeCompare(a.cree_le||a.date||'')).slice(0,6);
+  document.getElementById('ventes-liste').innerHTML = dernieres.length ? dernieres.map(d => {
+    const [cls, lbl] = STATUT_DOC[d.statut] || ['neutral', d.statut];
+    return `<tr><td class="num">${Djigui.esc(d.numero)}</td>
+      <td>${Djigui.esc(tiersMap[d.tiers_id] || '—')}</td>
+      <td class="right num">${Djigui.fmt(d.total_ttc)}</td>
+      <td class="right"><span class="badge ${cls}">${lbl}</span></td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="muted" style="text-align:center;padding:12px">Aucune vente pour le moment</td></tr>';
+}
+charger();
+</script>
+</body>
+</html>

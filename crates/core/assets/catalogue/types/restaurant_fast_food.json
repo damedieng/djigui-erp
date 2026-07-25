@@ -1,0 +1,66 @@
+{
+  "code": "restaurant_fast_food",
+  "version": 1,
+  "categories": [
+    {
+      "code": "plats_locaux", "libelle": "Plats locaux", "icone": "ti-bowl", "couleur": "#b45309", "ordre": 10,
+      "articles": [
+        { "code": "thieboudienne", "libelle": "Thiéboudienne", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/thieboudienne.webp" },
+        { "code": "yassa_poulet", "libelle": "Yassa poulet", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/yassa_poulet.webp" },
+        { "code": "mafe", "libelle": "Mafé", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/mafe.webp" },
+        { "code": "domoda", "libelle": "Domoda", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/domoda.webp" },
+        { "code": "soupe_kandia", "libelle": "Soupe kandia", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/soupe_kandia.webp" },
+        { "code": "thiou_viande", "libelle": "Thiou viande", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/thiou_viande.webp" }
+      ]
+    },
+    {
+      "code": "grillades", "libelle": "Grillades", "icone": "ti-flame", "couleur": "#dc2626", "ordre": 20,
+      "articles": [
+        { "code": "poulet_braise_entier", "libelle": "Poulet braisé entier", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/poulet_braise_entier.webp" },
+        { "code": "demi_poulet_braise", "libelle": "Demi-poulet braisé", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/demi_poulet_braise.webp" },
+        { "code": "dibi_mouton_kg", "libelle": "Dibi mouton", "unite": "kg", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/dibi_mouton_kg.webp" },
+        { "code": "poisson_braise", "libelle": "Poisson braisé", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/poisson_braise.webp" },
+        { "code": "brochette_viande", "libelle": "Brochette de viande", "unite": "piece", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/brochette_viande.webp" }
+      ]
+    },
+    {
+      "code": "sandwichs", "libelle": "Sandwichs & fast-food", "icone": "ti-bread", "couleur": "#ea580c", "ordre": 30,
+      "articles": [
+        { "code": "sandwich_viande", "libelle": "Sandwich viande", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/sandwich_viande.webp" },
+        { "code": "sandwich_poulet", "libelle": "Sandwich poulet", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/sandwich_poulet.webp" },
+        { "code": "sandwich_omelette", "libelle": "Sandwich omelette", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/sandwich_omelette.webp" },
+        { "code": "chawarma", "libelle": "Chawarma", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/chawarma.webp" },
+        { "code": "burger_simple", "libelle": "Burger simple", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/burger_simple.webp" },
+        { "code": "frites_portion", "libelle": "Portion de frites", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/frites_portion.webp" }
+      ]
+    },
+    {
+      "code": "petit_dejeuner", "libelle": "Petit-déjeuner", "icone": "ti-cup", "couleur": "#a16207", "ordre": 40,
+      "articles": [
+        { "code": "cafe_touba_tasse", "libelle": "Café Touba (tasse)", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/cafe_touba_tasse.webp" },
+        { "code": "cafe_au_lait", "libelle": "Café au lait", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/cafe_au_lait.webp" },
+        { "code": "the_tasse", "libelle": "Thé (tasse)", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/the_tasse.webp" },
+        { "code": "pain_beurre", "libelle": "Pain beurre", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/pain_beurre.webp" },
+        { "code": "bouillie_mil", "libelle": "Bouillie de mil (laakh)", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/bouillie_mil.webp" }
+      ]
+    },
+    {
+      "code": "boissons_service", "libelle": "Boissons", "icone": "ti-glass", "couleur": "#2563eb", "ordre": 50,
+      "articles": [
+        { "code": "eau_minerale_50cl", "libelle": "Eau minérale 50 cl", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/eau_minerale_50cl.webp" },
+        { "code": "soda_33cl", "libelle": "Soda en canette 33 cl", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/soda_33cl.webp" },
+        { "code": "jus_bissap_verre", "libelle": "Jus de bissap (verre)", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/jus_bissap_verre.webp" },
+        { "code": "jus_gingembre_verre", "libelle": "Jus de gingembre (verre)", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/jus_gingembre_verre.webp" }
+      ]
+    },
+    {
+      "code": "accompagnements", "libelle": "Suppléments", "icone": "ti-plus", "couleur": "#65a30d", "ordre": 60,
+      "articles": [
+        { "code": "supplement_riz", "libelle": "Supplément riz", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/supplement_riz.webp" },
+        { "code": "supplement_sauce", "libelle": "Supplément sauce", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/supplement_sauce.webp" },
+        { "code": "salade_portion", "libelle": "Portion de salade", "unite": "prestation", "gere_stock": false, "tva": 18, "prix_vente": null, "image": "articles/salade_portion.webp" },
+        { "code": "emballage_a_emporter", "libelle": "Emballage à emporter", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/emballage_a_emporter.webp" }
+      ]
+    }
+  ]
+}

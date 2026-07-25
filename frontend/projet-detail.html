@@ -1,0 +1,2520 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Détail projet</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+<style>
+.barre { height: 8px; border-radius: 6px; background: var(--surface-2); overflow: hidden; min-width: 60px; }
+.barre > div { height: 100%; background: var(--brand); border-radius: 6px; }
+.stat-select { font: inherit; font-size: 12px; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border-strong);
+  background: var(--surface); cursor: pointer; }
+/* Barre collante : chiffres clés + onglets, toujours visibles.
+   Le fond opaque est indispensable : sans lui, le contenu défilerait par
+   transparence sous la barre. */
+.projet-collant { position: sticky; top: 0; z-index: 30; background: var(--bg);
+  padding-top: 2px; margin-bottom: -18px; }
+.pc-infos { display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--brand) 100%);
+  color: #fff; border-radius: 12px 12px 0 0; padding: 8px 16px; }
+.pc-nom { font-weight: 700; font-size: 13.5px; margin-right: auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.pc-item { display: flex; align-items: baseline; gap: 6px; padding: 0 14px;
+  border-left: 1px solid rgba(255,255,255,.22); white-space: nowrap; }
+.pc-item:first-of-type { border-left: 0; }
+.pc-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: rgba(255,255,255,.72); font-weight: 600; }
+.pc-val { font-size: 13.5px; font-weight: 700; }
+.pc-val.ko { color: #ffc9c1; }
+.pc-jauge { width: 60px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.25);
+  overflow: hidden; align-self: center; }
+.pc-jauge > div { height: 100%; background: #fff; }
+.projet-collant .tabs-folder { margin-top: 0; }
+@media (max-width: 1080px){ .pc-item.secondaire { display: none; } }
+@media (max-width: 700px){ .pc-infos { display: none; } }
+
+/* Cartes de l'écran projet : pas de bordure fine, une ombre douce et des
+   angles plus francs. Volontairement limité à cet écran (portée .content). */
+.content .card,
+.content .panel-toolbar { border: 0 !important; border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(20,40,30,.07), 0 1px 2px rgba(20,40,30,.05); }
+.content .card { overflow: hidden; }
+/* L'en-tête de tableau devient une bande teintée plutôt qu'un trait. */
+.content .card .table thead th { background: #f2f6f3; border-bottom: 0;
+  color: var(--text-2); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.content .card .table tbody td { border-bottom: 1px solid #eef2ef; }
+.content .card .table tbody tr:last-child td { border-bottom: 0; }
+.content .card .table tbody tr:hover td { background: #f7faf8; }
+/* Les barres d'outils gardent leur teinte d'origine si elle est posée en ligne. */
+.content .panel-toolbar { background: var(--surface); }
+
+/* Tuiles de synthèse : la couleur porte le sens, pas un trait de bordure.
+   Quatre familles seulement (neutre, argent, temps, alerte) pour rester sobre.
+   Chaque tuile = un aplat très clair + une pastille d'icône plus soutenue. */
+.pe-bloc { --ton: #5c6a61; --fond: #f1f4f2; --pastille: #e2e8e4;
+  display: flex; align-items: center; gap: 11px;
+  background: var(--fond); border: 0; border-radius: 12px; padding: 11px 13px;
+  transition: transform .12s ease, box-shadow .12s ease; }
+.pe-bloc:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(20,40,30,.10); }
+.pe-bloc .pe-ic { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--pastille); color: var(--ton); font-size: 18px; }
+.pe-bloc .pe-corps { min-width: 0; }
+.pe-bloc .pe-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  font-weight: 700; color: var(--ton); opacity: .75; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.pe-bloc .pe-val { font-weight: 700; font-size: 13.5px; margin-top: 2px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
+/* Le suffixe FCFA ne doit pas manger la place du montant. */
+.pe-bloc .pe-val .muted { font-size: 9.5px !important; margin-left: 1px; }
+
+/* Argent : le vert de la marque. */
+.pe-bloc.acc-brand  { --ton: #0e5a39; --fond: #e8f3ec; --pastille: #cfe6da; }
+/* Temps : un bleu sourd, jamais vif. */
+.pe-bloc.acc-date   { --ton: #2b5f95; --fond: #eaf1f8; --pastille: #d5e4f2; }
+/* Écart favorable / défavorable. */
+.pe-bloc.acc-ok     { --ton: #0e5a39; --fond: #dfeee6; --pastille: #c2ded0; }
+.pe-bloc.acc-danger { --ton: #a2352a; --fond: #fbebe9; --pastille: #f4d6d1; }
+/* Moyens engagés : un ambre discret. */
+.pe-bloc.acc-moyen  { --ton: #8a6114; --fond: #f8f1e2; --pastille: #ecdcbf; }
+
+/* Les trois chiffres qu'on lit en premier sont plus hauts et plus gros. */
+.pe-bloc.fort .pe-val { font-size: 15px; }
+.pe-bloc.fort .pe-ic { width: 36px; height: 36px; font-size: 19px; }
+/* ---------- En-tête de projet ----------
+   Le bandeau vert et les tuiles cassent l'aplat blanc : on repère
+   immédiatement le nom, l'état, puis les chiffres clés. */
+/* ⚠️ CAUSE RÉELLE DE « l'en-tête disparaît d'un onglet à l'autre ».
+   `.content` est un conteneur flex en colonne. Par défaut un élément flex peut
+   être COMPRIMÉ sous sa taille naturelle : quand l'onglet est long (Liste,
+   Gantt, Ressources, Jalons), le navigateur écrasait l'en-tête jusqu'à une
+   hauteur de 0 px au lieu de laisser défiler. Sur les onglets courts (Par
+   personne, Documents) il n'y avait rien à comprimer, donc il s'affichait.
+   Mesuré dans un vrai navigateur : hauteur = 0 px exactement sur ces 4 onglets.
+   `flex-shrink: 0` interdit cette compression ; la zone défile, comme prévu. */
+.content > * { flex-shrink: 0; }
+
+/* En-tête du projet : bloc SIMPLE et STABLE.
+   Volontairement ni collant ni auto-compacté : ces deux comportements
+   faisaient changer la hauteur du haut de page d'un onglet à l'autre, et le
+   contenu sautait sous les yeux. La hauteur est désormais identique sur
+   Liste, Gantt, Ressources, Jalons et Documents. */
+.projet-hero { border: 0; border-radius: 16px; background: var(--surface);
+  overflow: hidden; box-shadow: 0 2px 10px rgba(20,40,30,.08), 0 1px 2px rgba(20,40,30,.06); }
+.hero-bandeau { display: flex; align-items: center; gap: 14px; padding: 13px 18px;
+  background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--brand) 100%); color: #fff; }
+.hero-titre { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700;
+  flex: 1; min-width: 0; }
+.hero-titre i { font-size: 21px; opacity: .85; flex: 0 0 auto; }
+.hero-titre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.hero-actions .stat-select { font-size: 13px; padding: 5px 10px; border-radius: var(--radius);
+  background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.hero-actions .stat-select option { color: var(--text); }
+.hero-toggle { color: #fff; opacity: .85; }
+.hero-toggle:hover { opacity: 1; background: rgba(255,255,255,.15); }
+
+/* Les deux jauges, sur fond teinté pour les détacher des tuiles. */
+.hero-jauges { display: grid; grid-template-columns: 1fr 1fr; gap: 22px;
+  padding: 15px 18px; background: linear-gradient(180deg, #f2f8f4 0%, #ffffff 100%); }
+@media (max-width: 760px){ .hero-jauges { grid-template-columns: 1fr; gap: 12px; } }
+
+/* Chaque chiffre dans sa tuile, avec un liseré de couleur à gauche. */
+.synthese { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
+  gap: 10px; padding: 14px 18px; }
+.hero-note { padding: 0 18px 14px; font-size: 13px; color: var(--text-2); font-style: italic; }
+.hero-note:empty { display: none; }
+#p-collapsible { transition: none; }
+.card.p-compact { padding: 12px 16px; }
+.bandeau-warn { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius);
+  background: var(--warning-tint); border: 1px solid var(--warning); color: var(--warning); font-size: 13.5px; }
+.bandeau-warn .btn { margin-left: auto; }
+.t-nom-cell { display: flex; align-items: center; gap: 6px; }
+.t-nom-cell .puce { color: var(--text-muted); }
+/* Gantt */
+.gantt { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.gantt-left { flex-shrink: 0; border-right: 2px solid var(--border-strong); background: var(--surface); }
+.gantt-right { overflow-x: auto; flex: 1; }
+.g-th { height: 58px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 700;
+  background: var(--brand); color: #fff; border-bottom: 1px solid var(--border); box-sizing: border-box; }
+.g-cell { height: 42px; display: flex; align-items: center; padding: 0 10px; font-size: 12.5px;
+  border-bottom: 1px solid var(--border); box-sizing: border-box; white-space: nowrap; }
+.g-left-row { display: grid; }
+/* En-tête à 2 niveaux : bande (mois/année) + unité fine (jour/semaine/mois) */
+.g-band-row { position: relative; height: 24px; background: var(--brand); box-sizing: border-box; }
+.g-band { position: absolute; top: 0; height: 24px; color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; padding: 0 8px; text-transform: capitalize;
+  border-left: 1px solid rgba(255,255,255,.35); box-sizing: border-box; white-space: nowrap; overflow: hidden; }
+.g-days-head { display: grid; }
+.g-day-h { height: 34px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--text-2); border-left: 1px solid var(--border); background: var(--surface-2); box-sizing: border-box; }
+.g-day-h.we { background: var(--brand-tint); }
+.g-day-h b { font-size: 11.5px; color: var(--text); font-weight: 600; }
+.g-row { display: grid; height: 42px; border-bottom: 1px solid var(--border); position: relative; }
+.g-cellday { border-left: 1px solid var(--border); box-sizing: border-box; }
+.g-cellday.we { background: var(--brand-tint); opacity: .5; }
+.g-bar { position: absolute; height: 24px; top: 9px; border-radius: 6px; box-shadow: var(--shadow);
+  overflow: hidden; white-space: nowrap; border: 1px solid rgba(0,0,0,.18); }
+/* Partie RESTANTE (non faite) éclaircie ; la partie faite garde la couleur pleine. */
+.g-bar-reste { position: absolute; top: 0; bottom: 0; right: 0; background: rgba(255,255,255,.5); border-left: 1px dashed rgba(255,255,255,.7); }
+.g-bar-lbl { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 7px; font-size: 10.5px;
+  font-weight: 700; z-index: 1; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.g-legende { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 8px; font-size: 12px; color: var(--text-2); }
+.g-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.g-legende i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.g-bar.surcharge { outline: 2px solid var(--danger); outline-offset: 0; }
+.assign-chip { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.assign-chip .h { color: var(--text-muted); font-size: 12px; }
+.assign-chip button { margin-left: auto; }
+.col-menu { position: relative; }
+.col-pop { position: absolute; right: 0; top: 110%; z-index: 20; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20,40,30,.15); padding: 8px; min-width: 180px; }
+.col-pop label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 13px; cursor: pointer; border-radius: 6px; }
+.col-pop label:hover { background: var(--surface-2); }
+#quick-pop { position: fixed; z-index: 60; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); box-shadow: 0 6px 20px rgba(20,40,30,.18); padding: 5px; min-width: 200px; max-height: 260px; overflow: auto; }
+.quick-opt { padding: 5px 9px; cursor: pointer; border-radius: 6px; font-size: 13px; }
+.quick-opt:hover { background: var(--brand-tint); }
+/* Soude TOUS les panneaux à la barre d'onglets (chaque onglet, pas que le 1er) */
+.tabs-folder ~ [data-vue] { margin-top: -18px; }
+/* Modale large : 4 colonnes et champs compacts. Objectif = tout voir d'un coup,
+   sans scroll, y compris sur un écran de portable. */
+.modal.modal-xl { max-width: 1180px; padding: 18px 20px; }
+.modal-xl .form-grid { grid-template-columns: repeat(4, 1fr); gap: 10px 16px; }
+.modal-xl .field.span2 { grid-column: span 2; }
+/* Champs resserrés : c'est ce qui fait vraiment gagner la hauteur. */
+.modal-xl .field { gap: 3px; }
+.modal-xl .field label { font-size: 12px; }
+.modal-xl .field input, .modal-xl .field select, .modal-xl .field textarea {
+  padding: 6px 9px; font-size: 13px; }
+.modal-xl .field textarea { min-height: 0; }
+.modal-xl .card-head { padding-bottom: 6px; }
+/* Liste des prédécesseurs : compacte, défile si elle s'allonge. */
+.pred-liste { display: flex; flex-direction: column; gap: 3px; max-height: 78px; overflow-y: auto; }
+.pred-liste:empty { display: none; }
+.pred-chip { display: flex; align-items: center; gap: 6px; font-size: 12px;
+  padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius); }
+.pred-chip.ko { border-color: var(--danger); background: var(--danger-tint); }
+/* Titre de section : sépare visuellement sans ajouter de hauteur inutile. */
+.form-sect { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--text-2); margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.form-sect:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+/* Les boutons restent visibles même si le contenu défile. */
+.modal-xl .modal-actions { position: sticky; bottom: -22px; background: var(--surface);
+  padding: 12px 0 2px; margin-top: 4px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: row; justify-content: flex-end; gap: 10px; }
+@media (max-width: 1220px){ .modal-xl .form-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px){ .modal-xl .form-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px){ .modal-xl .form-grid { grid-template-columns: 1fr; }
+  .modal-xl .field.span2 { grid-column: span 1; } }
+/* Actions rapides du Gantt : discrètes, révélées au survol de la ligne. */
+.g-cell-nom { display: flex; align-items: center; gap: 2px; font-weight: 600; overflow: hidden; }
+.g-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-acts { display: inline-flex; align-items: center; gap: 1px; margin-left: auto;
+  padding-left: 6px; flex: 0 0 auto; }
+.g-act { display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 5px;
+  background: transparent; color: var(--text-2); cursor: pointer; font-size: 15px;
+  transition: background .12s, color .12s, opacity .12s; }
+.g-act:hover { background: var(--brand-tint); color: var(--brand-strong); }
+/* Modifier / avancement : invisibles tant que la ligne n'est pas survolée. */
+.g-act-hover { opacity: 0; }
+.g-left-row:hover .g-act-hover { opacity: 1; }
+/* Au clavier, l'action doit rester atteignable. */
+.g-act-hover:focus-visible { opacity: 1; }
+/* Taux modifiable en place, discret tant qu'on n'y touche pas. */
+.taux-vif { width: 96px; text-align: right; padding: 3px 6px; font-size: 12.5px;
+  border: 1px solid transparent; border-radius: var(--radius); background: transparent;
+  color: inherit; font-family: inherit; }
+.taux-vif:hover { border-color: var(--border-strong); background: var(--surface); }
+.taux-vif:focus { border-color: var(--brand); background: var(--surface); outline: 0; }
+/* Sous-total par personne dans la répartition. */
+.rep-sous-total td { background: var(--brand-tint); font-weight: 700; border-top: 1px solid var(--border); }
+/* Réglage rapide de la durée : petits pas, sans quitter le clavier. */
+.duree-rapide { display: flex; align-items: center; gap: 3px; }
+.duree-rapide input { flex: 1; min-width: 0; text-align: center; }
+.btn-pas { width: 26px; height: 30px; padding: 0; flex: 0 0 auto;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--text-2); cursor: pointer;
+  font-size: 14px; line-height: 1; transition: background .12s, color .12s; }
+.btn-pas:hover { background: var(--brand-tint); color: var(--brand-strong); border-color: var(--brand); }
+.btn-pas:disabled { opacity: .4; cursor: default; }
+.btn-pas-lbl { width: 34px; font-size: 12px; font-weight: 600; }
+/* Repères de dates dans les modales : information, pas un contrôle. */
+.reperes { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12.5px;
+  padding: 9px 12px; border-radius: var(--radius); background: var(--brand-tint); color: var(--text-2); }
+.reperes b { color: var(--text); font-weight: 600; }
+/* Jalon sur la frise : losange centré sur sa date. */
+.g-jalon { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+  transform: rotate(45deg); border-radius: 2px; box-shadow: 0 0 0 2px var(--surface);
+  z-index: 3; }   /* au-dessus de la barre quand le jalon est posé sur l'activité */
+.obs-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.obs-item:last-child { border-bottom: 0; }
+.obs-meta { font-size: 11.5px; color: var(--text-muted); display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title"><a href="projets.html" style="color:var(--text-2);text-decoration:none"><i class="ti ti-arrow-left"></i></a>
+          <span id="tb-nom">Projet</span></div>
+        <div class="topbar-date">Détail, tâches, budget et planning</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn" id="btn-export"><i class="ti ti-file-spreadsheet"></i>Exporter (Excel)</button>
+        <button class="btn" id="btn-modifier"><i class="ti ti-edit"></i>Modifier</button>
+        <button class="btn btn-primary" id="btn-nouvelle-tache"><i class="ti ti-plus"></i>Ajouter une tâche</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <!-- En-tête projet (compact + repliable) -->
+      <div class="projet-hero" id="projet-hero">
+        <div class="hero-bandeau">
+          <div class="hero-titre">
+            <i class="ti ti-briefcase"></i>
+            <span id="p-nom">…</span>
+          </div>
+          <div class="hero-actions">
+            <select id="p-statut" class="stat-select"></select>
+            <button class="icon-act hero-toggle" id="p-toggle" title="Réduire / agrandir les infos"><i class="ti ti-chevron-up"></i></button>
+          </div>
+        </div>
+        <div class="hero-jauges" id="p-jauges"></div>
+        <div id="p-collapsible">
+          <div class="synthese" id="p-synthese"></div>
+          <div id="p-note" class="hero-note"></div>
+        </div>
+      </div>
+
+      <!-- Bandeau dépassement -->
+      <div id="bandeau-depasse" class="bandeau-warn" style="display:none">
+        <i class="ti ti-alert-triangle" style="font-size:20px"></i>
+        <span id="depasse-txt"></span>
+        <button class="btn" id="btn-ajuster"><i class="ti ti-calendar-up"></i>Ajuster la fin du projet</button>
+      </div>
+
+      <!-- Barre collante : chiffres clés + onglets. Reste visible pendant le
+           défilement, sur tous les onglets, avec toujours le même contenu. -->
+      <div class="projet-collant">
+        <div class="pc-infos" id="pc-infos"></div>
+        <div class="tabs-folder" id="tabs">
+        <div class="tab active" data-vue="liste"><i class="ti ti-list-details"></i> Liste</div>
+        <div class="tab" data-vue="gantt"><i class="ti ti-timeline"></i> Gantt</div>
+        <div class="tab" data-vue="personne"><i class="ti ti-user-cog"></i> Par personne</div>
+        <div class="tab" data-vue="ressources"><i class="ti ti-package"></i> Ressources</div>
+        <div class="tab" data-vue="jalons"><i class="ti ti-flag"></i> Jalons &amp; livrables</div>
+        <div class="tab" data-vue="documents"><i class="ti ti-paperclip"></i> Documents</div>
+        </div>
+      </div>
+
+      <!-- VUE LISTE -->
+      <div data-vue="liste">
+        <div id="lot-bar" class="panel-toolbar" style="display:none;border-radius:var(--radius);border:1px solid var(--brand);background:var(--brand-tint)">
+          <span id="lot-compte" style="font-weight:600;font-size:13px"></span>
+          <div class="tb-sep"></div>
+          <select id="lot-statut" class="input-date">
+            <option value="">Changer le statut…</option>
+            <option value="a_faire">À faire</option><option value="en_cours">En cours</option>
+            <option value="bloquee">Bloquée</option><option value="terminee">Terminée</option>
+          </select>
+          <button class="btn" id="lot-appliquer">Appliquer</button>
+          <button class="btn" id="lot-supprimer" style="color:var(--danger)"><i class="ti ti-trash"></i>Supprimer</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead>
+              <tr><th style="width:34px"><input type="checkbox" id="chk-tous"></th>
+                  <th>Tâche</th><th>Période</th><th class="right">Jours</th><th class="right">Budget</th>
+                  <th class="right">Statut</th><th class="right" style="width:140px">Avancement</th><th class="right">Actions</th></tr>
+            </thead>
+            <tbody id="corps-taches"><tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VUE GANTT -->
+      <div data-vue="gantt" hidden>
+        <div class="panel-toolbar" style="border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);justify-content:space-between">
+          <span class="muted" style="font-size:13px">Barres par niveau, remplissage = avancement.</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+            <label style="font-size:12px;color:var(--text-2)">Échelle</label>
+            <select id="gantt-echelle" class="input-date" style="min-width:110px">
+              <option value="auto">Auto</option><option value="jour">Jour</option>
+              <option value="semaine">Semaine</option><option value="mois">Mois</option>
+            </select>
+            <div class="col-menu">
+              <button class="btn" id="btn-cols"><i class="ti ti-columns"></i>Colonnes</button>
+              <div class="col-pop" id="col-pop" hidden></div>
+            </div>
+          </div>
+        </div>
+        <div id="gantt-zone"></div>
+      </div>
+
+      <!-- VUE PAR PERSONNE (planification ressource humaine) -->
+      <div data-vue="personne" hidden>
+        <div class="panel-toolbar" style="border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);flex-wrap:wrap">
+          <span style="font-weight:600;font-size:13px"><i class="ti ti-user"></i> Ressource</span>
+          <select id="pers-select" class="input-date" style="min-width:220px"><option value="">Choisir une personne…</option></select>
+          <span id="pers-info" class="muted" style="font-size:13px"></span>
+          <span style="margin-left:auto;font-size:12px;color:var(--danger)"><i class="ti ti-alert-triangle"></i> Rouge = tâches qui se chevauchent (surcharge)</span>
+        </div>
+        <div id="pers-gantt"></div>
+      </div>
+
+      <!-- VUE RESSOURCES : toggle matérielle / humaine intégré à la barre -->
+      <div data-vue="ressources" hidden>
+        <div class="panel-toolbar" style="border-radius:var(--radius);border:1px solid var(--border);background:var(--surface)">
+          <div class="chips" id="res-subtabs">
+            <span class="chip active" data-sub="materielle"><i class="ti ti-package"></i> Matérielle</span>
+            <span class="chip" data-sub="humaine"><i class="ti ti-users"></i> Humaine</span>
+          </div>
+          <span class="muted" id="res-desc" style="font-size:12.5px"></span>
+          <button class="btn btn-primary" id="btn-res-add" style="margin-left:auto"><i class="ti ti-plus"></i>Ajouter</button>
+        </div>
+
+        <!-- Table matérielle -->
+        <div class="card" data-sub="materielle" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr><th>Libellé</th><th>Type</th><th>Rattachée à</th><th class="right">Coût unitaire</th>
+                <th class="right">Quantité</th><th class="right">Coût total</th><th class="right">Actions</th></tr></thead>
+            <tbody id="corps-res"><tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Chargement…</td></tr></tbody>
+            <tfoot><tr><td colspan="5" class="right" style="font-weight:600">Total ressources</td>
+                <td class="right num" id="res-total" style="font-weight:700">0</td><td></td></tr></tfoot>
+          </table>
+        </div>
+
+        <!-- Répartition détaillée : qui travaille sur quoi, et pour combien -->
+        <div class="card" data-sub="humaine" hidden style="padding:0;overflow:visible;margin-top:14px">
+          <div class="card-head" style="padding:12px 14px 0">
+            <span class="card-title"><i class="ti ti-table"></i> Répartition par personne et par activité</span>
+            <span class="muted" style="font-size:12.5px;margin-left:auto" id="rep-resume"></span>
+          </div>
+          <table class="table" id="tbl-repartition">
+            <thead><tr><th>Personne</th><th>Activité</th><th>Mode</th><th class="right">Taux</th>
+              <th class="right">Quantité</th><th class="right">Coût</th></tr></thead>
+            <tbody id="corps-repartition"></tbody>
+            <tfoot><tr><td colspan="5" class="right" style="font-weight:700">Total main-d'œuvre</td>
+              <td class="right num" id="rep-total" style="font-weight:700"></td></tr></tfoot>
+          </table>
+        </div>
+
+        <!-- Table humaine (intervenants) -->
+        <div class="card" data-sub="humaine" hidden style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr><th>Nom</th><th>Type</th><th class="right">Taux</th><th class="right">Temps</th>
+                <th class="right">Coût projet</th><th class="right">% projet</th><th class="right">Actions</th></tr></thead>
+            <tbody id="interv-liste"><tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Aucun intervenant.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+
+      <!-- ============ Jalons & livrables ============ -->
+      <div data-vue="jalons" hidden>
+        <div class="panel-toolbar" style="border-radius:var(--radius);border:1px solid var(--border);background:var(--surface)">
+          <strong style="font-size:14px"><i class="ti ti-flag"></i> Jalons</strong>
+          <span class="muted" style="font-size:12.5px">Les dates clés du projet.</span>
+          <button class="btn btn-primary" id="btn-jalon-add" style="margin-left:auto"><i class="ti ti-plus"></i>Nouveau jalon</button>
+        </div>
+        <div class="panel-toolbar" id="lot-jalons" style="display:none;border-radius:var(--radius);border:1px solid var(--brand);background:var(--brand-tint)">
+          <span id="lot-jalons-nb" style="font-weight:600;font-size:13px"></span>
+          <select id="lot-jalons-statut" class="input-date">
+            <option value="">Changer le statut…</option>
+            <option value="a_venir">À venir</option>
+            <option value="atteint">Atteint</option>
+            <option value="manque">Manqué</option>
+          </select>
+          <button class="btn" id="lot-jalons-appliquer">Appliquer</button>
+          <button class="btn" id="lot-jalons-suppr" style="color:var(--danger)"><i class="ti ti-trash"></i>Supprimer</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="jal-all"></th>
+              <th>Jalon</th><th>Activité liée</th><th>Date prévue</th><th>Date réelle</th>
+              <th>Statut</th><th class="right">Livrables</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-jalons"><tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Aucun jalon.</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="panel-toolbar" style="margin-top:14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface)">
+          <strong style="font-size:14px"><i class="ti ti-package-export"></i> Livrables</strong>
+          <span class="muted" style="font-size:12.5px">Ce que le projet doit produire.</span>
+          <button class="btn btn-primary" id="btn-livrable-add" style="margin-left:auto"><i class="ti ti-plus"></i>Nouveau livrable</button>
+        </div>
+        <div class="panel-toolbar" id="lot-livrables" style="display:none;border-radius:var(--radius);border:1px solid var(--brand);background:var(--brand-tint)">
+          <span id="lot-livrables-nb" style="font-weight:600;font-size:13px"></span>
+          <select id="lot-livrables-statut" class="input-date">
+            <option value="">Changer le statut…</option>
+            <option value="a_produire">À produire</option>
+            <option value="en_cours">En cours</option>
+            <option value="livre">Livré</option>
+            <option value="accepte">Accepté</option>
+            <option value="refuse">Refusé</option>
+          </select>
+          <button class="btn" id="lot-livrables-appliquer">Appliquer</button>
+          <button class="btn" id="lot-livrables-suppr" style="color:var(--danger)"><i class="ti ti-trash"></i>Supprimer</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="liv-all"></th>
+              <th>Livrable</th><th>Activité</th><th>Jalon</th><th>Attendu le</th><th>Livré le</th>
+              <th>Statut</th><th class="right">Pièces</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-livrables"><tr><td colspan="9" class="muted" style="text-align:center;padding:18px">Aucun livrable.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============ Documents joints ============ -->
+      <div data-vue="documents" hidden>
+        <div class="panel-toolbar" style="border-radius:var(--radius);border:1px solid var(--border);background:var(--surface)">
+          <span class="muted" style="font-size:12.5px">Plans, contrats, photos, rapports… rattachés au projet.</span>
+          <button class="btn btn-primary" id="btn-doc-add" style="margin-left:auto"><i class="ti ti-upload"></i>Joindre un fichier</button>
+          <input type="file" id="doc-file" hidden>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr><th>Fichier</th><th>Rattaché à</th><th class="right">Taille</th><th>Ajouté le</th><th class="right">Actions</th></tr></thead>
+            <tbody id="corps-docs"><tr><td colspan="5" class="muted" style="text-align:center;padding:18px">Aucun document.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="aide">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment ça marche ?</div>
+        <ul>
+          <li>Les tâches peuvent avoir des <strong>sous-tâches (jusqu'à 4 niveaux)</strong>. Le <strong>budget, les dates et l'avancement d'une tâche parente se calculent automatiquement</strong> à partir de ses sous-tâches (du bas vers le haut).</li>
+          <li>Le <strong>Budget planifié</strong> du projet = somme des budgets des tâches. Il est comparé au <strong>Budget saisi</strong> ; l'écart s'affiche.</li>
+          <li>Si les tâches <strong>dépassent la fin prévue</strong>, un bandeau jaune propose d'<strong>ajuster la fin du projet</strong>.</li>
+          <li>La vue <strong>Gantt</strong> montre le planning ; le bouton <strong>Colonnes</strong> permet d'afficher/masquer des colonnes.</li>
+          <li>Un <strong>jalon</strong> est une <strong>date importante</strong> du projet (ex. « réception des travaux »). Il apparaît en <strong>losange sur le Gantt</strong>. Si la date passe sans que le jalon soit atteint, la ligne devient <strong>jaune</strong> : c'est un simple avertissement, <strong>rien n'est modifié automatiquement</strong>.</li>
+          <li>Un <strong>livrable</strong> est <strong>ce que vous devez remettre</strong> (un rapport, une maquette, un bâtiment…). Vous pouvez le relier à une activité et/ou à un jalon.</li>
+          <li>Les <strong>documents</strong> sont vos fichiers (plans, contrats, photos). Ils sont <strong>copiés sur cet ordinateur</strong>, à côté de vos données — pas dans un cloud. Cliquez sur la flèche pour <strong>ouvrir</strong> un fichier.</li>
+          <li>Supprimer un jalon <strong>ne supprime pas</strong> ses livrables ni ses documents : ils sont simplement détachés.</li>
+          <li>Dans une activité, le champ <strong>« Ne peut commencer qu'après »</strong> indique ce qui doit être <strong>terminé avant</strong>. Si vous dites que A doit précéder B, une <strong>flèche part de A vers B</strong> sur le Gantt. Le lien est enregistré <strong>dès que vous choisissez l'activité</strong>, il n'y a pas de bouton à cliquer.</li>
+          <li>Le petit champ <strong>« +j »</strong> est un délai en jours : <strong>3</strong> = « commence 3 jours après la fin », <strong>-2</strong> = « commence 2 jours avant la fin » (les deux se chevauchent).</li>
+          <li>Si une activité démarre <strong>trop tôt</strong> par rapport à ce qui la précède, la flèche devient <strong>rouge</strong> et un bandeau propose <strong>« Harmoniser les dates »</strong>. Rien ne bouge tant que vous n'avez pas vu la liste des changements et cliqué sur Appliquer.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale tâche -->
+<div class="modal-overlay" id="modal-tache" hidden>
+  <div class="modal modal-xl">
+    <div class="card-head"><span class="card-title" id="t-titre-modal">Nouvelle tâche</span>
+      <i class="ti ti-x" id="t-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-tache" class="form-grid">
+      <input type="hidden" id="t-id">
+
+      <div class="form-sect"><i class="ti ti-file-description"></i> L'activité</div>
+      <div class="field span2"><label>Nom de la tâche</label><input id="t-nom" required autocomplete="off"></div>
+      <div class="field"><label>Tâche parente <span class="muted">(pour en faire une sous-tâche)</span></label>
+        <select id="t-parent"><option value="">— Aucune (tâche principale) —</option></select></div>
+      <div class="field span2" id="t-pred-wrap">
+        <label><i class="ti ti-arrow-narrow-right"></i> Ne peut commencer qu'après
+          <span class="muted">— le lien est créé dès que vous choisissez</span></label>
+        <div id="t-pred-liste" class="pred-liste"></div>
+        <div style="display:flex;gap:6px">
+          <select id="t-pred-sel" style="flex:1;min-width:0"><option value="">Choisir une activité…</option></select>
+          <input type="number" id="t-pred-dec" step="1" value="0" placeholder="+j" style="width:70px"
+                 title="Décalage en jours : positif = attendre après la fin (retard), négatif = démarrer avant la fin (avance)">
+        </div>
+      </div>
+      <div class="field span2"><label>Description</label><textarea id="t-desc" rows="2"></textarea></div>
+
+      <div class="form-sect"><i class="ti ti-calendar"></i> Dates</div>
+      <div class="field"><label>Début prévu</label><input type="date" id="t-debut-p"></div>
+      <div class="field"><label>Durée (jours)</label>
+        <div class="duree-rapide">
+          <button type="button" class="btn-pas" data-jours="-1" title="Un jour de moins">−</button>
+          <input type="number" id="t-duree" min="0" step="1" placeholder="ex. 5">
+          <button type="button" class="btn-pas" data-jours="1" title="Un jour de plus">+</button>
+          <button type="button" class="btn-pas btn-pas-lbl" data-jours="7" title="Une semaine de plus">+7</button>
+          <button type="button" class="btn-pas btn-pas-lbl" data-jours="30" title="Un mois de plus">+30</button>
+        </div>
+      </div>
+      <div class="field"><label>Fin prévue</label><input type="date" id="t-fin-p"></div>
+      <div class="field"><label>Début réel</label><input type="date" id="t-debut-r"></div>
+      <div class="field"><label>Fin réelle</label><input type="date" id="t-fin-r"></div>
+      <div class="field span2"><label class="check" style="margin-top:18px"><input type="checkbox" id="t-ouvres"> Compter en <strong>jours ouvrés</strong> (sauter les week-ends)</label></div>
+
+      <div class="form-sect"><i class="ti ti-progress"></i> Suivi</div>
+      <div class="field"><label>Statut</label>
+        <select id="t-statut"><option value="a_faire">À faire</option><option value="en_cours">En cours</option>
+          <option value="bloquee">Bloquée</option><option value="terminee">Terminée</option></select></div>
+      <div class="field"><label>Avancement (%)</label>
+        <input type="number" id="t-av" min="0" max="100" step="1" value="0" inputmode="numeric"></div>
+      <div class="field"><label>Budget (FCFA)</label><input type="number" id="t-budget" min="0" step="1" value="0"></div>
+
+      <div class="field full" id="t-equipe-wrap" style="display:none">
+        <div class="form-sect" style="margin-top:0"><i class="ti ti-users"></i> Ressources humaines
+          <a href="#" id="t-gerer-interv" style="font-weight:400;font-size:12px;margin-left:8px"><i class="ti ti-plus"></i>nouvelle ressource humaine</a></div>
+        <div id="t-equipe-liste" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="t-assign-user" style="flex:1;min-width:200px"><option value="">Choisir une personne…</option></select>
+          <input type="number" id="t-assign-h" min="0" step="1" placeholder="heures" style="width:120px" title="Heures allouées">
+          <button type="button" class="btn" id="t-assign-add"><i class="ti ti-plus"></i>Ajouter</button>
+        </div>
+      </div>
+
+      <div class="field full" id="t-note-calc" class="muted"></div>
+      <div class="field full" id="t-alertes"></div>
+      <div class="field full modal-actions">
+        <button type="button" class="btn" id="t-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale ressource -->
+<div class="modal-overlay" id="modal-res" hidden>
+  <div class="modal" style="max-width:520px">
+    <div class="card-head"><span class="card-title" id="res-titre-modal">Nouvelle ressource</span>
+      <i class="ti ti-x" id="res-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-res" class="form-grid">
+      <input type="hidden" id="res-id">
+      <div class="field full"><label>Libellé</label><input id="res-libelle" required autocomplete="off" placeholder="ex. Ciment, Location engin, Prestataire…"></div>
+      <div class="field"><label>Type</label>
+        <select id="res-type"><option value="materiel">Matériel</option><option value="budget">Budget</option><option value="sous_traitance">Sous-traitance</option></select></div>
+      <div class="field"><label>Rattachée à</label>
+        <select id="res-tache"><option value="">Tout le projet</option></select></div>
+      <div class="field"><label>Coût unitaire (FCFA)</label><input type="number" id="res-cu" min="0" step="1" value="0"></div>
+      <div class="field"><label>Quantité</label><input type="number" id="res-qte" min="0" step="1" value="1"></div>
+      <div class="field full" style="flex-direction:row;justify-content:space-between;gap:10px">
+        <button type="button" class="btn" id="res-supprimer" style="color:var(--danger);display:none"><i class="ti ti-trash"></i>Supprimer</button>
+        <div style="display:flex;gap:10px;margin-left:auto">
+          <button type="button" class="btn" id="res-annuler">Annuler</button>
+          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : ajout/édition d'un intervenant -->
+<div class="modal-overlay" id="modal-interv" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title" id="iv-form-titre">Nouvel intervenant</span>
+      <i class="ti ti-x" id="interv-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <p class="muted" style="margin-top:0;font-size:13px">Personne <strong>interne</strong> (employé avec compte) ou <strong>externe</strong> (consultant / prestataire). Le taux <strong>horaire ou journalier</strong> alimente le coût de main-d'œuvre.</p>
+    <form id="form-interv" class="form-grid">
+      <input type="hidden" id="iv-id">
+      <div class="field"><label>Type</label>
+        <select id="iv-type"><option value="interne">Interne (employé)</option><option value="externe">Externe (consultant)</option></select></div>
+      <div class="field" id="iv-user-wrap"><label>Employé (compte)</label><select id="iv-user"><option value="">—</option></select></div>
+      <div class="field full" id="iv-nom-wrap" style="display:none"><label>Nom</label><input id="iv-nom" autocomplete="off"></div>
+      <div class="field" id="iv-societe-wrap" style="display:none"><label>Société</label><input id="iv-societe" autocomplete="off"></div>
+      <div class="field"><label>Mode de coût</label>
+        <select id="iv-typetaux"><option value="horaire">Taux horaire</option><option value="journalier">Taux journalier</option><option value="forfait">Forfait (montant fixe)</option></select></div>
+      <div class="field"><label id="iv-taux-lbl">Taux (FCFA)</label><input type="number" id="iv-taux" min="0" step="1" value="0"></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="iv-reset">Effacer</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer l'intervenant</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale avancement + observation -->
+<div class="modal-overlay" id="modal-prog" hidden>
+  <div class="modal" style="max-width:480px">
+    <div class="card-head"><span class="card-title" id="prog-titre">Avancement</span>
+      <i class="ti ti-x" id="prog-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-prog" class="form-grid">
+      <input type="hidden" id="prog-tid">
+      <div class="field full"><label>Avancement (%)</label>
+        <input type="number" id="prog-av" min="0" max="100" step="1" value="0" inputmode="numeric"></div>
+      <div class="field full"><label>Observation (ce qui a été fait, un blocage…)</label>
+        <textarea id="prog-obs" rows="2" placeholder="facultatif"></textarea></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="prog-annuler">Fermer</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+      <div class="field full">
+        <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:2px">Historique</div>
+        <div id="prog-hist" style="max-height:200px;overflow:auto"><div class="muted" style="font-size:12px">Aucune observation.</div></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale édition projet -->
+<div class="modal-overlay" id="modal-proj" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title">Modifier le projet</span>
+      <i class="ti ti-x" id="proj-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-proj" class="form-grid">
+      <div class="field full"><label>Nom du projet</label><input id="proj-nom" required autocomplete="off"></div>
+      <div class="field full"><label>Client</label><div id="proj-client-mount"></div></div>
+      <div class="field"><label>Chef de projet</label><select id="proj-chef"><option value="">—</option></select></div>
+      <div class="field"><label>Statut</label>
+        <select id="proj-statut"><option value="planifie">Planifié</option><option value="en_cours">En cours</option>
+          <option value="suspendu">Suspendu</option><option value="cloture">Clôturé</option></select></div>
+      <div class="field"><label>Début prévu</label><input type="date" id="proj-debut"></div>
+      <div class="field"><label>Fin prévue</label><input type="date" id="proj-fin"></div>
+      <div class="field full"><label>Budget saisi (FCFA)</label><input type="number" id="proj-budget" min="0" step="1"></div>
+      <div class="field full"><label>Note</label><textarea id="proj-note" rows="2"></textarea></div>
+      <div class="field full" style="flex-direction:row;justify-content:space-between;gap:10px">
+        <button type="button" class="btn" id="proj-supprimer" style="color:var(--danger)"><i class="ti ti-trash"></i>Supprimer</button>
+        <div style="display:flex;gap:10px;margin-left:auto">
+          <button type="button" class="btn" id="proj-annuler">Annuler</button>
+          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Popup d'assignation rapide -->
+<div id="quick-pop" hidden></div>
+
+
+<!-- Modale jalon -->
+<div class="modal-overlay" id="modal-jalon" hidden>
+  <div class="modal">
+    <div class="card-head"><span class="card-title" id="jalon-titre">Nouveau jalon</span>
+      <i class="ti ti-x" data-fermer="modal-jalon" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-jalon" class="form-grid">
+      <div class="field full"><label>Nom du jalon</label><input name="nom" required placeholder="Ex. Réception des travaux"></div>
+      <div class="field"><label>Date prévue</label><input name="date_prevue" type="date" required></div>
+      <div class="field"><label>Date réelle <span class="muted">(si atteint)</span></label><input name="date_reelle" type="date"></div>
+      <div class="field"><label>Statut</label>
+        <select name="statut">
+          <option value="a_venir">À venir</option>
+          <option value="atteint">Atteint</option>
+          <option value="manque">Manqué</option>
+        </select></div>
+      <div class="field"><label>Activité liée <span class="muted">(facultatif)</span></label>
+        <select name="tache_id" id="jalon-tache"></select></div>
+      <div class="field full"><label>Note</label><textarea name="note" rows="2"></textarea></div>
+      <div class="field full"><div class="reperes" id="jalon-reperes"></div></div>
+      <div class="field full"><div class="alert warn" id="jalon-alertes" style="display:block" hidden></div></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" data-fermer="modal-jalon">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale livrable -->
+<div class="modal-overlay" id="modal-livrable" hidden>
+  <div class="modal">
+    <div class="card-head"><span class="card-title" id="livrable-titre">Nouveau livrable</span>
+      <i class="ti ti-x" data-fermer="modal-livrable" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-livrable" class="form-grid">
+      <div class="field full"><label>Nom du livrable</label><input name="nom" required placeholder="Ex. Rapport d'étude"></div>
+      <div class="field"><label>Attendu le</label><input name="date_attendue" type="date"></div>
+      <div class="field"><label>Livré le</label><input name="date_livraison" type="date"></div>
+      <div class="field"><label>Statut</label>
+        <select name="statut">
+          <option value="a_produire">À produire</option>
+          <option value="en_cours">En cours</option>
+          <option value="livre">Livré</option>
+          <option value="accepte">Accepté</option>
+          <option value="refuse">Refusé</option>
+        </select></div>
+      <div class="field"><label>Activité <span class="muted">(facultatif)</span></label>
+        <select name="tache_id" id="livrable-tache"></select></div>
+      <div class="field full"><label>Jalon <span class="muted">(facultatif)</span></label>
+        <select name="jalon_id" id="livrable-jalon"></select></div>
+      <div class="field full"><label>Description</label><textarea name="description" rows="2"></textarea></div>
+      <div class="field full"><div class="reperes" id="livrable-reperes"></div></div>
+      <div class="field full"><div class="alert warn" id="livrable-alertes" style="display:block" hidden></div></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" data-fermer="modal-livrable">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : rattachement du fichier -->
+<div class="modal-overlay" id="modal-doc" hidden>
+  <div class="modal" style="max-width:520px">
+    <div class="card-head"><span class="card-title">Joindre un fichier</span>
+      <i class="ti ti-x" data-fermer="modal-doc" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-doc" class="form-grid">
+      <div class="field full"><label>Fichier</label><div id="doc-nom" class="muted"></div></div>
+      <div class="field full"><label>Rattacher à une activité <span class="muted">(facultatif)</span></label>
+        <select name="tache_id" id="doc-tache"></select></div>
+      <div class="field full"><label>Rattacher à un jalon <span class="muted">(facultatif)</span></label>
+        <select name="jalon_id" id="doc-jalon"></select></div>
+      <div class="field full"><label>Rattacher à un livrable <span class="muted">(facultatif)</span></label>
+        <select name="livrable_id" id="doc-livrable"></select></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" data-fermer="modal-doc">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Joindre</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Aperçu de l'harmonisation : rien n'est modifié tant qu'on n'applique pas -->
+<div class="modal-overlay" id="modal-harm" hidden>
+  <div class="modal" style="max-width:760px">
+    <div class="card-head"><span class="card-title">Harmoniser les dates</span>
+      <i class="ti ti-x" data-fermer="modal-harm" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <p class="muted" id="harm-nb" style="margin:6px 0 12px"></p>
+    <div class="card" style="padding:0;overflow:visible">
+      <table class="table">
+        <thead><tr><th>Activité</th><th>Aujourd'hui</th><th>Après harmonisation</th><th class="right">Décalage</th></tr></thead>
+        <tbody id="harm-corps"></tbody>
+      </table>
+    </div>
+    <div class="alert warn" style="margin-top:12px">
+      <i class="ti ti-info-circle"></i>
+      <span>Seules les <b>dates prévues</b> des activités de dernier niveau changent. La durée de chaque activité est conservée. Rien n'est modifié tant que vous n'avez pas cliqué sur Appliquer.</span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+      <button type="button" class="btn" data-fermer="modal-harm">Annuler</button>
+      <button type="button" class="btn btn-primary" id="harm-appliquer"><i class="ti ti-check"></i>Appliquer</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const STATUT_PROJ = { planifie:['#4a72a8','Planifié'], en_cours:['#16794f','En cours'], suspendu:['#9a6a12','Suspendu'], cloture:['#5c6a61','Clôturé'] };
+const STATUT_TACHE = { a_faire:['#5c6a61','À faire'], en_cours:['#4a72a8','En cours'], bloquee:['#b23a2c','Bloquée'], terminee:['#16794f','Terminée'] };
+const TYPE_RES = { materiel:'Matériel', budget:'Budget', sous_traitance:'Sous-traitance' };
+const projetId = new URLSearchParams(location.search).get('id');
+let projet = null, taches = [], ressources = [], assignations = [], intervenants = [], tiersListe = [], users = [], clientSel = null;
+const dfr = d => d ? (Djigui.dateFr ? Djigui.dateFr(d) : d.slice(0,10)) : '—';
+const fmtM = v => Djigui.fmt(Math.round(v||0));
+
+// Colonnes Gantt configurables (persistées).
+const COLS = [
+  { key:'debut', lbl:'Début', w:96 }, { key:'fin', lbl:'Fin', w:96 }, { key:'jours', lbl:'Nb jours', w:72 },
+  { key:'budget', lbl:'Budget', w:96 }, { key:'statut', lbl:'Statut', w:100 }, { key:'avancement', lbl:'Avanc.', w:64 },
+];
+let colVis = JSON.parse(localStorage.getItem('proj-cols') || 'null') || { debut:true, fin:true, jours:true, budget:true, statut:true, avancement:false };
+
+async function charger() {
+  if (!projetId) { location.href = 'projets.html'; return; }
+  try {
+    [projet, taches, ressources, assignations, intervenants] = await Promise.all([
+      Djigui.api('/api/projets/' + projetId),
+      Djigui.api('/api/projets/' + projetId + '/taches'),
+      Djigui.api('/api/projets/' + projetId + '/ressources'),
+      Djigui.api('/api/projets/' + projetId + '/assignations'),
+      Djigui.api('/api/intervenants'),
+    ]);
+  } catch (e) { Djigui.toast('Projet introuvable', 'danger'); return; }
+  rendreEntete(); rendreTaches(); rendreGantt(); rendreRessources(); rendreIntervenants();
+  rendreRepartition(); rendrePersonnes();
+  // Annexes (jalons/livrables/documents) : chargées à part pour ne pas retarder
+  // l'affichage du planning si l'une d'elles échoue.
+  try { await chargerAnnexes(); await chargerDependances(); rendreGantt(); }
+  catch (e) { Djigui.toast('Jalons/liens indisponibles : ' + e.message, 'warn'); }
+}
+
+function rendreEntete() {
+  document.getElementById('tb-nom').textContent = projet.nom;
+  document.getElementById('p-nom').textContent = projet.nom;
+  document.title = 'Djigui · ' + projet.nom;
+  const sel = document.getElementById('p-statut');
+  sel.innerHTML = Object.entries(STATUT_PROJ).map(([v,[,l]]) => `<option value="${v}">${l}</option>`).join('');
+  sel.value = projet.statut;
+  // Sur le bandeau vert, le texte reste blanc : une couleur de statut en dur
+  // serait illisible. On teinte seulement le fond de la pastille.
+  const [coul] = STATUT_PROJ[projet.statut] || ['#5c6a61'];
+  sel.style.background = coul + '55';
+  sel.style.borderColor = 'rgba(255,255,255,.5)';
+
+  const ecart = (projet.budget_global||0) - (projet.budget_planifie||0);
+  const ecartTxt = ecart === 0 ? '<span class="muted">équilibré</span>'
+    : `<span style="color:${ecart>=0?'var(--brand-strong)':'var(--danger)'}">${ecart>=0?'+':'−'} ${fmtM(Math.abs(ecart))}</span>`;
+  // Une tuile par chiffre : libellé + icône + valeur, avec un accent de couleur
+  // sur les trois informations qu'on regarde en premier.
+  const fcfa = v => fmtM(v) + ' <span class="muted" style="font-size:11px">FCFA</span>';
+  document.getElementById('p-synthese').innerHTML = [
+    ['ti-user', 'Client', Djigui.esc(projet.client_nom || '—'), ''],
+    ['ti-user-star', 'Chef de projet', Djigui.esc(projet.chef_nom || '—'), ''],
+    ['ti-calendar-event', 'Fin prévue', dfr(projet.date_fin_prevue), 'acc-date'],
+    ['ti-wallet', 'Budget saisi', fcfa(projet.budget_global), 'acc-brand fort'],
+    ['ti-sum', 'Budget planifié', fcfa(projet.budget_planifie), 'acc-brand fort'],
+    ['ti-arrows-diff', 'Écart', ecartTxt, ecart >= 0 ? 'acc-ok fort' : 'acc-danger fort'],
+    ['ti-checklist', 'Budget tâches', fcfa(projet.budget_taches), 'acc-moyen'],
+    ['ti-users', 'Coût main-d\'œuvre', fcfa(projet.cout_main_oeuvre), 'acc-moyen'],
+    ['ti-package', 'Coût ressources', fcfa(projet.cout_ressources), 'acc-moyen'],
+  ].map(([ic, l, v, acc]) => `<div class="pe-bloc ${acc}" title="${l}">
+      <div class="pe-ic"><i class="ti ${ic}"></i></div>
+      <div class="pe-corps"><div class="pe-lbl">${l}</div><div class="pe-val">${v}</div></div>
+    </div>`).join('');
+  // Deux jauges : avancement physique (pondéré budget) + budgétaire (dépenses/budget).
+  const phys = projet.avancement_physique || 0;
+  const budg = projet.avancement_budgetaire || 0;
+  // Budgétaire coloré : orange si dépenses > avancement physique (on dépense plus vite qu'on avance).
+  const budgCoul = budg > phys + 5 ? 'var(--warning)' : (budg > 100 ? 'var(--danger)' : 'var(--brand)');
+  const jauge = (icone, libelle, valeur, couleur, aide) => `
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+        <span style="font-size:12.5px;font-weight:600;color:var(--text-2)">
+          <i class="ti ${icone}"></i> ${libelle}${aide ? ` <span class="muted" style="font-size:10.5px;font-weight:400">${aide}</span>` : ''}</span>
+        <span style="font-weight:800;font-size:16px;color:${couleur}">${valeur}%</span></div>
+      <div class="barre" style="height:12px;background:rgba(255,255,255,.7)">
+        <div style="width:${Math.min(valeur,100)}%;background:${couleur}"></div></div>
+    </div>`;
+  document.getElementById('p-jauges').innerHTML =
+    jauge('ti-progress', 'Avancement physique', phys, 'var(--brand-strong)', '') +
+    jauge('ti-coin', 'Avancement budgétaire', budg, budgCoul, '(dépenses / budget)');
+  // Barre collante : les chiffres qu'on doit garder sous les yeux en parcourant
+  // un long planning. Toujours remplie, sur tous les onglets.
+  document.getElementById('pc-infos').innerHTML = `
+    <span class="pc-nom">${Djigui.esc(projet.nom)}</span>
+    <span class="pc-item">
+      <span class="pc-lbl">Avancement</span>
+      <span class="pc-val">${phys}%</span>
+      <span class="pc-jauge"><div style="width:${Math.min(phys,100)}%"></div></span>
+    </span>
+    <span class="pc-item secondaire">
+      <span class="pc-lbl">Budget</span><span class="pc-val">${fmtM(projet.budget_global)}</span>
+    </span>
+    <span class="pc-item">
+      <span class="pc-lbl">Planifié</span><span class="pc-val">${fmtM(projet.budget_planifie)}</span>
+    </span>
+    <span class="pc-item">
+      <span class="pc-lbl">Écart</span>
+      <span class="pc-val ${ecart < 0 ? 'ko' : ''}">${ecart === 0 ? '—' : (ecart > 0 ? '+ ' : '− ') + fmtM(Math.abs(ecart))}</span>
+    </span>
+    <span class="pc-item secondaire">
+      <span class="pc-lbl">Fin</span><span class="pc-val">${dfr(projet.date_fin_prevue)}</span>
+    </span>`;
+
+  document.getElementById('p-note').textContent = projet.note || '';
+
+  // Bandeau de dépassement
+  const b = document.getElementById('bandeau-depasse');
+  if (projet.depasse_fin) {
+    b.style.display = '';
+    document.getElementById('depasse-txt').innerHTML =
+      `Les tâches se terminent le <strong>${dfr(projet.date_fin_calculee)}</strong>, après la fin prévue du projet (<strong>${dfr(projet.date_fin_prevue)}</strong>).`;
+  } else b.style.display = 'none';
+}
+// Export Excel du projet. Le fichier est écrit par le SERVEUR dans
+// « Téléchargements » puis ouvert : le WebView2 de Tauri ne sait pas
+// télécharger (même contrainte que l'export des ventes).
+document.getElementById('btn-export').addEventListener('click', async e => {
+  const b = e.currentTarget;
+  const avant = b.innerHTML;
+  b.disabled = true;
+  b.innerHTML = '<i class="ti ti-loader"></i>Préparation…';
+  try {
+    const r = await Djigui.api('/api/projets/' + projetId + '/export-xlsx', { method: 'POST' });
+    Djigui.alert(`Le classeur a été enregistré et ouvert :
+
+${r.chemin}`);
+  } catch (err) {
+    Djigui.toast('Erreur : ' + err.message, 'danger');
+  } finally {
+    b.disabled = false; b.innerHTML = avant;
+  }
+});
+
+document.getElementById('btn-ajuster').addEventListener('click', async () => {
+  if (!projet.date_fin_calculee) return;
+  try { await Djigui.api('/api/projets/' + projetId, { method:'PUT', body: corpsProjet({ date_fin_prevue: projet.date_fin_calculee }) });
+    Djigui.toast('Fin du projet ajustée au ' + dfr(projet.date_fin_calculee), 'ok'); charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+function corpsProjet(over) {
+  return Object.assign({
+    nom: projet.nom, client_id: projet.client_id || null, chef_de_projet_id: projet.chef_de_projet_id || null,
+    date_debut_prevue: projet.date_debut_prevue || null, date_fin_prevue: projet.date_fin_prevue || null,
+    statut: projet.statut, budget_global: projet.budget_global, note: projet.note || null,
+  }, over || {});
+}
+
+// Tâches parentes repliées (leurs sous-tâches sont masquées).
+let pliees = new Set();
+// Ordonne : parent puis ses descendants (récursif), sauf sous une tâche repliée.
+function tachesArbre() {
+  const parPar = {}; taches.forEach(t => (parPar[t.tache_parente_id||''] ??= []).push(t));
+  const out = [];
+  (function walk(parentKey) {
+    (parPar[parentKey] || []).forEach(t => { out.push(t); if (!pliees.has(t.id)) walk(t.id); });
+  })('');
+  // Sécurité : n'ajoute QUE les vraies orphelines (parent inexistant), pas les
+  // enfants masqués par un repli.
+  const ids = new Set(taches.map(t => t.id));
+  taches.forEach(t => { if (!out.includes(t) && (!t.tache_parente_id || !ids.has(t.tache_parente_id))) out.push(t); });
+  return out;
+}
+// Bascule replié/déplié d'une tâche parente et re-rend les vues.
+function togglePlier(id) {
+  if (pliees.has(id)) pliees.delete(id); else pliees.add(id);
+  rendreTaches(); rendreGantt();
+}
+
+// ---- Assignation rapide (icône personne rouge sur les activités non assignées) ----
+const estAssignee = id => assignations.some(a => a.tache_id === id);
+function quickAssignBtn(t) {
+  if (t.a_enfants) return '';   // les parents agrègent leurs sous-tâches
+  const ok = estAssignee(t.id);
+  const coul = ok ? 'var(--brand)' : 'var(--danger)';
+  const icon = ok ? 'ti-user-check' : 'ti-user-exclamation';
+  const titre = ok ? 'Assignée — cliquez pour ajouter une personne' : 'Non assignée — cliquez pour assigner';
+  return `<button class="icon-act" data-quick="${t.id}" title="${titre}" style="color:${coul};margin-left:4px"><i class="ti ${icon}"></i></button>`;
+}
+function ouvrirQuick(id, cible) {
+  const pop = document.getElementById('quick-pop');
+  const deja = new Set(assignations.filter(a => a.tache_id === id).map(a => a.intervenant_id));
+  const actifs = intervenants.filter(i => i.actif && !deja.has(i.id));
+  pop.dataset.tache = id;
+  const totalActifs = intervenants.filter(i => i.actif).length;
+  pop.innerHTML = actifs.length
+    ? '<div style="font-size:11px;color:var(--text-muted);padding:3px 8px">Assigner une personne</div>' +
+      actifs.map(i => `<div class="quick-opt" data-qi="${i.id}">${Djigui.esc(i.nom)}${i.type==='externe'?' <span class="muted" style="font-size:11px">(ext.)</span>':''}</div>`).join('')
+    : (totalActifs
+        ? '<div class="muted" style="padding:8px;font-size:12px">Toutes les personnes sont déjà assignées à cette activité.</div>'
+        : '<div class="muted" style="padding:8px;font-size:12px">Aucune ressource humaine.<br>Créez-en dans Ressources → Humaine.</div>');
+  const r = cible.getBoundingClientRect();
+  pop.style.left = Math.min(r.left, window.innerWidth-230) + 'px';
+  pop.style.top = (r.bottom+4) + 'px';
+  pop.hidden = false;
+}
+document.getElementById('quick-pop').addEventListener('click', async e => {
+  const opt = e.target.closest('[data-qi]'); if (!opt) return;
+  const tacheId = document.getElementById('quick-pop').dataset.tache;
+  try {
+    await Djigui.api('/api/assignations', { method:'POST', body:{ tache_id: tacheId, intervenant_id: opt.dataset.qi, heures_allouees: 0 } });
+    document.getElementById('quick-pop').hidden = true;
+    Djigui.toast('Personne assignée', 'ok');
+    await charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#quick-pop') && !e.target.closest('[data-quick]')) document.getElementById('quick-pop').hidden = true;
+});
+
+function rendreTaches() {
+  const corps = document.getElementById('corps-taches');
+  if (!taches.length) {
+    corps.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:34px">
+      <div class="muted" style="margin-bottom:14px"><i class="ti ti-checklist" style="font-size:26px;display:block;margin-bottom:6px;color:var(--text-muted)"></i>Aucune tâche pour ce projet.</div>
+      <button class="btn btn-primary" data-new-task><i class="ti ti-plus"></i>Ajouter une tâche</button></td></tr>`;
+    majLotBar(); return;
+  }
+  corps.innerHTML = tachesArbre().map(t => {
+    const [coul] = STATUT_TACHE[t.statut] || ['#5c6a61'];
+    const indent = (t.niveau - 1) * 20;
+    const periode = [t.debut_calcule, t.fin_calcule].filter(Boolean).map(dfr).join(' → ') || '—';
+    const opts = Object.entries(STATUT_TACHE).map(([v,[,l]]) => `<option value="${v}" ${v===t.statut?'selected':''}>${l}</option>`).join('');
+    return `<tr data-id="${t.id}">
+      <td><input type="checkbox" class="chk-t" value="${t.id}"></td>
+      <td><div class="t-nom-cell" style="padding-left:${indent}px">${t.a_enfants
+        ? `<i class="ti ti-chevron-${pliees.has(t.id)?'right':'down'}" data-plier="${t.id}" style="cursor:pointer;color:var(--text-2)"></i>`
+        : '<i class="ti ti-point puce"></i>'}
+        <span style="font-weight:600;cursor:pointer" data-edit="${t.id}">${Djigui.esc(t.nom)}</span>${quickAssignBtn(t)}</div></td>
+      <td class="num" style="font-size:12px;color:var(--text-2)">${Djigui.esc(periode)}</td>
+      <td class="right num">${t.nb_jours || '—'}</td>
+      <td class="right num">${fmtM(t.budget_calcule)}${t.a_enfants?' <span class="muted" title="calculé depuis les sous-tâches">∑</span>':''}</td>
+      <td class="right">${t.a_enfants
+        ? `<span class="badge" style="background:${coul}22;color:${coul}">${STATUT_TACHE[t.statut][1]}</span>`
+        : `<select class="stat-select" data-statut="${t.id}" style="border-color:${coul};color:${coul}">${opts}</select>`}</td>
+      <td class="right"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+        <div class="barre"><div style="width:${t.avancement_calcule}%;background:${coul}"></div></div>
+        <span style="font-size:12px;width:30px">${t.avancement_calcule}%</span>
+        ${!t.a_enfants ? `<button class="icon-act" data-prog="${t.id}" title="Saisir l'avancement et une observation"><i class="ti ti-progress-check"></i></button>` : ''}</div></td>
+      <td class="right">
+        ${t.niveau < 4 ? `<button class="icon-act" data-add-child="${t.id}" title="Ajouter une sous-tâche"><i class="ti ti-plus"></i></button>` : ''}
+        <button class="icon-act" data-edit="${t.id}" title="Modifier"><i class="ti ti-edit"></i></button>
+        <button class="icon-act danger" data-del="${t.id}" title="Supprimer"><i class="ti ti-trash"></i></button></td>
+    </tr>`;
+  }).join('');
+  majLotBar();
+}
+
+// ---- Gantt : échelle adaptative (jour / semaine / mois) + en-tête 2 niveaux ----
+const NIVEAU_COUL = ['#16794f', '#c8860a', '#3f6fb0', '#7c3aed'];
+function coulNiveau(n) { return NIVEAU_COUL[Math.min(Math.max(n,1),4)-1]; }
+const MOISAB = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const joursDansMois = d => new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+const moisEntre = (a,b) => (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
+function lundiDe(d) { const x=new Date(d); const j=(x.getDay()+6)%7; x.setDate(x.getDate()-j); x.setHours(0,0,0,0); return x; }
+let ganttEchelle = localStorage.getItem('gantt-echelle') || 'auto';
+
+// Détermine l'échelle et une position en COLONNES (xcol) selon la durée totale.
+// Les colonnes sont étirables (1fr) : elles remplissent la largeur si le projet
+// est court, et scrollent si le projet est long. Les barres sont positionnées
+// en % pour rester alignées quelle que soit la largeur.
+function friseSpec(dated) {
+  let min = new Date(dated.reduce((a,t)=> t.debut_calcule<a?t.debut_calcule:a, dated[0].debut_calcule));
+  let max = new Date(dated.reduce((a,t)=> t.fin_calcule>a?t.fin_calcule:a, dated[0].fin_calcule));
+  min.setHours(0,0,0,0); max.setHours(0,0,0,0);
+  const total = Math.round((max-min)/86400000) + 1;
+  let unit = ganttEchelle === 'auto' ? (total<=60 ? 'jour' : total<=366 ? 'semaine' : 'mois') : ganttEchelle;
+  // Étend la frise aux MOIS ENTIERS (1er → fin de mois) pour combler le vide.
+  min = new Date(min.getFullYear(), min.getMonth(), 1);
+  max = new Date(max.getFullYear(), max.getMonth()+1, 0);
+  const jours = Math.round((max-min)/86400000) + 1;
+  let LARG, origin, ncol;
+  if (unit==='jour') { LARG=30; origin=new Date(min); ncol=jours; }
+  else if (unit==='semaine') { LARG=52; origin=lundiDe(min); ncol=Math.ceil((Math.round((max-origin)/86400000)+1)/7); }
+  else { LARG=74; origin=new Date(min.getFullYear(),min.getMonth(),1); ncol=moisEntre(origin,max)+1; }
+  const xcol = (date) => { const d=new Date(date); d.setHours(0,0,0,0);
+    if (unit==='jour') return (d-origin)/86400000;
+    if (unit==='semaine') return (d-origin)/86400000/7;
+    return moisEntre(origin,d) + (d.getDate()-1)/joursDansMois(d); };
+  return { min, max, unit, LARG, origin, ncol, xcol, gridCols: `repeat(${ncol}, minmax(${LARG}px, 1fr))` };
+}
+const pctCol = (c, sp) => (c / sp.ncol * 100);
+// En-tête à deux niveaux : bande (mois/année) + unité fine.
+function friseHead(sp) {
+  let fine = '';
+  for (let i=0;i<sp.ncol;i++) {
+    let lbl='', we=false;
+    if (sp.unit==='jour') { const d=addDays(sp.origin,i); lbl=d.getDate(); we=(d.getDay()===0||d.getDay()===6); }
+    else if (sp.unit==='semaine') { const d=addDays(sp.origin,i*7); lbl=d.getDate()+'/'+(d.getMonth()+1); }
+    else { const d=new Date(sp.origin.getFullYear(),sp.origin.getMonth()+i,1); lbl=MOISAB[d.getMonth()]; }
+    fine += `<div class="g-day-h ${we?'we':''}"><b>${lbl}</b></div>`;
+  }
+  let bande = '';
+  if (sp.unit==='mois') {
+    for (let y=sp.origin.getFullYear(); y<=sp.max.getFullYear(); y++) {
+      const g0=Math.max(0,sp.xcol(new Date(y,0,1))), g1=Math.min(sp.ncol,sp.xcol(new Date(y+1,0,1)));
+      if (g1>g0) bande += `<div class="g-band" style="left:${pctCol(g0,sp)}%;width:${pctCol(g1-g0,sp)}%">${y}</div>`;
+    }
+  } else {
+    let m=new Date(sp.origin.getFullYear(),sp.origin.getMonth(),1);
+    while (m<=sp.max) {
+      const nxt=new Date(m.getFullYear(),m.getMonth()+1,1);
+      const g0=Math.max(0,sp.xcol(m<sp.origin?sp.origin:m)), g1=Math.min(sp.ncol,sp.xcol(nxt));
+      if (g1>g0) bande += `<div class="g-band" style="left:${pctCol(g0,sp)}%;width:${pctCol(g1-g0,sp)}%">${MOISAB[m.getMonth()]} ${m.getFullYear()}</div>`;
+      m=nxt;
+    }
+  }
+  return `<div class="g-band-row">${bande}</div>
+    <div class="g-days-head" style="grid-template-columns:${sp.gridCols}">${fine}</div>`;
+}
+function friseCells(sp) {
+  let cells='';
+  for (let i=0;i<sp.ncol;i++) {
+    let we=false;
+    if (sp.unit==='jour') { const d=addDays(sp.origin,i); we=(d.getDay()===0||d.getDay()===6); }
+    cells += `<div class="g-cellday ${we?'we':''}"></div>`;
+  }
+  return cells;
+}
+function barreGantt(sp, t, coul, surc) {
+  const c0=sp.xcol(t.debut_calcule), c1=sp.xcol(addDays(t.fin_calcule,1));
+  const left=pctCol(c0,sp), w=Math.max(0.6, pctCol(c1-c0,sp)), av=t.avancement_calcule||0;
+  const bg = surc ? 'var(--danger)' : coul;   // barre PLEINE (bien visible)
+  return `<div class="g-bar ${surc?'surcharge':''}" data-tache="${t.id}" style="left:${left}%;width:${w}%;background:${bg}" title="${Djigui.esc(t.nom)} — ${av}%">
+    ${(!surc && av<100) ? `<div class="g-bar-reste" style="left:${av}%"></div>` : ''}
+    <span class="g-bar-lbl">${Djigui.esc(t.nom)} · ${av}%</span></div>`;
+}
+
+// Un jalon sur la frise : losange à sa date, couleur selon le statut.
+function losangeJalon(sp, j) {
+  const coul = (STATUT_JALON[j.statut] || ['#8a94a6'])[0];
+  const left = pctCol(sp.xcol(j.date_reelle || j.date_prevue), sp);
+  return `<div class="g-jalon" style="left:${left}%;background:${coul}" title="${Djigui.esc(j.nom)} — ${dfr(j.date_prevue)}"></div>`;
+}
+
+// Actions rapides du Gantt, à droite du libellé.
+// Sobre : seul l'état d'assignation reste visible en permanence (c'est une
+// information, pas une commande) ; modifier et avancement n'apparaissent qu'au
+// survol de la ligne, pour ne pas charger le tableau.
+function actionsGantt(t) {
+  const b = [];
+  if (!t.a_enfants) {
+    const ok = estAssignee(t.id);
+    b.push(`<button class="g-act" data-quick="${t.id}" title="${ok ? 'Assignée — ajouter une personne' : 'Non assignée — assigner'}"
+      style="color:${ok ? 'var(--brand)' : 'var(--danger)'}"><i class="ti ${ok ? 'ti-user-check' : 'ti-user-exclamation'}"></i></button>`);
+  }
+  b.push(`<button class="g-act g-act-hover" data-edit="${t.id}" title="Modifier l'activité"><i class="ti ti-edit"></i></button>`);
+  if (!t.a_enfants) {
+    b.push(`<button class="g-act g-act-hover" data-prog="${t.id}" title="Saisir l'avancement"><i class="ti ti-progress-check"></i></button>`);
+  }
+  return `<span class="g-acts">${b.join('')}</span>`;
+}
+
+function rendreGantt() {
+  const zone = document.getElementById('gantt-zone');
+  const dated = taches.filter(t => t.debut_calcule && t.fin_calcule);
+  if (!dated.length) { zone.innerHTML = '<div class="card"><div class="muted">Ajoutez des dates de début/fin aux tâches pour afficher le planning.</div></div>'; return; }
+  const sp = friseSpec(dated);
+  const arbre = tachesArbre();
+  const colsAff = COLS.filter(c => colVis[c.key]);
+  // Largeurs FIXES (mêmes colonnes sur toutes les lignes → parfaitement alignées).
+  const gridLeft = `260px ${colsAff.map(c=>c.w+'px').join(' ')}`;
+  let left = `<div class="g-left-row" style="grid-template-columns:${gridLeft}">
+    <div class="g-th">Activité</div>${colsAff.map(c=>`<div class="g-th" style="justify-content:center;border-left:1px solid rgba(255,255,255,.3)">${c.lbl}</div>`).join('')}</div>`;
+  arbre.forEach(t => {
+    const indent = (t.niveau-1)*16;
+    left += `<div class="g-left-row" style="grid-template-columns:${gridLeft}">
+      <div class="g-cell g-cell-nom" style="padding-left:${10+indent}px">${t.a_enfants
+        ? `<i class="ti ti-chevron-${pliees.has(t.id)?'right':'down'}" data-plier="${t.id}" style="cursor:pointer;color:var(--text-2);margin-right:2px"></i>`
+        : ''}<span class="g-nom" title="${Djigui.esc(t.nom)}">${Djigui.esc(t.nom)}</span>${actionsGantt(t)}</div>
+      ${colsAff.map(c => `<div class="g-cell" style="justify-content:center;border-left:1px solid var(--border)">${celluleCol(c.key,t)}</div>`).join('')}</div>`;
+  });
+  const head = friseHead(sp), cells = friseCells(sp);
+  const body = arbre.map(t => {
+    const bar = (t.debut_calcule && t.fin_calcule) ? barreGantt(sp, t, coulNiveau(t.niveau), false) : '';
+    // Les jalons rattachés à cette activité sont posés SUR sa ligne, pas dans
+    // une bande à part : on voit tout de suite à quelle activité ils appartiennent.
+    const sesJalons = jalons.filter(j => j.tache_id === t.id && j.date_prevue)
+      .map(j => losangeJalon(sp, j)).join('');
+    return `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${bar}${sesJalons}</div>`;
+  }).join('');
+  // Bande de jalons : losanges positionnés sur la frise. Purement visuel —
+  // aucun recalcul de dates n'en découle (barrière « retard en cascade »).
+  // Bande du bas : uniquement les jalons NON rattachés à une activité.
+  const datesJal = jalons.filter(j => j.date_prevue && !j.tache_id);
+  const bandeJalons = datesJal.length ? `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${
+    datesJal.map(j => losangeJalon(sp, j)).join('')}</div>` : '';
+  const libJalons = datesJal.length
+    ? `<div class="g-left-row" style="grid-template-columns:${gridLeft}"><div class="g-cell" style="font-weight:600"><i class="ti ti-flag"></i> Jalons</div>${colsAff.map(()=>'<div class="g-cell" style="border-left:1px solid var(--border)"></div>').join('')}</div>`
+    : '';
+  const legende = `<div class="g-legende">${[1,2,3,4].map(n =>
+    `<span><i style="background:${coulNiveau(n)}"></i>Niveau ${n}</span>`).join('')}
+    <span><i style="background:#2e9e5b;transform:rotate(45deg)"></i>Jalon</span>
+    <span style="margin-left:auto;color:var(--text-muted)">Partie pleine = avancement · échelle : ${sp.unit}</span></div>`;
+  // Légende AU-DESSUS du planning : on lit le code couleur avant le tableau,
+  // pas après l'avoir parcouru.
+  zone.innerHTML = `${legende}<div class="gantt">
+    <div class="gantt-left">${left}${libJalons}</div>
+    <div class="gantt-right"><div style="min-width:100%;display:inline-block">${head}${body}${bandeJalons}</div></div>
+  </div>`;
+  // Les flèches se mesurent sur le DOM : il faut que le Gantt soit posé.
+  requestAnimationFrame(dessinerFleches);
+}
+// Clics sur le Gantt : déplier/fermer + assignation rapide.
+document.getElementById('gantt-zone').addEventListener('click', e => {
+  const pli = e.target.closest('[data-plier]'); if (pli) { togglePlier(pli.dataset.plier); return; }
+  const q = e.target.closest('[data-quick]'); if (q) { ouvrirQuick(q.dataset.quick, q); return; }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) { ouvrirTache(taches.find(t => t.id === ed.dataset.edit)); return; }
+  const pr = e.target.closest('[data-prog]');
+  if (pr) { ouvrirProg(taches.find(t => t.id === pr.dataset.prog)); return; }
+});
+// Redimensionnement : les barres bougent, les flèches doivent suivre.
+let minuteurFleches = null;
+window.addEventListener('resize', () => {
+  clearTimeout(minuteurFleches);
+  minuteurFleches = setTimeout(dessinerFleches, 120);
+});
+// Sélecteur d'échelle (auto/jour/semaine/mois).
+document.getElementById('gantt-echelle').value = ganttEchelle;
+document.getElementById('gantt-echelle').addEventListener('change', e => {
+  ganttEchelle = e.target.value; localStorage.setItem('gantt-echelle', ganttEchelle);
+  rendreGantt(); rendrePersGantt();
+});
+// ===========================================================================
+// Jalons, livrables et documents joints
+//
+// Rappel : un jalon reste LOCAL au projet — aucun rendez-vous n'est créé dans
+// l'agenda (barrière décidée avec l'utilisateur).
+// ===========================================================================
+let jalons = [], livrables = [], documents = [];
+const jalSel = new Set(), livSel = new Set();
+
+const STATUT_JALON = {
+  a_venir: ['#8a94a6', 'À venir'],
+  atteint: ['#2e9e5b', 'Atteint'],
+  manque:  ['#c0392b', 'Manqué'],
+};
+const STATUT_LIV = {
+  a_produire: ['#8a94a6', 'À produire'],
+  en_cours:   ['#2f7fd1', 'En cours'],
+  livre:      ['#2e9e5b', 'Livré'],
+  accepte:    ['#1b7a44', 'Accepté'],
+  refuse:     ['#c0392b', 'Refusé'],
+};
+
+function pastille(map, v) {
+  const [c, l] = map[v] || ['#8a94a6', v];
+  return `<span class="badge" style="background:${c}1f;color:${c}">${l}</span>`;
+}
+// Taille lisible par un humain, pas en octets bruts.
+function poids(n) {
+  if (n < 1024) return n + ' o';
+  if (n < 1048576) return (n / 1024).toFixed(0) + ' Ko';
+  return (n / 1048576).toFixed(1) + ' Mo';
+}
+
+async function chargerAnnexes() {
+  [jalons, livrables, documents] = await Promise.all([
+    Djigui.api('/api/projets/' + projetId + '/jalons'),
+    Djigui.api('/api/projets/' + projetId + '/livrables'),
+    Djigui.api('/api/projets/' + projetId + '/documents-joints'),
+  ]);
+  jalSel.clear(); livSel.clear();
+  rendreJalons(); rendreLivrables(); rendreDocs();
+}
+
+// ---- Jalons ---------------------------------------------------------------
+function rendreJalons() {
+  const c = document.getElementById('corps-jalons');
+  if (!jalons.length) {
+    c.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Aucun jalon. Ajoutez les dates clés du projet.</td></tr>';
+  } else {
+    c.innerHTML = jalons.map(j => `<tr${j.en_retard ? ' style="background:var(--warning-tint)"' : ''}>
+      <td><input type="checkbox" data-jal="${j.id}"${jalSel.has(j.id) ? ' checked' : ''}></td>
+      <td style="font-weight:600">${Djigui.esc(j.nom)}
+        ${j.en_retard ? '<i class="ti ti-alert-triangle" style="color:var(--warning)" title="Échéance dépassée"></i>' : ''}
+        ${j.note ? `<div class="muted" style="font-size:12px">${Djigui.esc(j.note)}</div>` : ''}</td>
+      <td class="muted">${j.tache_nom ? Djigui.esc(j.tache_nom) : '—'}</td>
+      <td>${dfr(j.date_prevue)}</td>
+      <td>${j.date_reelle ? dfr(j.date_reelle) : '—'}</td>
+      <td>${pastille(STATUT_JALON, j.statut)}</td>
+      <td class="right">${j.nb_livrables || 0}</td>
+      <td class="right"><i class="ti ti-pencil icon-act" data-jedit="${j.id}" title="Modifier"></i></td>
+    </tr>`).join('');
+  }
+  majLotJalons();
+}
+function majLotJalons() {
+  document.getElementById('lot-jalons').style.display = jalSel.size ? '' : 'none';
+  document.getElementById('lot-jalons-nb').textContent = `${jalSel.size} jalon(s) sélectionné(s)`;
+}
+
+// ---- Livrables ------------------------------------------------------------
+function rendreLivrables() {
+  const c = document.getElementById('corps-livrables');
+  if (!livrables.length) {
+    c.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:18px">Aucun livrable.</td></tr>';
+  } else {
+    c.innerHTML = livrables.map(l => `<tr${l.en_retard ? ' style="background:var(--warning-tint)"' : ''}>
+      <td><input type="checkbox" data-liv="${l.id}"${livSel.has(l.id) ? ' checked' : ''}></td>
+      <td style="font-weight:600">${Djigui.esc(l.nom)}
+        ${l.en_retard ? '<i class="ti ti-alert-triangle" style="color:var(--warning)" title="Attendu dépassé"></i>' : ''}
+        ${l.description ? `<div class="muted" style="font-size:12px">${Djigui.esc(l.description)}</div>` : ''}</td>
+      <td class="muted">${l.tache_nom ? Djigui.esc(l.tache_nom) : '—'}</td>
+      <td class="muted">${l.jalon_nom ? Djigui.esc(l.jalon_nom) : '—'}</td>
+      <td>${l.date_attendue ? dfr(l.date_attendue) : '—'}</td>
+      <td>${l.date_livraison ? dfr(l.date_livraison) : '—'}</td>
+      <td>${pastille(STATUT_LIV, l.statut)}</td>
+      <td class="right">${l.nb_documents || 0}</td>
+      <td class="right"><i class="ti ti-pencil icon-act" data-ledit="${l.id}" title="Modifier"></i></td>
+    </tr>`).join('');
+  }
+  majLotLivrables();
+}
+function majLotLivrables() {
+  document.getElementById('lot-livrables').style.display = livSel.size ? '' : 'none';
+  document.getElementById('lot-livrables-nb').textContent = `${livSel.size} livrable(s) sélectionné(s)`;
+}
+
+// ---- Documents ------------------------------------------------------------
+function rendreDocs() {
+  const c = document.getElementById('corps-docs');
+  if (!documents.length) {
+    c.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:18px">Aucun document joint.</td></tr>';
+    return;
+  }
+  c.innerHTML = documents.map(d => {
+    const t = taches.find(x => x.id === d.tache_id);
+    const j = jalons.find(x => x.id === d.jalon_id);
+    const l = livrables.find(x => x.id === d.livrable_id);
+    const rat = [t && 'Activité : ' + t.nom, j && 'Jalon : ' + j.nom, l && 'Livrable : ' + l.nom]
+      .filter(Boolean).map(Djigui.esc).join('<br>') || '<span class="muted">Projet</span>';
+    return `<tr>
+      <td style="font-weight:600"><i class="ti ti-file"></i> ${Djigui.esc(d.nom)}</td>
+      <td style="font-size:12.5px">${rat}</td>
+      <td class="right num">${poids(d.taille || 0)}</td>
+      <td class="muted">${dfr((d.cree_le || '').slice(0, 10))}</td>
+      <td class="right">
+        <i class="ti ti-external-link icon-act" data-douvrir="${d.id}" title="Ouvrir"></i>
+        <i class="ti ti-trash icon-act" data-dsuppr="${d.id}" title="Supprimer" style="color:var(--danger)"></i></td>
+    </tr>`;
+  }).join('');
+}
+
+// ---- Sélections (traitement par lot) --------------------------------------
+document.getElementById('corps-jalons').addEventListener('change', e => {
+  const cb = e.target.closest('[data-jal]'); if (!cb) return;
+  cb.checked ? jalSel.add(cb.dataset.jal) : jalSel.delete(cb.dataset.jal);
+  majLotJalons();
+});
+document.getElementById('jal-all').addEventListener('change', e => {
+  jalSel.clear();
+  if (e.target.checked) jalons.forEach(j => jalSel.add(j.id));
+  rendreJalons();
+});
+document.getElementById('corps-livrables').addEventListener('change', e => {
+  const cb = e.target.closest('[data-liv]'); if (!cb) return;
+  cb.checked ? livSel.add(cb.dataset.liv) : livSel.delete(cb.dataset.liv);
+  majLotLivrables();
+});
+document.getElementById('liv-all').addEventListener('change', e => {
+  livSel.clear();
+  if (e.target.checked) livrables.forEach(l => livSel.add(l.id));
+  rendreLivrables();
+});
+
+document.getElementById('lot-jalons-appliquer').addEventListener('click', async () => {
+  const st = document.getElementById('lot-jalons-statut').value;
+  if (!st) { Djigui.toast('Choisissez un statut', 'warn'); return; }
+  try {
+    const r = await Djigui.api('/api/jalons/lot/statut', { method: 'POST', body: { ids: [...jalSel], statut: st } });
+    Djigui.toast(`${r.traites} jalon(s) mis à jour`, 'ok'); await chargerAnnexes();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('lot-jalons-suppr').addEventListener('click', async () => {
+  if (!await Djigui.confirm(`Supprimer ${jalSel.size} jalon(s) ? Les livrables et documents rattachés seront conservés.`)) return;
+  try {
+    const r = await Djigui.api('/api/jalons/lot/supprimer', { method: 'POST', body: { ids: [...jalSel] } });
+    Djigui.toast(`${r.traites} jalon(s) supprimé(s)`, 'ok'); await chargerAnnexes();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('lot-livrables-appliquer').addEventListener('click', async () => {
+  const st = document.getElementById('lot-livrables-statut').value;
+  if (!st) { Djigui.toast('Choisissez un statut', 'warn'); return; }
+  try {
+    const r = await Djigui.api('/api/livrables/lot/statut', { method: 'POST', body: { ids: [...livSel], statut: st } });
+    Djigui.toast(`${r.traites} livrable(s) mis à jour`, 'ok'); await chargerAnnexes();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('lot-livrables-suppr').addEventListener('click', async () => {
+  if (!await Djigui.confirm(`Supprimer ${livSel.size} livrable(s) ? Les documents rattachés seront conservés.`)) return;
+  try {
+    const r = await Djigui.api('/api/livrables/lot/supprimer', { method: 'POST', body: { ids: [...livSel] } });
+    Djigui.toast(`${r.traites} livrable(s) supprimé(s)`, 'ok'); await chargerAnnexes();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Modale jalon ---------------------------------------------------------
+const formJalon = document.getElementById('form-jalon');
+let jalonEditId = null;
+
+// Repères de dates affichés dans les modales jalon/livrable.
+// C'est du GUIDAGE, pas un contrôle : aucune borne min/max n'est posée sur les
+// champs, l'utilisateur reste libre de saisir la date qu'il veut.
+function reperesDates(cible, tacheId) {
+  const zone = document.getElementById(cible);
+  if (!zone) return;
+  const bloc = [];
+  const d = x => x ? dfr(x) : '—';
+  const dp = projet.date_debut_prevue, fp = projet.date_fin_prevue;
+  const dc = projet.date_debut_calculee, fc = projet.date_fin_calculee;
+  if (dp || fp) bloc.push(`<span><i class="ti ti-briefcase"></i> Projet prévu : <b>${d(dp)}</b> → <b>${d(fp)}</b></span>`);
+  // Les dates réelles viennent des activités (calcul bas→haut) et peuvent
+  // déborder du prévu : on montre les deux, sinon le repère induirait en erreur.
+  if ((dc || fc) && (dc !== dp || fc !== fp))
+    bloc.push(`<span><i class="ti ti-timeline"></i> D'après les activités : <b>${d(dc)}</b> → <b>${d(fc)}</b></span>`);
+  const t = tacheId && taches.find(x => x.id === tacheId);
+  if (t) {
+    bloc.push(`<span><i class="ti ti-subtask"></i> ${Djigui.esc(t.nom)} : <b>${t.debut_calcule ? dfr(t.debut_calcule) : '—'}</b> → <b>${t.fin_calcule ? dfr(t.fin_calcule) : '—'}</b></span>`);
+  }
+  zone.innerHTML = bloc.join('');
+}
+
+function optionsTaches(vide) {
+  return `<option value="">${vide}</option>` + tachesArbre()
+    .map(t => `<option value="${t.id}">${'— '.repeat(t.niveau - 1)}${Djigui.esc(t.nom)}</option>`).join('');
+}
+// Avertissements informatifs : ils n'empêchent jamais l'enregistrement.
+function alertesJalon() {
+  const b = document.getElementById('jalon-alertes');
+  const m = [];
+  const dp = formJalon.date_prevue.value, dr = formJalon.date_reelle.value;
+  const st = formJalon.statut.value;
+  if (dp && projet.date_fin_prevue && dp > projet.date_fin_prevue)
+    m.push('Ce jalon tombe après la fin prévue du projet.');
+  if (st === 'atteint' && !dr) m.push('Jalon marqué atteint sans date réelle : la date du jour sera utilisée.');
+  if (dr && dp && dr > dp) m.push('Le jalon a été atteint après la date prévue.');
+  b.hidden = !m.length;
+  b.innerHTML = m.map(x => `<div><i class="ti ti-alert-triangle"></i> ${Djigui.esc(x)}</div>`).join('')
+    + (m.length ? '<div class="muted" style="margin-top:4px">Vous pouvez enregistrer quand même.</div>' : '');
+}
+formJalon.addEventListener('input', alertesJalon);
+document.getElementById('jalon-tache').addEventListener('change', e =>
+  reperesDates('jalon-reperes', e.target.value));
+
+function ouvrirJalon(j) {
+  jalonEditId = j ? j.id : null;
+  formJalon.reset();
+  document.getElementById('jalon-titre').textContent = j ? 'Modifier le jalon' : 'Nouveau jalon';
+  document.getElementById('jalon-tache').innerHTML = optionsTaches('Aucune');
+  if (j) {
+    formJalon.nom.value = j.nom;
+    formJalon.date_prevue.value = j.date_prevue || '';
+    formJalon.date_reelle.value = j.date_reelle || '';
+    formJalon.statut.value = j.statut;
+    formJalon.tache_id.value = j.tache_id || '';
+    formJalon.note.value = j.note || '';
+  }
+  alertesJalon();
+  reperesDates('jalon-reperes', formJalon.tache_id.value);
+  document.getElementById('modal-jalon').hidden = false;
+}
+document.getElementById('btn-jalon-add').addEventListener('click', () => ouvrirJalon(null));
+document.getElementById('corps-jalons').addEventListener('click', e => {
+  const b = e.target.closest('[data-jedit]'); if (!b) return;
+  ouvrirJalon(jalons.find(j => j.id === b.dataset.jedit));
+});
+formJalon.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData(formJalon);
+  const g = k => (f.get(k) || '').trim() || null;
+  const body = {
+    projet_id: projetId, nom: f.get('nom').trim(), date_prevue: f.get('date_prevue'),
+    date_reelle: g('date_reelle'), statut: f.get('statut'),
+    tache_id: g('tache_id'), note: g('note'), ordre: 0,
+  };
+  const [url, method] = jalonEditId ? ['/api/jalons/' + jalonEditId, 'PUT'] : ['/api/jalons', 'POST'];
+  try {
+    await Djigui.api(url, { method, body });
+    Djigui.toast(jalonEditId ? 'Jalon modifié' : 'Jalon créé', 'ok');
+    document.getElementById('modal-jalon').hidden = true;
+    await chargerAnnexes(); rendreGantt();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Modale livrable ------------------------------------------------------
+const formLivrable = document.getElementById('form-livrable');
+let livrableEditId = null;
+
+function alertesLivrable() {
+  const b = document.getElementById('livrable-alertes');
+  const m = [];
+  const da = formLivrable.date_attendue.value, dl = formLivrable.date_livraison.value;
+  const st = formLivrable.statut.value;
+  if (da && dl && dl > da) m.push('Livré après la date attendue.');
+  if (['livre', 'accepte'].includes(st) && !dl)
+    m.push('Livrable marqué livré sans date : la date du jour sera utilisée.');
+  b.hidden = !m.length;
+  b.innerHTML = m.map(x => `<div><i class="ti ti-alert-triangle"></i> ${Djigui.esc(x)}</div>`).join('')
+    + (m.length ? '<div class="muted" style="margin-top:4px">Vous pouvez enregistrer quand même.</div>' : '');
+}
+formLivrable.addEventListener('input', alertesLivrable);
+document.getElementById('livrable-tache').addEventListener('change', e =>
+  reperesDates('livrable-reperes', e.target.value));
+
+function optionsJalons(vide) {
+  return `<option value="">${vide}</option>`
+    + jalons.map(j => `<option value="${j.id}">${Djigui.esc(j.nom)}</option>`).join('');
+}
+function ouvrirLivrable(l) {
+  livrableEditId = l ? l.id : null;
+  formLivrable.reset();
+  document.getElementById('livrable-titre').textContent = l ? 'Modifier le livrable' : 'Nouveau livrable';
+  document.getElementById('livrable-tache').innerHTML = optionsTaches('Aucune');
+  document.getElementById('livrable-jalon').innerHTML = optionsJalons('Aucun');
+  if (l) {
+    formLivrable.nom.value = l.nom;
+    formLivrable.date_attendue.value = l.date_attendue || '';
+    formLivrable.date_livraison.value = l.date_livraison || '';
+    formLivrable.statut.value = l.statut;
+    formLivrable.tache_id.value = l.tache_id || '';
+    formLivrable.jalon_id.value = l.jalon_id || '';
+    formLivrable.description.value = l.description || '';
+  }
+  alertesLivrable();
+  reperesDates('livrable-reperes', formLivrable.tache_id.value);
+  document.getElementById('modal-livrable').hidden = false;
+}
+document.getElementById('btn-livrable-add').addEventListener('click', () => ouvrirLivrable(null));
+document.getElementById('corps-livrables').addEventListener('click', e => {
+  const b = e.target.closest('[data-ledit]'); if (!b) return;
+  ouvrirLivrable(livrables.find(l => l.id === b.dataset.ledit));
+});
+formLivrable.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData(formLivrable);
+  const g = k => (f.get(k) || '').trim() || null;
+  const body = {
+    projet_id: projetId, nom: f.get('nom').trim(), description: g('description'),
+    statut: f.get('statut'), date_attendue: g('date_attendue'), date_livraison: g('date_livraison'),
+    tache_id: g('tache_id'), jalon_id: g('jalon_id'), ordre: 0,
+  };
+  const [url, method] = livrableEditId ? ['/api/livrables/' + livrableEditId, 'PUT'] : ['/api/livrables', 'POST'];
+  try {
+    await Djigui.api(url, { method, body });
+    Djigui.toast(livrableEditId ? 'Livrable modifié' : 'Livrable créé', 'ok');
+    document.getElementById('modal-livrable').hidden = true;
+    await chargerAnnexes();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Documents joints -----------------------------------------------------
+// Le fichier part en base64 ; c'est le serveur qui l'écrit sur disque et ne
+// garde que son chemin en base (jamais le contenu dans djigui.db).
+const MAX_DOC = 20 * 1024 * 1024;
+let docEnAttente = null;
+
+document.getElementById('btn-doc-add').addEventListener('click', () => document.getElementById('doc-file').click());
+document.getElementById('doc-file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.value = '';           // permet de rejoindre le même fichier ensuite
+  if (!f) return;
+  if (f.size > MAX_DOC) {
+    Djigui.alert(`Fichier trop lourd (${poids(f.size)}). Maximum ${poids(MAX_DOC)}.`);
+    return;
+  }
+  docEnAttente = f;
+  document.getElementById('doc-nom').textContent = `${f.name} · ${poids(f.size)}`;
+  document.getElementById('doc-tache').innerHTML = optionsTaches('Aucune');
+  document.getElementById('doc-jalon').innerHTML = optionsJalons('Aucun');
+  document.getElementById('doc-livrable').innerHTML = `<option value="">Aucun</option>`
+    + livrables.map(l => `<option value="${l.id}">${Djigui.esc(l.nom)}</option>`).join('');
+  document.getElementById('modal-doc').hidden = false;
+});
+
+document.getElementById('form-doc').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!docEnAttente) return;
+  const f = new FormData(e.target);
+  const g = k => (f.get(k) || '').trim() || null;
+  const lecteur = new FileReader();
+  lecteur.onload = async () => {
+    try {
+      await Djigui.api('/api/documents-joints', { method: 'POST', body: {
+        projet_id: projetId, nom: docEnAttente.name,
+        type_mime: docEnAttente.type || null,
+        contenu_base64: String(lecteur.result).split(',')[1] || '',
+        tache_id: g('tache_id'), jalon_id: g('jalon_id'), livrable_id: g('livrable_id'),
+      }});
+      Djigui.toast('Document joint', 'ok');
+      document.getElementById('modal-doc').hidden = true;
+      docEnAttente = null;
+      await chargerAnnexes();
+    } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  };
+  lecteur.readAsDataURL(docEnAttente);
+});
+
+document.getElementById('corps-docs').addEventListener('click', async e => {
+  const o = e.target.closest('[data-douvrir]');
+  if (o) {
+    try { await Djigui.api(`/api/documents-joints/${o.dataset.douvrir}/ouvrir`, { method: 'POST' }); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+    return;
+  }
+  const d = e.target.closest('[data-dsuppr]');
+  if (d) {
+    const doc = documents.find(x => x.id === d.dataset.dsuppr);
+    if (!await Djigui.confirm(`Supprimer « ${doc.nom} » ? Le fichier sera effacé du poste.`)) return;
+    try {
+      await Djigui.api('/api/documents-joints/' + d.dataset.dsuppr, { method: 'DELETE' });
+      Djigui.toast('Document supprimé', 'ok'); await chargerAnnexes();
+    } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+// Fermeture des modales par la croix / Annuler (jamais par le fond : on ne
+// perd pas une saisie sur un clic à côté).
+document.querySelectorAll('[data-fermer]').forEach(b =>
+  b.addEventListener('click', () => { document.getElementById(b.dataset.fermer).hidden = true; }));
+
+// ===========================================================================
+// Prédécesseurs — liens de précédence (migration 0029)
+//
+// ⚠️ Les dates ne se recalculent JAMAIS toutes seules. On signale l'incohérence,
+// l'utilisateur clique « Harmoniser les dates », voit l'aperçu, et applique.
+// ===========================================================================
+let dependances = [], violations = [], changements = [];
+
+async function chargerDependances() {
+  const [deps, coh] = await Promise.all([
+    Djigui.api('/api/projets/' + projetId + '/dependances'),
+    Djigui.api('/api/projets/' + projetId + '/coherence'),
+  ]);
+  dependances = deps;
+  violations = coh.violations || [];
+  changements = coh.changements || [];
+  rendreBandeauCoherence();
+}
+
+// Un lien est-il violé ? (sert à colorer la flèche en rouge)
+const lienViole = id => violations.some(v => v.dependance_id === id);
+const predecesseursDe = id => dependances.filter(d => d.tache_id === id);
+
+// ---- Bandeau de cohérence -------------------------------------------------
+function rendreBandeauCoherence() {
+  let z = document.getElementById('bandeau-coherence');
+  if (!z) {
+    z = document.createElement('div');
+    z.id = 'bandeau-coherence';
+    // Au-dessus de la zone collante : le bandeau ne doit pas en faire varier
+    // la hauteur selon qu'il y a des incohérences ou non.
+    const collant = document.querySelector('.projet-collant');
+    collant.parentNode.insertBefore(z, collant);
+  }
+  if (!violations.length) { z.innerHTML = ''; return; }
+  const n = violations.length;
+  z.innerHTML = `<div class="alert warn" style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <i class="ti ti-arrow-guide"></i>
+    <div style="flex:1">
+      <b>${n} activité${n > 1 ? 's' : ''} ne respecte${n > 1 ? 'nt' : ''} pas ${n > 1 ? 'leurs liens' : 'son lien'} de précédence.</b>
+      <div style="font-size:12.5px">${violations.slice(0, 3).map(v =>
+        `« ${Djigui.esc(v.tache_nom) }» commence ${v.jours} j avant la fin de « ${Djigui.esc(v.predecesseur_nom)} »`).join(' · ')}${n > 3 ? ` · et ${n - 3} autre(s)` : ''}</div>
+    </div>
+    <button class="btn btn-primary" id="btn-harmoniser" style="white-space:nowrap">
+      <i class="ti ti-wand"></i>Harmoniser les dates</button>
+  </div>`;
+  document.getElementById('btn-harmoniser').addEventListener('click', ouvrirApercuHarmonisation);
+}
+
+// ---- Aperçu avant application --------------------------------------------
+function ouvrirApercuHarmonisation() {
+  if (!changements.length) {
+    Djigui.alert("Aucune date à déplacer : les liens sont respectés ou les activités n'ont pas de dates.");
+    return;
+  }
+  document.getElementById('harm-nb').textContent =
+    `${changements.length} activité(s) seront déplacées pour maintenir la cohérence du projet.`;
+  document.getElementById('harm-corps').innerHTML = changements.map(c => `<tr>
+    <td style="font-weight:600">${Djigui.esc(c.tache_nom)}</td>
+    <td class="muted">${dfr(c.debut_avant)} → ${dfr(c.fin_avant)}</td>
+    <td style="color:var(--brand);font-weight:600">${dfr(c.debut_apres)} → ${dfr(c.fin_apres)}</td>
+    <td class="right num">+${c.jours} j</td></tr>`).join('');
+  document.getElementById('modal-harm').hidden = false;
+}
+document.getElementById('harm-appliquer').addEventListener('click', async () => {
+  try {
+    const r = await Djigui.api('/api/projets/' + projetId + '/harmoniser', { method: 'POST' });
+    Djigui.toast(`${r.changements.length} activité(s) harmonisée(s)`, 'ok');
+    document.getElementById('modal-harm').hidden = true;
+    await charger();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Saisie des prédécesseurs dans la modale d'activité -------------------
+function rendrePredecesseurs(tacheId) {
+  const liste = document.getElementById('t-pred-liste');
+  const sel = document.getElementById('t-pred-sel');
+  // ⚠️ Ne jamais remplacer le contenu de #t-pred-wrap : cela détruirait le
+  // sélecteur et le bouton, et l'édition suivante serait cassée.
+  // On désactive les champs, on ne les supprime pas.
+  const dispo = !!tacheId;
+  ['t-pred-sel', 't-pred-dec'].forEach(id => {
+    document.getElementById(id).disabled = !dispo;
+  });
+  if (!dispo) {
+    liste.innerHTML = '<div class="muted" style="font-size:12px">Enregistrez l\'activité, vous pourrez ensuite la lier.</div>';
+    sel.innerHTML = '<option value="">Choisir une activite\u2026</option>';
+    return;
+  }
+  const mes = predecesseursDe(tacheId);
+  liste.innerHTML = mes.map(d => {
+    const ko = lienViole(d.id);
+    return `<div class="pred-chip ${ko ? 'ko' : ''}">
+      <i class="ti ti-arrow-narrow-right" style="color:${ko ? 'var(--danger)' : 'var(--text-2)'}"></i>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${Djigui.esc(d.predecesseur_nom)}${d.decalage ? ` <span class="muted">+${d.decalage} j</span>` : ''}</span>
+      ${ko ? '<i class="ti ti-alert-triangle" style="color:var(--danger)" title="Lien non respecté"></i>' : ''}
+      <i class="ti ti-x icon-act" data-preddel="${d.id}" title="Retirer ce lien" style="color:var(--danger)"></i>
+    </div>`;
+  }).join('');
+
+  // On ne propose ni la tâche elle-même, ni ses prédécesseurs déjà posés.
+  const deja = new Set(mes.map(d => d.predecesseur_id));
+  sel.innerHTML = '<option value="">Choisir une activite\u2026</option>' + tachesArbre()
+    .filter(t => t.id !== tacheId && !deja.has(t.id))
+    .map(t => `<option value="${t.id}">${'\u2014 '.repeat(t.niveau - 1)}${Djigui.esc(t.nom)}</option>`).join('');
+}
+
+// Enregistrement AUTOMATIQUE au choix de l'activité : il n'y a pas de bouton à
+// découvrir, donc plus moyen de perdre une saisie. Le bouton « Enregistrer » du
+// formulaire ne gère QUE la tâche elle-même, jamais les liens.
+document.getElementById('t-pred-sel').addEventListener('change', async e => {
+  const pred = e.target.value;
+  const tacheId = document.getElementById('t-id').value;
+  if (!pred || !tacheId) return;
+  try {
+    await Djigui.api('/api/dependances', { method: 'POST', body: {
+      tache_id: tacheId, predecesseur_id: pred,
+      decalage: parseInt(document.getElementById('t-pred-dec').value || '0', 10),
+    }});
+    Djigui.toast('Lien créé', 'ok');
+    await chargerDependances();
+    rendrePredecesseurs(tacheId);   // vide aussi le sélecteur
+    document.getElementById('t-pred-dec').value = 0;
+    rendreGantt();
+  } catch (err) {
+    Djigui.toast(err.message, 'danger');
+    e.target.value = '';            // on ne laisse pas un choix qui n'a pas pris
+  }
+});
+
+document.getElementById('t-pred-liste').addEventListener('click', async e => {
+  const b = e.target.closest('[data-preddel]'); if (!b) return;
+  try {
+    await Djigui.api('/api/dependances/' + b.dataset.preddel, { method: 'DELETE' });
+    await chargerDependances();
+    rendrePredecesseurs(document.getElementById('t-id').value);
+    rendreGantt();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Flèches sur le Gantt -------------------------------------------------
+// Tracées APRÈS le rendu, en mesurant les barres réellement affichées : plus
+// robuste que de recalculer des positions en pixels à la main.
+function dessinerFleches() {
+  const zone = document.getElementById('gantt-zone');
+  const cadre = zone.querySelector('.gantt-right > div');
+  if (!cadre || !dependances.length) return;
+  // Un onglet masqué a des dimensions nulles : impossible de mesurer les barres.
+  // On ne trace rien et on attend que l'onglet Gantt devienne visible
+  // (le gestionnaire d'onglets rappelle cette fonction).
+  if (!cadre.offsetParent || !cadre.getBoundingClientRect().width) return;
+  cadre.querySelectorAll('.g-fleches').forEach(x => x.remove());
+
+  const boite = cadre.getBoundingClientRect();
+  const barre = id => cadre.querySelector(`.g-bar[data-tache="${id}"]`);
+  const traits = [];
+  for (const d of dependances) {
+    const a = barre(d.predecesseur_id), b = barre(d.tache_id);
+    if (!a || !b) continue;                  // activité pliée ou sans dates
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const x1 = ra.right - boite.left, y1 = ra.top - boite.top + ra.height / 2;
+    const x2 = rb.left - boite.left,  y2 = rb.top - boite.top + rb.height / 2;
+    const ko = lienViole(d.id);
+    const coul = ko ? 'var(--danger)' : '#7a8b80';
+    // Le tracé DOIT toujours aborder le successeur par la gauche, pour que la
+    // pointe aille de gauche à droite — sens de lecture d'un planning.
+    // ⚠️ Piège corrigé : quand deux activités s'enchaînent bout à bout, l'écart
+    // entre les barres est quasi nul ; l'ancien tracé repartait alors vers la
+    // gauche et la flèche pointait à l'envers.
+    const app = 10;                 // longueur du segment d'approche
+    const xe = x2 - app;            // point d'entrée, à gauche du successeur
+    let chemin;
+    if (xe > x1 + 4) {
+      // Cas normal : on sort à droite, on descend, on entre par la gauche.
+      chemin = `M ${x1} ${y1} H ${xe} V ${y2} H ${x2 - 6}`;
+    } else {
+      // Bout à bout ou successeur trop tôt : on contourne par une ligne
+      // intermédiaire, mais l'approche finale reste orientée vers la droite.
+      const ym = (y1 + y2) / 2;
+      chemin = `M ${x1} ${y1} H ${x1 + app} V ${ym} H ${xe} V ${y2} H ${x2 - 6}`;
+    }
+    traits.push(`<path d="${chemin}" fill="none" stroke="${coul}" stroke-width="${ko ? 2 : 1.4}"
+      ${ko ? 'stroke-dasharray="4 3"' : ''} stroke-linejoin="round"></path>`);
+    // Pointe dessinée explicitement (et non via marker-end + orient="auto") :
+    // son orientation ne dépend plus du dernier segment.
+    traits.push(`<path d="M ${x2} ${y2} L ${x2 - 6} ${y2 - 3.5} L ${x2 - 6} ${y2 + 3.5} Z" fill="${coul}"></path>`);
+  }
+  if (!traits.length) return;
+  const svg = `<svg class="g-fleches" width="${cadre.scrollWidth}" height="${cadre.scrollHeight}"
+      style="position:absolute;left:0;top:0;pointer-events:none;overflow:visible">
+    ${traits.join('')}</svg>`;
+  cadre.style.position = 'relative';
+  cadre.insertAdjacentHTML('beforeend', svg);
+}
+
+function celluleCol(key, t) {
+  if (key==='debut') return dfr(t.debut_calcule);
+  if (key==='fin') return dfr(t.fin_calcule);
+  if (key==='jours') return t.nb_jours || '—';
+  if (key==='budget') return fmtM(t.budget_calcule);
+  if (key==='statut') { const [c,l]=STATUT_TACHE[t.statut]||['#5c6a61',t.statut]; return `<span class="badge" style="background:${c}22;color:${c}">${l}</span>`; }
+  if (key==='avancement') return t.avancement_calcule + '%';
+  return '';
+}
+// Menu colonnes
+document.getElementById('btn-cols').addEventListener('click', () => {
+  const pop = document.getElementById('col-pop');
+  pop.hidden = !pop.hidden;
+  if (!pop.hidden) pop.innerHTML = COLS.map(c =>
+    `<label><input type="checkbox" data-col="${c.key}" ${colVis[c.key]?'checked':''}> ${c.lbl}</label>`).join('');
+});
+document.getElementById('col-pop').addEventListener('change', e => {
+  const cb = e.target.closest('[data-col]'); if (!cb) return;
+  colVis[cb.dataset.col] = cb.checked;
+  localStorage.setItem('proj-cols', JSON.stringify(colVis));
+  rendreGantt();
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.col-menu')) document.getElementById('col-pop').hidden = true;
+});
+
+// ---- Ressources ----
+function rendreRessources() {
+  const corps = document.getElementById('corps-res');
+  const tacheNom = id => (taches.find(t => t.id === id) || {}).nom;
+  let total = 0;
+  corps.innerHTML = ressources.length ? ressources.map(r => {
+    total += r.cout;
+    return `<tr data-id="${r.id}">
+      <td style="font-weight:600">${Djigui.esc(r.libelle)}</td>
+      <td>${TYPE_RES[r.type]||r.type}</td>
+      <td>${r.tache_id ? Djigui.esc(tacheNom(r.tache_id)||'—') : '<span class="muted">Tout le projet</span>'}</td>
+      <td class="right num">${fmtM(r.cout_unitaire)}</td>
+      <td class="right num">${Djigui.fmt(r.quantite)}</td>
+      <td class="right num">${fmtM(r.cout)}</td>
+      <td class="right"><button class="icon-act" data-edit-res="${r.id}"><i class="ti ti-edit"></i></button>
+        <button class="icon-act danger" data-del-res="${r.id}"><i class="ti ti-trash"></i></button></td></tr>`;
+  }).join('') : '<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">Aucune ressource</td></tr>';
+  document.getElementById('res-total').textContent = fmtM(total) + ' FCFA';
+}
+
+// ---- Interactions liste ----
+document.getElementById('corps-taches').addEventListener('change', async e => {
+  if (e.target.classList.contains('chk-t')) { majLotBar(); return; }
+  const sel = e.target.closest('[data-statut]'); if (!sel) return;
+  try { await Djigui.api('/api/taches/lot/statut', { method:'POST', body:{ ids:[sel.dataset.statut], statut: sel.value } }); charger(); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('corps-taches').addEventListener('click', async e => {
+  const pli = e.target.closest('[data-plier]'); if (pli) { togglePlier(pli.dataset.plier); return; }
+  const q = e.target.closest('[data-quick]'); if (q) { ouvrirQuick(q.dataset.quick, q); return; }
+  if (e.target.closest('[data-new-task]')) { ouvrirTache(null); return; }
+  const prog = e.target.closest('[data-prog]'); if (prog) { ouvrirProg(taches.find(t => t.id === prog.dataset.prog)); return; }
+  const addc = e.target.closest('[data-add-child]'); if (addc) { ouvrirTache(null, addc.dataset.addChild); return; }
+  const ed = e.target.closest('[data-edit]'); if (ed) { ouvrirTache(taches.find(t => t.id === ed.dataset.edit)); return; }
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    if (!await Djigui.confirm('Supprimer cette tâche (et ses sous-tâches) ?', { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+    try { await Djigui.api('/api/taches/' + del.dataset.del, { method:'DELETE' }); Djigui.toast('Tâche supprimée','ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+function selection() { return [...document.querySelectorAll('.chk-t:checked')].map(c => c.value); }
+function majLotBar() {
+  const n = selection().length;
+  document.getElementById('lot-bar').style.display = n ? '' : 'none';
+  document.getElementById('lot-compte').textContent = `${n} tâche(s) sélectionnée(s)`;
+  const tous = document.getElementById('chk-tous'); const total = document.querySelectorAll('.chk-t').length;
+  tous.checked = total > 0 && n === total;
+}
+document.getElementById('chk-tous').addEventListener('change', e => { document.querySelectorAll('.chk-t').forEach(c => c.checked = e.target.checked); majLotBar(); });
+document.getElementById('lot-appliquer').addEventListener('click', async () => {
+  const ids = selection(); const statut = document.getElementById('lot-statut').value;
+  if (!ids.length || !statut) { Djigui.toast('Choisissez un statut', 'warn'); return; }
+  try { await Djigui.api('/api/taches/lot/statut', { method:'POST', body:{ ids, statut } }); Djigui.toast('Statut mis à jour', 'ok'); charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('lot-supprimer').addEventListener('click', async () => {
+  const ids = selection(); if (!ids.length) return;
+  if (!await Djigui.confirm(`Supprimer ${ids.length} tâche(s) ?`, { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+  try { await Djigui.api('/api/taches/lot/supprimer', { method:'POST', body:{ ids } }); Djigui.toast('Tâches supprimées', 'ok'); charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Onglets ----
+document.getElementById('tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('#tabs .tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('[data-vue]').forEach(p => { if (p.closest('#tabs')) return; p.hidden = p.dataset.vue !== t.dataset.vue; });
+  // Retour en haut à chaque changement d'onglet.
+  //
+  // Sans cela, la position de défilement était conservée : en passant d'un
+  // onglet long (Liste, Gantt, Ressources, Jalons) à un autre, on restait
+  // descendu et l'en-tête du projet paraissait « disparaître » — alors que sur
+  // un onglet court comme Documents il réapparaissait tout seul. On retrouve
+  // donc toujours les mêmes informations en arrivant sur un onglet ; c'est
+  // ensuite l'utilisateur qui replie s'il veut de la place.
+  const zone = document.querySelector('.content');
+  if (zone) zone.scrollTop = 0;
+  // Les flèches se mesurent sur le DOM : elles ne peuvent être tracées que
+  // lorsque le Gantt est réellement visible.
+  if (t.dataset.vue === 'gantt') requestAnimationFrame(dessinerFleches);
+});
+// Sous-onglets Ressources (matérielle / humaine) — intégrés à la barre d'outils
+let resSub = 'materielle';
+const RES_DESC = {
+  materielle: 'Matériel, budget, sous-traitance — au projet ou à une activité.',
+  humaine: 'Intervenants internes (employé) ou externes (consultant) avec taux. Assignez-les aux tâches via la section « Équipe ».',
+};
+function majResSub() { document.getElementById('res-desc').innerHTML = RES_DESC[resSub]; }
+document.getElementById('res-subtabs').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  resSub = c.dataset.sub;
+  document.querySelectorAll('#res-subtabs .chip').forEach(x => x.classList.toggle('active', x === c));
+  document.querySelectorAll('[data-sub]').forEach(p => { if (p.closest('#res-subtabs')) return; p.hidden = p.dataset.sub !== resSub; });
+  majResSub();
+});
+document.getElementById('btn-res-add').addEventListener('click', () => {
+  if (resSub === 'humaine') { ivReset(); modalInterv.hidden = false; } else ouvrirRes(null);
+});
+majResSub();
+document.getElementById('p-statut').addEventListener('change', async e => {
+  try { await Djigui.api('/api/projets/' + projetId + '/statut', { method:'POST', body:{ statut: e.target.value } });
+    Djigui.toast('Statut du projet mis à jour', 'ok'); charger(); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// Repli des infos projet — MANUEL et NON mémorisé.
+//
+// ⚠️ L'état était auparavant retenu dans le navigateur : après un seul clic sur
+// le chevron, les informations se repliaient toutes seules à chaque ouverture.
+// L'utilisateur voyait le bloc s'afficher puis disparaître, sans comprendre
+// pourquoi. À l'ouverture, l'écran montre donc TOUJOURS tout.
+localStorage.removeItem('proj-info-collapsed');   // purge l'ancien réglage
+let infosRepliees = false;
+function appliquerRepli() {
+  document.getElementById('p-collapsible').hidden = infosRepliees;
+  document.querySelector('#p-toggle i').className =
+    infosRepliees ? 'ti ti-chevron-down' : 'ti ti-chevron-up';
+}
+document.getElementById('p-toggle').addEventListener('click', () => {
+  infosRepliees = !infosRepliees;
+  appliquerRepli();
+});
+appliquerRepli();
+
+// ---- Modale tâche ----
+const modalT = document.getElementById('modal-tache');
+// Durée ↔ fin (jours calendaires ou jours ouvrés).
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function ajouterJoursOuvres(debut, n) {
+  const d = new Date(debut); let compte = 0;
+  while (true) {
+    const j = d.getDay();
+    if (j !== 0 && j !== 6) compte++;
+    if (compte >= n) return d;
+    d.setDate(d.getDate()+1);
+  }
+}
+function calcFinDepuisDuree() {
+  const deb = document.getElementById('t-debut-p').value;
+  const n = Number(document.getElementById('t-duree').value) || 0;
+  if (!deb || n <= 0) return;
+  const d0 = new Date(deb + 'T00:00:00');
+  const fin = document.getElementById('t-ouvres').checked
+    ? ajouterJoursOuvres(d0, n)
+    : (() => { const f = new Date(d0); f.setDate(f.getDate()+n-1); return f; })();
+  document.getElementById('t-fin-p').value = isoLocal(fin);
+}
+function calcDureeDepuisFin() {
+  const deb = document.getElementById('t-debut-p').value, fin = document.getElementById('t-fin-p').value;
+  if (!deb || !fin) return;
+  const n = Math.round((new Date(fin+'T00:00:00') - new Date(deb+'T00:00:00'))/86400000) + 1;
+  if (n > 0) document.getElementById('t-duree').value = n;
+}
+document.getElementById('t-duree').addEventListener('input', calcFinDepuisDuree);
+// Réglage rapide de la durée : plus besoin de retaper le nombre ni de recalculer
+// la date de fin à la main. La fin se recalcule à chaque pas.
+document.querySelector('.duree-rapide').addEventListener('click', e => {
+  const b = e.target.closest('[data-jours]'); if (!b) return;
+  const champ = document.getElementById('t-duree');
+  if (champ.disabled) return;          // tâche parente : durée calculée
+  const n = Math.max(0, (Number(champ.value) || 0) + Number(b.dataset.jours));
+  champ.value = n;
+  calcFinDepuisDuree();
+});
+document.getElementById('t-ouvres').addEventListener('change', calcFinDepuisDuree);
+document.getElementById('t-debut-p').addEventListener('change', () => {
+  if (Number(document.getElementById('t-duree').value) > 0) calcFinDepuisDuree(); else calcDureeDepuisFin();
+});
+document.getElementById('t-fin-p').addEventListener('change', calcDureeDepuisFin);
+function majParents(t) {
+  // parents possibles = toutes les tâches sauf elle-même et ses descendants, et de niveau < 4
+  const exclus = new Set();
+  if (t) { exclus.add(t.id); const desc = id => taches.filter(x=>x.tache_parente_id===id).forEach(x=>{exclus.add(x.id);desc(x.id);}); desc(t.id); }
+  const sel = document.getElementById('t-parent');
+  sel.innerHTML = '<option value="">— Aucune (tâche principale) —</option>' +
+    taches.filter(x => !exclus.has(x.id) && x.niveau < 4).map(x => `<option value="${x.id}">${'— '.repeat(x.niveau-1)}${Djigui.esc(x.nom)}</option>`).join('');
+}
+function ouvrirTache(t, parentPreset) {
+  document.getElementById('form-tache').reset();
+  document.getElementById('t-alertes').innerHTML = '';
+  const est = !!t;
+  majParents(est ? t : null);
+  const pere = parentPreset ? taches.find(x => x.id === parentPreset) : null;
+  document.getElementById('t-titre-modal').textContent = est ? 'Modifier la tâche'
+    : (pere ? `Nouvelle sous-tâche de « ${pere.nom} »` : 'Nouvelle tâche');
+  document.getElementById('t-id').value = est ? t.id : '';
+  document.getElementById('t-nom').value = est ? t.nom : '';
+  document.getElementById('t-parent').value = est && t.tache_parente_id ? t.tache_parente_id : (parentPreset || '');
+  document.getElementById('t-debut-p').value = est ? (t.date_debut_prevue || '') : '';
+  document.getElementById('t-fin-p').value = est ? (t.date_fin_prevue || '') : '';
+  document.getElementById('t-duree').value = (est && t.nb_jours) ? t.nb_jours : '';
+  document.getElementById('t-ouvres').checked = false;
+  document.getElementById('t-debut-r').value = est ? (t.date_debut_reelle || '') : '';
+  document.getElementById('t-fin-r').value = est ? (t.date_fin_reelle || '') : '';
+  document.getElementById('t-budget').value = est ? t.budget : 0;
+  document.getElementById('t-statut').value = est ? t.statut : 'a_faire';
+  document.getElementById('t-av').value = est ? t.avancement : 0;
+  document.getElementById('t-desc').value = est ? (t.description || '') : '';
+  // Note si la tâche a des sous-tâches : budget/dates/avancement calculés.
+  const calc = est && t.a_enfants;
+  ['t-budget','t-debut-p','t-fin-p','t-duree','t-ouvres','t-av','t-statut'].forEach(id => document.getElementById(id).disabled = calc);
+  document.getElementById('t-note-calc').innerHTML = calc
+    ? '<div class="badge neutral" style="white-space:normal">Cette tâche a des sous-tâches : son budget, ses dates et son avancement sont <strong>calculés automatiquement</strong> et ne sont pas modifiables ici.</div>' : '';
+  // Équipe : toujours visible ; l'assignation exige une tâche déjà enregistrée.
+  document.getElementById('t-equipe-wrap').style.display = '';
+  ['t-assign-user','t-assign-h','t-assign-add'].forEach(id => document.getElementById(id).disabled = !est);
+  if (est) rendreEquipe(t.id);
+  else document.getElementById('t-equipe-liste').innerHTML =
+    '<div class="muted" style="font-size:12px">Enregistrez l\'activité, puis choisissez-lui une ou plusieurs ressources humaines.</div>';
+  // Prédécesseurs : même règle que l'équipe, il faut une activité enregistrée.
+  rendrePredecesseurs(est ? t.id : null);
+  modalT.hidden = false;
+  document.getElementById('t-nom').focus();
+}
+
+// Liste des personnes assignées à la tâche ouverte + ajout/retrait.
+function rendreEquipe(tacheId) {
+  const liste = assignations.filter(a => a.tache_id === tacheId);
+  const box = document.getElementById('t-equipe-liste');
+  box.innerHTML = liste.length ? liste.map(a => {
+    const forfait = a.type_taux === 'forfait';
+    const unite = a.type_taux === 'journalier' ? 'j' : 'h';
+    const qte = forfait
+      ? '<span class="h">forfait</span>'
+      : `<input type="number" class="qte-assign" data-aq="${a.id}" value="${a.heures_allouees||''}" min="0" step="1" placeholder="0" title="Quantité (${a.type_taux==='journalier'?'jours':'heures'})" style="width:56px;padding:3px 6px;font-size:12px"> <span class="h">${unite}</span>`;
+    return `<div class="assign-chip"><i class="ti ti-${a.intervenant_type==='externe'?'briefcase':'user'}"></i>
+      <span>${Djigui.esc(a.intervenant_nom || '—')}${a.intervenant_type==='externe'?' <span class="muted" style="font-size:11px">(externe)</span>':''}</span>
+      ${qte}
+      <span class="h" style="min-width:70px;text-align:right">${a.cout ? fmtM(a.cout)+' F' : '—'}</span>
+      <button type="button" class="icon-act danger" data-unassign="${a.id}"><i class="ti ti-x"></i></button></div>`;
+  }).join('')
+    : '<div class="muted" style="font-size:12px">Aucune ressource humaine assignée à cette activité.</div>';
+  // dropdown : ressources humaines pas encore assignées à cette tâche
+  const dejaSet = new Set(liste.map(a => a.intervenant_id));
+  const sel = document.getElementById('t-assign-user');
+  sel.innerHTML = '<option value="">Choisir une personne…</option>' +
+    intervenants.filter(i => i.actif && !dejaSet.has(i.id)).map(i => `<option value="${i.id}">${Djigui.esc(i.nom)}${i.type==='externe'?' (externe)':''}</option>`).join('');
+}
+// Adapte le champ quantité selon le type de taux de la personne choisie.
+document.getElementById('t-assign-user').addEventListener('change', () => {
+  const i = intervenants.find(x => x.id === document.getElementById('t-assign-user').value);
+  const h = document.getElementById('t-assign-h');
+  if (i && i.type_taux === 'forfait') { h.style.display = 'none'; h.value = ''; }
+  else { h.style.display = ''; h.placeholder = (i && i.type_taux === 'journalier') ? 'jours' : 'heures'; }
+});
+document.getElementById('t-assign-add').addEventListener('click', async () => {
+  const tacheId = document.getElementById('t-id').value;
+  const iid = document.getElementById('t-assign-user').value;
+  if (!tacheId || !iid) { Djigui.toast('Choisissez un intervenant', 'warn'); return; }
+  const iv = intervenants.find(x => x.id === iid);
+  const h = bornerQuantite(tacheId, iv && iv.type_taux, Number(document.getElementById('t-assign-h').value) || 0);
+  try {
+    await Djigui.api('/api/assignations', { method:'POST', body:{ tache_id: tacheId, intervenant_id: iid, heures_allouees: h } });
+    document.getElementById('t-assign-h').value = '';
+    await charger();          // recharge le projet (coût main-d'œuvre) + tout
+    rendreEquipe(tacheId);    // rafraîchit la liste dans la modale ouverte
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+// Contrôle : la quantité prestée ne dépasse pas la durée de l'activité
+// (jours pour un journalier, heures = jours×8 pour un horaire). Renvoie la valeur bornée.
+function bornerQuantite(tacheId, typeTaux, valeur) {
+  const t = taches.find(x => x.id === tacheId);
+  const nj = t ? (t.nb_jours || 0) : 0;
+  if (!nj || typeTaux === 'forfait') return valeur;         // pas de contrainte
+  const max = typeTaux === 'journalier' ? nj : nj * 8;
+  if (valeur > max) {
+    Djigui.toast(`Limité à ${max} ${typeTaux==='journalier'?'jour(s)':'heure(s)'} : la durée de l'activité est de ${nj} jour(s).`, 'warn');
+    return max;
+  }
+  return valeur;
+}
+// Modifier la quantité (jours/heures) d'une personne déjà assignée → recalcule le coût.
+document.getElementById('t-equipe-liste').addEventListener('change', async e => {
+  const inp = e.target.closest('.qte-assign'); if (!inp) return;
+  const a = assignations.find(x => x.id === inp.dataset.aq);
+  let v = bornerQuantite(document.getElementById('t-id').value, a && a.type_taux, Number(inp.value)||0);
+  inp.value = v;
+  try {
+    await Djigui.api('/api/assignations/' + inp.dataset.aq, { method:'PUT', body:{ heures_allouees: v } });
+    await charger();
+    rendreEquipe(document.getElementById('t-id').value);
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('t-equipe-liste').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-unassign]'); if (!btn) return;
+  try {
+    await Djigui.api('/api/assignations/' + btn.dataset.unassign, { method:'DELETE' });
+    await charger();
+    rendreEquipe(document.getElementById('t-id').value);
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Annuaire des intervenants (interne / externe + taux) ----
+const modalInterv = document.getElementById('modal-interv');
+function majIvChamps() {
+  const ext = document.getElementById('iv-type').value === 'externe';
+  document.getElementById('iv-user-wrap').style.display = ext ? 'none' : '';
+  document.getElementById('iv-nom-wrap').style.display = ext ? '' : 'none';
+  document.getElementById('iv-societe-wrap').style.display = ext ? '' : 'none';
+  const tt = document.getElementById('iv-typetaux').value;
+  document.getElementById('iv-taux-lbl').textContent =
+    tt === 'forfait' ? 'Montant forfaitaire (FCFA)' : tt === 'journalier' ? 'Taux journalier (FCFA/jour)' : 'Taux horaire (FCFA/h)';
+}
+document.getElementById('iv-type').addEventListener('change', majIvChamps);
+document.getElementById('iv-typetaux').addEventListener('change', majIvChamps);
+function rendreIntervenants() {
+  const tb = document.getElementById('interv-liste');
+  const totalProjet = projet ? (projet.budget_planifie || 0) : 0;
+  const uniteTaux = t => t==='forfait' ? 'forfait' : (t==='journalier' ? '/jour' : '/h');
+  tb.innerHTML = intervenants.length ? intervenants.map(i => {
+    // Coût & temps de cet intervenant SUR CE PROJET (depuis ses assignations).
+    const mes = assignations.filter(a => a.intervenant_id === i.id);
+    const heures = mes.reduce((s,a)=>s+(a.heures_allouees||0),0);
+    const cout = mes.reduce((s,a)=>s+(a.cout||0),0);
+    const pct = totalProjet > 0 ? Math.round(cout/totalProjet*100) : 0;
+    return `<tr style="${i.actif?'':'opacity:.5'}">
+      <td style="font-weight:600">${Djigui.esc(i.nom)}${i.societe?` <span class="muted" style="font-size:11px">· ${Djigui.esc(i.societe)}</span>`:''}</td>
+      <td>${i.type==='externe'?'Externe':'Interne'}</td>
+      <td class="right num"><input type="number" class="taux-vif" data-iv-taux="${i.id}" value="${i.taux || 0}"
+            min="0" step="100" title="Modifier le taux — enregistré à la sortie du champ">
+        <span class="muted" style="font-size:11px">${uniteTaux(i.type_taux)}</span></td>
+      <td class="right num">${i.type_taux==='forfait' ? '<span class="muted">forfait</span>' : (heures ? Djigui.fmt(heures)+(i.type_taux==='journalier'?' j':' h') : '—')}</td>
+      <td class="right num" style="font-weight:600">${cout ? fmtM(cout) : '—'}</td>
+      <td class="right num">${cout ? pct+'%' : '—'}</td>
+      <td class="right"><button class="icon-act" data-iv-edit="${i.id}"><i class="ti ti-edit"></i></button>
+        <button class="icon-act danger" data-iv-del="${i.id}"><i class="ti ti-trash"></i></button></td></tr>`;
+  }).join('')
+    : '<tr><td colspan="7" class="muted" style="text-align:center;padding:12px">Aucun intervenant. Ajoutez-en un.</td></tr>';
+}
+// Répartition détaillée des ressources humaines : une ligne par assignation,
+// regroupée par personne, avec un SOUS-TOTAL par personne puis le total général.
+function rendreRepartition() {
+  const corps = document.getElementById('corps-repartition');
+  const uniteQte = t => t === 'forfait' ? '' : (t === 'journalier' ? 'j' : 'h');
+  const modeLbl = { horaire: 'Horaire', journalier: 'Journalier', forfait: 'Forfait' };
+
+  // Regroupement par intervenant, en gardant l'ordre de l'annuaire.
+  const parPersonne = new Map();
+  for (const a of assignations) {
+    if (!parPersonne.has(a.intervenant_id)) parPersonne.set(a.intervenant_id, []);
+    parPersonne.get(a.intervenant_id).push(a);
+  }
+  if (!parPersonne.size) {
+    corps.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">'
+      + 'Personne n\'est encore affecté à une activité.</td></tr>';
+    document.getElementById('rep-total').textContent = '—';
+    document.getElementById('rep-resume').textContent = '';
+    return;
+  }
+
+  let html = '', total = 0;
+  for (const [ivId, lignes] of parPersonne) {
+    const iv = intervenants.find(x => x.id === ivId);
+    const nom = iv ? iv.nom : (lignes[0].intervenant_nom || 'Inconnu');
+    const tt = iv ? iv.type_taux : lignes[0].type_taux;
+    const taux = iv ? iv.taux : 0;
+    let sousTotal = 0, sousQte = 0;
+
+    lignes.forEach((a, i) => {
+      sousTotal += a.cout || 0;
+      sousQte += a.heures_allouees || 0;
+      html += `<tr>
+        <td>${i === 0 ? `<span style="font-weight:600">${Djigui.esc(nom)}</span>${
+              iv && iv.type === 'externe' ? ' <span class="badge neutral" style="font-size:10px">externe</span>' : ''}` : ''}</td>
+        <td>${Djigui.esc(a.tache_nom || '—')}</td>
+        <td class="muted">${modeLbl[tt] || tt || '—'}</td>
+        <td class="right num">${fmtM(taux)}</td>
+        <td class="right num">${tt === 'forfait' ? '<span class="muted">forfait</span>'
+              : (a.heures_allouees ? Djigui.fmt(a.heures_allouees) + ' ' + uniteQte(tt) : '—')}</td>
+        <td class="right num">${a.cout ? fmtM(a.cout) : '—'}</td></tr>`;
+    });
+
+    // Sous-total de la personne — demandé explicitement.
+    html += `<tr class="rep-sous-total">
+      <td colspan="4" class="right">Total ${Djigui.esc(nom)}</td>
+      <td class="right num">${tt === 'forfait' ? '—' : Djigui.fmt(sousQte) + ' ' + uniteQte(tt)}</td>
+      <td class="right num">${fmtM(sousTotal)}</td></tr>`;
+    total += sousTotal;
+  }
+
+  corps.innerHTML = html;
+  document.getElementById('rep-total').textContent = fmtM(total);
+  document.getElementById('rep-resume').textContent =
+    `${parPersonne.size} personne(s) · ${assignations.length} affectation(s)`;
+}
+
+// Taux modifiable directement dans la liste, sans ouvrir la fiche.
+// Enregistré à la sortie du champ (blur), pas à chaque frappe.
+document.getElementById('interv-liste').addEventListener('change', async e => {
+  const inp = e.target.closest('[data-iv-taux]'); if (!inp) return;
+  const iv = intervenants.find(x => x.id === inp.dataset.ivTaux); if (!iv) return;
+  const taux = Math.max(0, Number(inp.value) || 0);
+  if (taux === iv.taux) return;
+  try {
+    await Djigui.api('/api/intervenants/' + iv.id, { method: 'PUT', body: {
+      nom: iv.nom, type: iv.type, utilisateur_id: iv.utilisateur_id || null,
+      societe: iv.societe || null, role: iv.role || null,
+      type_taux: iv.type_taux, taux, actif: iv.actif,
+    }});
+    Djigui.toast('Taux mis à jour', 'ok');
+    await charger();               // les coûts du projet en dépendent
+  } catch (err) {
+    Djigui.toast('Erreur : ' + err.message, 'danger');
+    inp.value = iv.taux;           // on remet la valeur d'origine
+  }
+});
+
+function ivReset() {
+  document.getElementById('form-interv').reset();
+  document.getElementById('iv-id').value = '';
+  document.getElementById('iv-form-titre').textContent = 'Nouvel intervenant';
+  majIvChamps();
+}
+document.getElementById('iv-reset').addEventListener('click', ivReset);
+document.getElementById('interv-fermer').addEventListener('click', () => modalInterv.hidden = true);
+document.getElementById('t-gerer-interv').addEventListener('click', e => { e.preventDefault(); rendreIntervenants(); ivReset(); modalInterv.hidden = false; });
+document.getElementById('interv-liste').addEventListener('click', async e => {
+  const ed = e.target.closest('[data-iv-edit]');
+  if (ed) { const i = intervenants.find(x=>x.id===ed.dataset.ivEdit); if (!i) return;
+    document.getElementById('iv-id').value = i.id;
+    document.getElementById('iv-type').value = i.type;
+    document.getElementById('iv-user').value = i.utilisateur_id || '';
+    document.getElementById('iv-nom').value = i.nom;
+    document.getElementById('iv-societe').value = i.societe || '';
+    document.getElementById('iv-typetaux').value = i.type_taux;
+    document.getElementById('iv-taux').value = i.taux;
+    document.getElementById('iv-form-titre').textContent = 'Modifier l\'intervenant';
+    majIvChamps(); modalInterv.hidden = false; return; }
+  const del = e.target.closest('[data-iv-del]');
+  if (del) { if (!await Djigui.confirm('Supprimer cet intervenant ?', { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+    try { await Djigui.api('/api/intervenants/' + del.dataset.ivDel, { method:'DELETE' });
+      intervenants = await Djigui.api('/api/intervenants'); rendreIntervenants();
+      rendreEquipe(document.getElementById('t-id').value); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); } }
+});
+document.getElementById('form-interv').addEventListener('submit', async e => {
+  e.preventDefault();
+  const type = document.getElementById('iv-type').value;
+  let nom, uid = null, societe = null;
+  if (type === 'interne') {
+    uid = document.getElementById('iv-user').value;
+    if (!uid) { Djigui.toast('Choisissez l\'employé', 'warn'); return; }
+    nom = (users.find(u=>u.id===uid)||{}).nom || 'Employé';
+  } else {
+    nom = document.getElementById('iv-nom').value.trim();
+    if (!nom) { Djigui.toast('Saisissez le nom', 'warn'); return; }
+    societe = document.getElementById('iv-societe').value.trim() || null;
+  }
+  const body = { nom, type, utilisateur_id: uid, societe,
+    type_taux: document.getElementById('iv-typetaux').value,
+    taux: Number(document.getElementById('iv-taux').value) || 0, actif: true };
+  const id = document.getElementById('iv-id').value;
+  try {
+    if (id) await Djigui.api('/api/intervenants/' + id, { method:'PUT', body });
+    else await Djigui.api('/api/intervenants', { method:'POST', body });
+    Djigui.toast('Intervenant enregistré', 'ok');
+    intervenants = await Djigui.api('/api/intervenants');
+    rendreIntervenants(); ivReset(); rendreEquipe(document.getElementById('t-id').value);
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Vue « Par personne » : Gantt d'une ressource + chevauchements ----
+function rendrePersonnes() {
+  const sel = document.getElementById('pers-select');
+  const ancien = sel.value;
+  // intervenants ayant au moins une assignation
+  const ids = [...new Set(assignations.map(a => a.intervenant_id))];
+  const gens = ids.map(id => { const a = assignations.find(x=>x.intervenant_id===id)||{};
+    return { id, nom: (a.intervenant_nom||'—') + (a.intervenant_type==='externe'?' (externe)':'') }; });
+  sel.innerHTML = '<option value="">Choisir une personne…</option>' +
+    gens.map(g => `<option value="${g.id}">${Djigui.esc(g.nom)}</option>`).join('');
+  if (ancien && ids.includes(ancien)) sel.value = ancien;
+  rendrePersGantt();
+}
+document.getElementById('pers-select').addEventListener('change', rendrePersGantt);
+function rendrePersGantt() {
+  const uid = document.getElementById('pers-select').value;
+  const zone = document.getElementById('pers-gantt');
+  const info = document.getElementById('pers-info');
+  if (!uid) { zone.innerHTML = '<div class="card"><div class="muted">Choisissez une personne pour voir son planning.</div></div>'; info.textContent=''; return; }
+  // tâches de l'intervenant (avec dates), + heures + coût
+  const mesAssign = assignations.filter(a => a.intervenant_id === uid);
+  const heures = mesAssign.reduce((s,a)=>s+(a.heures_allouees||0),0);
+  const cout = mesAssign.reduce((s,a)=>s+(a.cout||0),0);
+  const sesTaches = mesAssign.map(a => taches.find(t => t.id === a.tache_id)).filter(t => t && t.debut_calcule && t.fin_calcule);
+  info.textContent = `${mesAssign.length} tâche(s)${heures?` · ${Djigui.fmt(heures)} h`:''}${cout?` · ${fmtM(cout)} FCFA`:''}`;
+  if (!sesTaches.length) { zone.innerHTML = '<div class="card"><div class="muted">Cette personne n\'a pas de tâche datée.</div></div>'; return; }
+  // détection des chevauchements (surcharge)
+  const surcharge = new Set();
+  for (let i=0;i<sesTaches.length;i++) for (let j=i+1;j<sesTaches.length;j++) {
+    const a=sesTaches[i], b=sesTaches[j];
+    if (a.debut_calcule <= b.fin_calcule && b.debut_calcule <= a.fin_calcule) { surcharge.add(a.id); surcharge.add(b.id); }
+  }
+  // timeline adaptative (mêmes helpers que le Gantt projet)
+  const sp = friseSpec(sesTaches);
+  const ord = [...sesTaches].sort((a,b)=>(a.debut_calcule||'').localeCompare(b.debut_calcule||''));
+  let left = `<div class="g-left-row" style="grid-template-columns:220px auto auto"><div class="g-th">Tâche</div><div class="g-th">Période</div><div class="g-th">Statut</div></div>` +
+    ord.map(t => { const [c,l]=STATUT_TACHE[t.statut]||['#5c6a61',t.statut];
+      return `<div class="g-left-row" style="grid-template-columns:220px auto auto">
+        <div class="g-cell" style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${surcharge.has(t.id)?'<i class="ti ti-alert-triangle" style="color:var(--danger)"></i> ':''}${Djigui.esc(t.nom)}</div>
+        <div class="g-cell" style="font-size:11.5px;color:var(--text-2)">${dfr(t.debut_calcule)} → ${dfr(t.fin_calcule)}</div>
+        <div class="g-cell"><span class="badge" style="background:${c}22;color:${c}">${l}</span></div></div>`; }).join('');
+  const head = friseHead(sp), cells = friseCells(sp);
+  const body = ord.map(t =>
+    `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${barreGantt(sp, t, coulNiveau(t.niveau), surcharge.has(t.id))}</div>`).join('');
+  const nbSurc = surcharge.size;
+  const alerte = nbSurc ? `<div class="bandeau-warn" style="margin-top:10px"><i class="ti ti-alert-triangle" style="font-size:20px"></i>
+    <span><strong>${nbSurc} tâche(s)</strong> se chevauchent pour cette personne (surcharge). Décalez des dates ou réassignez.</span></div>` : '';
+  zone.innerHTML = `<div class="gantt"><div class="gantt-left">${left}</div>
+    <div class="gantt-right"><div style="min-width:100%;display:inline-block">${head}${body}</div></div></div>${alerte}`;
+}
+document.getElementById('btn-nouvelle-tache').addEventListener('click', () => ouvrirTache(null));
+document.getElementById('t-fermer').addEventListener('click', () => modalT.hidden = true);
+document.getElementById('t-annuler').addEventListener('click', () => modalT.hidden = true);
+document.getElementById('form-tache').addEventListener('submit', async e => {
+  e.preventDefault();
+  const dp = document.getElementById('t-debut-p').value, fp = document.getElementById('t-fin-p').value;
+  if (dp && fp && fp < dp) document.getElementById('t-alertes').innerHTML = '<div class="badge warn">La fin prévue est avant le début prévu.</div>';
+  const body = {
+    projet_id: projetId, tache_parente_id: document.getElementById('t-parent').value || null,
+    nom: document.getElementById('t-nom').value.trim(), description: document.getElementById('t-desc').value.trim() || null,
+    date_debut_prevue: dp || null, date_fin_prevue: fp || null,
+    date_debut_reelle: document.getElementById('t-debut-r').value || null, date_fin_reelle: document.getElementById('t-fin-r').value || null,
+    statut: document.getElementById('t-statut').value, avancement: Number(document.getElementById('t-av').value) || 0,
+    budget: Number(document.getElementById('t-budget').value) || 0,
+  };
+  const id = document.getElementById('t-id').value;
+  try {
+    let creee = null;
+    if (id) await Djigui.api('/api/taches/' + id, { method:'PUT', body });
+    else creee = await Djigui.api('/api/taches', { method:'POST', body });
+    Djigui.toast('Tâche enregistrée', 'ok');
+    await charger();
+    if (creee) {
+      // Nouvelle tâche : on la rouvre en édition pour permettre d'assigner des personnes.
+      const t = taches.find(x => x.id === creee.id);
+      if (t) ouvrirTache(t); else modalT.hidden = true;
+    } else modalT.hidden = true;
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Modale avancement + observation ----
+const modalProg = document.getElementById('modal-prog');
+async function ouvrirProg(t) {
+  if (!t) return;
+  document.getElementById('prog-tid').value = t.id;
+  document.getElementById('prog-titre').textContent = 'Avancement — ' + t.nom;
+  document.getElementById('prog-av').value = t.avancement;
+  document.getElementById('prog-obs').value = '';
+  document.getElementById('prog-hist').innerHTML = '<div class="muted" style="font-size:12px">Chargement…</div>';
+  modalProg.hidden = false;
+  try {
+    const hist = await Djigui.api('/api/taches/' + t.id + '/actions');
+    document.getElementById('prog-hist').innerHTML = hist.length ? hist.map(a => `
+      <div class="obs-item">
+        <div class="obs-meta"><span>${Djigui.dateFr ? Djigui.dateFr(a.date.slice(0,10)) : a.date.slice(0,10)}</span>
+          ${a.avancement!=null?`<span style="font-weight:600;color:var(--brand-strong)">${a.avancement}%</span>`:''}
+          ${a.auteur_nom?`<span>· ${Djigui.esc(a.auteur_nom)}</span>`:''}</div>
+        ${a.observation?`<div>${Djigui.esc(a.observation)}</div>`:'<div class="muted">(pas d\'observation)</div>'}
+      </div>`).join('') : '<div class="muted" style="font-size:12px">Aucune observation.</div>';
+  } catch (e) { document.getElementById('prog-hist').innerHTML = '<div class="badge danger">Erreur historique</div>'; }
+}
+document.getElementById('prog-fermer').addEventListener('click', () => modalProg.hidden = true);
+document.getElementById('prog-annuler').addEventListener('click', () => modalProg.hidden = true);
+document.getElementById('form-prog').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('prog-tid').value;
+  const body = { avancement: Number(document.getElementById('prog-av').value),
+                 observation: document.getElementById('prog-obs').value.trim() || null };
+  try {
+    await Djigui.api('/api/taches/' + id + '/actions', { method:'POST', body });
+    Djigui.toast('Avancement enregistré', 'ok');
+    await charger();
+    // recharge l'historique dans la modale restée ouverte
+    ouvrirProg(taches.find(t => t.id === id));
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Modale ressource ----
+const modalR = document.getElementById('modal-res');
+function majTachesRes() {
+  const sel = document.getElementById('res-tache');
+  sel.innerHTML = '<option value="">Tout le projet</option>' +
+    taches.map(t => `<option value="${t.id}">${'— '.repeat(t.niveau-1)}${Djigui.esc(t.nom)}</option>`).join('');
+}
+function ouvrirRes(r) {
+  document.getElementById('form-res').reset(); majTachesRes();
+  const est = !!r;
+  document.getElementById('res-titre-modal').textContent = est ? 'Modifier la ressource' : 'Nouvelle ressource';
+  document.getElementById('res-supprimer').style.display = est ? '' : 'none';
+  document.getElementById('res-id').value = est ? r.id : '';
+  document.getElementById('res-libelle').value = est ? r.libelle : '';
+  document.getElementById('res-type').value = est ? r.type : 'materiel';
+  document.getElementById('res-tache').value = est && r.tache_id ? r.tache_id : '';
+  document.getElementById('res-cu').value = est ? r.cout_unitaire : 0;
+  document.getElementById('res-qte').value = est ? r.quantite : 1;
+  modalR.hidden = false; document.getElementById('res-libelle').focus();
+}
+document.getElementById('res-fermer').addEventListener('click', () => modalR.hidden = true);
+document.getElementById('res-annuler').addEventListener('click', () => modalR.hidden = true);
+document.getElementById('corps-res').addEventListener('click', async e => {
+  const ed = e.target.closest('[data-edit-res]'); if (ed) { ouvrirRes(ressources.find(r=>r.id===ed.dataset.editRes)); return; }
+  const del = e.target.closest('[data-del-res]');
+  if (del) { if (!await Djigui.confirm('Supprimer cette ressource ?', { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+    try { await Djigui.api('/api/ressources/' + del.dataset.delRes, { method:'DELETE' }); Djigui.toast('Ressource supprimée','ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); } }
+});
+document.getElementById('form-res').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {
+    projet_id: projetId, tache_id: document.getElementById('res-tache').value || null,
+    type: document.getElementById('res-type').value, libelle: document.getElementById('res-libelle').value.trim(),
+    cout_unitaire: Number(document.getElementById('res-cu').value) || 0, quantite: Number(document.getElementById('res-qte').value) || 0,
+  };
+  const id = document.getElementById('res-id').value;
+  try {
+    if (id) await Djigui.api('/api/ressources/' + id, { method:'PUT', body });
+    else await Djigui.api('/api/ressources', { method:'POST', body });
+    Djigui.toast('Ressource enregistrée', 'ok'); modalR.hidden = true; charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('res-supprimer').addEventListener('click', async () => {
+  const id = document.getElementById('res-id').value; if (!id) return;
+  if (!await Djigui.confirm('Supprimer cette ressource ?', { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+  try { await Djigui.api('/api/ressources/' + id, { method:'DELETE' }); Djigui.toast('Ressource supprimée','ok'); modalR.hidden = true; charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Modale édition projet ----
+const modalP = document.getElementById('modal-proj');
+document.getElementById('btn-modifier').addEventListener('click', () => {
+  document.getElementById('proj-nom').value = projet.nom;
+  document.getElementById('proj-chef').value = projet.chef_de_projet_id || '';
+  document.getElementById('proj-statut').value = projet.statut;
+  document.getElementById('proj-debut').value = projet.date_debut_prevue || '';
+  document.getElementById('proj-fin').value = projet.date_fin_prevue || '';
+  document.getElementById('proj-budget').value = projet.budget_global;
+  document.getElementById('proj-note').value = projet.note || '';
+  clientSel.setValue(projet.client_id || '');
+  modalP.hidden = false;
+});
+document.getElementById('proj-fermer').addEventListener('click', () => modalP.hidden = true);
+document.getElementById('proj-annuler').addEventListener('click', () => modalP.hidden = true);
+document.getElementById('form-proj').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {
+    nom: document.getElementById('proj-nom').value.trim(), client_id: (clientSel && clientSel.value) || null,
+    chef_de_projet_id: document.getElementById('proj-chef').value || null,
+    date_debut_prevue: document.getElementById('proj-debut').value || null, date_fin_prevue: document.getElementById('proj-fin').value || null,
+    statut: document.getElementById('proj-statut').value, budget_global: Number(document.getElementById('proj-budget').value) || 0,
+    note: document.getElementById('proj-note').value.trim() || null,
+  };
+  try { await Djigui.api('/api/projets/' + projetId, { method:'PUT', body }); Djigui.toast('Projet enregistré', 'ok'); modalP.hidden = true; charger(); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('proj-supprimer').addEventListener('click', async () => {
+  if (!await Djigui.confirm('Supprimer ce projet et toutes ses tâches ?', { titre:'Supprimer le projet', okLabel:'Supprimer', danger:true })) return;
+  try { await Djigui.api('/api/projets/' + projetId, { method:'DELETE' }); Djigui.toast('Projet supprimé', 'ok'); location.href = 'projets.html'; }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+async function init() {
+  clientSel = Djigui.selectRecherche(document.getElementById('proj-client-mount'), { items: [], placeholder: 'Aucun (facultatif)…' });
+  [tiersListe, users] = await Promise.all([
+    Djigui.api('/api/tiers?filtre=tous').catch(()=>[]), Djigui.api('/api/utilisateurs').catch(()=>[]),
+  ]);
+  clientSel.setItems([{ value:'', label:'— Aucun —' }].concat(tiersListe.map(t => ({ value: t.id, label: t.nom, sub: t.code }))));
+  const chef = document.getElementById('proj-chef');
+  const ivUser = document.getElementById('iv-user');
+  users.filter(u => u.actif !== false).forEach(u => {
+    chef.insertAdjacentHTML('beforeend', `<option value="${u.id}">${Djigui.esc(u.nom)}</option>`);
+    ivUser.insertAdjacentHTML('beforeend', `<option value="${u.id}">${Djigui.esc(u.nom)}</option>`);
+  });
+  await charger();
+}
+init();
+</script>
+</body>
+</html>

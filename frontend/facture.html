@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Facture</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+<script src="assets/vendor/pdfmake.min.js"></script>
+<script src="assets/vendor/vfs_fonts.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><img src="assets/logo-djigui.png" alt="Djigui"></div>
+      <div><div class="brand-name">Djigui</div><div class="brand-sub">Gestion commerciale</div></div>
+    </div>
+    <a class="nav-item" href="accueil.html"><i class="ti ti-home"></i>Accueil</a>
+    <div class="nav-label">Commerce</div>
+    <a class="nav-item" href="documents.html?sens=vente"><i class="ti ti-shopping-cart"></i>Ventes</a>
+    <a class="nav-item" href="caisse.html"><i class="ti ti-cash"></i>Caisse</a>
+    <a class="nav-item active"><i class="ti ti-file-invoice"></i>Factures</a>
+    <a class="nav-item" href="abonnements.html"><i class="ti ti-repeat"></i>Abonnements</a>
+    <a class="nav-item" href="agenda.html"><i class="ti ti-calendar-event"></i>Agenda</a>
+    <a class="nav-item" href="projets.html"><i class="ti ti-briefcase"></i>Projets</a>
+    <a class="nav-item" href="documents.html?sens=achat"><i class="ti ti-truck"></i>Achats</a>
+    <div class="nav-label">Catalogue</div>
+    <a class="nav-item" href="articles.html"><i class="ti ti-box"></i>Articles</a>
+    <a class="nav-item" href="#"><i class="ti ti-tools"></i>Production</a>
+    <div class="nav-label">Contacts</div>
+    <a class="nav-item" href="tiers.html"><i class="ti ti-users"></i>Tiers</a>
+    <a class="nav-item" href="#"><i class="ti ti-chart-bar"></i>Rapports</a>
+    <div class="sidebar-foot">
+      <a class="nav-item" href="parametres.html"><i class="ti ti-settings"></i>Paramètres</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title" id="doc-titre">Facture</div>
+        <div class="topbar-date" id="doc-soustitre"></div>
+      </div>
+      <div class="topbar-right">
+        <a class="btn" href="documents.html"><i class="ti ti-arrow-left"></i>Documents</a>
+        <button class="btn" id="btn-imprimer"><i class="ti ti-printer"></i>Imprimer</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="doc">
+        <div class="doc-head">
+          <div style="display:flex;gap:16px;align-items:center">
+            <div class="doc-logo" id="doc-logo"><i class="ti ti-building-store"></i></div>
+            <div>
+              <div style="font-size:18px;font-weight:600" id="ent-nom">—</div>
+              <div class="muted" style="font-size:12.5px;line-height:1.6" id="ent-coord"></div>
+            </div>
+          </div>
+          <div class="doc-title">
+            <h2 id="doc-type">FACTURE</h2>
+            <div class="muted num" style="font-size:13px;margin-top:4px" id="doc-numero"></div>
+          </div>
+        </div>
+
+        <div class="doc-meta">
+          <div>
+            <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.05em" id="lbl-tiers">Facturé à</div>
+            <div style="font-weight:600;margin-top:4px" id="cli-nom">—</div>
+            <div class="muted" style="font-size:12.5px;line-height:1.6" id="cli-coord"></div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12.5px;line-height:1.9">
+              <span class="muted">Date&nbsp;&nbsp;</span><span class="num" id="doc-date"></span><br>
+              <span class="muted">Statut&nbsp;&nbsp;</span><span id="doc-statut"></span>
+            </div>
+          </div>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr><th>Désignation</th><th class="right">Qté</th><th class="right">P.U. HT</th><th class="right">Total HT</th></tr>
+          </thead>
+          <tbody id="corps-lignes"></tbody>
+        </table>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:18px">
+          <div style="width:260px;display:flex;flex-direction:column;gap:8px">
+            <div class="tot-row"><span>Total HT</span><span class="num" id="f-ht">0</span></div>
+            <div id="f-ventilation"></div>
+            <div class="tot-grand" style="border-top:1px solid var(--border);padding-top:10px"><span>Total TTC</span><span class="num" id="f-ttc">0</span></div>
+          </div>
+        </div>
+
+        <div class="doc-foot" id="doc-pied"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Aperçu PDF (avant impression) -->
+<div class="modal-overlay" id="modal-pdf" hidden>
+  <div class="modal" style="max-width:900px;width:94vw;height:92vh;display:flex;flex-direction:column;padding:16px 18px">
+    <div class="card-head" style="margin-bottom:10px">
+      <span class="card-title">Aperçu du document</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" id="pdf-telecharger"><i class="ti ti-download"></i>Télécharger</button>
+        <button class="btn btn-primary" id="pdf-imprimer"><i class="ti ti-printer"></i>Imprimer</button>
+        <i class="ti ti-x" id="pdf-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2);margin-left:6px"></i>
+      </div>
+    </div>
+    <iframe id="pdf-apercu" style="flex:1;width:100%;border:1px solid var(--border);border-radius:8px;background:#525659"></iframe>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+// --- Mentions légales (OHADA) -------------------------------------------
+// Toute mention absente est simplement omise : rien n'est obligatoire, une
+// facture reste imprimable sans NINEA, sans RCCM et sans CNI.
+function lignesEmetteur(ent) {
+  const capital = ent.capital ? 'Capital ' + Djigui.fmt(ent.capital) + ' ' + (ent.devise || 'FCFA') : null;
+  return [
+    ent.adresse,
+    [ent.forme_juridique, capital].filter(Boolean).join(' · '),
+    [ent.ninea && 'NINEA ' + ent.ninea, ent.rccm && 'RCCM ' + ent.rccm].filter(Boolean).join(' · '),
+    ent.regime_fiscal && 'Régime : ' + ent.regime_fiscal,
+    ent.telephone, ent.email,
+  ].filter(Boolean);
+}
+// NINEA/RCCM pour une entreprise ; pour un particulier la CNI n'est jamais
+// imprimée sur la facture (pièce d'identité, pas une mention commerciale).
+function lignesTiers(t) {
+  return [t.adresse, t.ninea && 'NINEA ' + t.ninea, t.rccm && 'RCCM ' + t.rccm, t.telephone].filter(Boolean);
+}
+function nomTiers(t) {
+  return t.nature === 'entreprise' ? t.nom : [t.prenom, t.nom].filter(Boolean).join(' ');
+}
+
+const TYPES = { devis:'DEVIS', facture:'FACTURE', avoir:'AVOIR', commande:'BON DE COMMANDE', livraison:'BON DE LIVRAISON', proforma:'PROFORMA' };
+const LBL = { vente:'Facturé à', achat:'Fournisseur' };
+const STATUTS = { brouillon:['neutral','Brouillon'], valide:['ok','Validé'], accepte:['ok','Accepté'], transforme:['warn','Transformé'], annule:['danger','Annulé'] };
+
+// Données chargées, réutilisées pour construire le PDF.
+let donnees = null;
+
+async function init() {
+  const id = new URLSearchParams(location.search).get('id');
+  if (!id) { document.getElementById('doc-soustitre').textContent = 'Aucun document sélectionné — ouvrez une pièce depuis la liste Documents.'; return; }
+  try {
+    const [doc, ent] = await Promise.all([
+      Djigui.api('/api/documents/' + id),
+      Djigui.api('/api/parametres').catch(()=>({})),
+    ]);
+    const tiers = await Djigui.api('/api/tiers/' + doc.tiers_id).catch(()=>null);
+    donnees = { doc, ent, tiers };
+
+    // En-tête entreprise (§5.9) — logo si défini dans Paramètres
+    if (ent.logo) {
+      document.getElementById('doc-logo').innerHTML =
+        `<img src="${ent.logo}" alt="Logo" style="width:100%;height:100%;object-fit:contain">`;
+    }
+    document.getElementById('ent-nom').textContent = ent.raison_sociale || 'Entreprise';
+    document.getElementById('ent-coord').innerHTML =
+      lignesEmetteur(ent).map(Djigui.esc).join('<br>');
+
+    // Titre / type / numéro
+    document.getElementById('doc-type').textContent = TYPES[doc.type_document] || doc.type_document.toUpperCase();
+    document.getElementById('doc-numero').textContent = 'N° ' + doc.numero;
+    document.getElementById('doc-titre').textContent = (TYPES[doc.type_document]||'').replace(/^./,c=>c)+' '+doc.numero;
+    document.getElementById('doc-soustitre').textContent = 'Créé le ' + Djigui.dateFr(doc.date) + (doc.document_source_id ? ' · issu d’une transformation' : '');
+
+    // Tiers
+    document.getElementById('lbl-tiers').textContent = LBL[doc.sens] || 'Tiers';
+    if (tiers) {
+      document.getElementById('cli-nom').textContent = nomTiers(tiers);
+      document.getElementById('cli-coord').innerHTML =
+        lignesTiers(tiers).map(Djigui.esc).join('<br>');
+    }
+    document.getElementById('doc-date').textContent = Djigui.dateFr(doc.date);
+    const [sc, sl] = STATUTS[doc.statut] || ['neutral', doc.statut];
+    document.getElementById('doc-statut').innerHTML = `<span class="badge ${sc}">${sl}</span>`;
+
+    // Libellé d'une taxe pour la ventilation. Si le nom porte déjà un taux
+    // (ex. « TVA 18 % », cas des docs à taxe simple), on l'affiche tel quel ;
+    // sinon on suffixe le taux pour les taxes en pourcentage.
+    const libTaxe = t => {
+      const nom = Djigui.esc(t.nom);
+      if (t.type === 'fixe' || /%/.test(nom)) return nom;
+      return `${nom} (${t.taux}%)`;
+    };
+    const taxesLigne = l => (l.taxes && l.taxes.length)
+      ? l.taxes.map(t => t.type === 'fixe' ? Djigui.esc(t.nom) : t.taux + '%').join(' + ')
+      : (l.taux_tva ? l.taux_tva + '%' : '<span class="muted">—</span>');
+
+    // Lignes
+    document.getElementById('corps-lignes').innerHTML = (doc.lignes||[]).map(l => `
+      <tr><td>${Djigui.esc(l.designation)}</td>
+        <td class="right num">${Djigui.fmt(l.quantite)}</td>
+        <td class="right num">${Djigui.fmt(l.prix_unitaire)}</td>
+        <td class="right num">${Djigui.fmt(l.total_ligne_ht)}</td></tr>`).join('');
+
+    // Totaux
+    const dev = ent.devise || 'FCFA';
+    document.getElementById('f-ht').textContent = Djigui.fmt(doc.total_ht);
+
+    // Ventilation des taxes : regroupe par nom (snapshot figé sur les lignes)
+    const ventil = new Map();
+    for (const l of (doc.lignes||[])) {
+      for (const t of (l.taxes||[])) {
+        const cle = t.nom + '|' + t.type + '|' + t.taux;
+        const cur = ventil.get(cle) || { lib: libTaxe(t), montant: 0 };
+        cur.montant += t.montant || 0;
+        ventil.set(cle, cur);
+      }
+    }
+    const rows = [...ventil.values()];
+    document.getElementById('f-ventilation').innerHTML = rows.length
+      ? rows.map(v => `<div class="tot-row"><span>${v.lib}</span><span class="num">${Djigui.fmt(Math.round(v.montant*100)/100)}</span></div>`).join('')
+      : `<div class="tot-row"><span>TVA</span><span class="num">${Djigui.fmt(doc.total_tva)}</span></div>`;
+
+    document.getElementById('f-ttc').textContent = Djigui.fmt(doc.total_ttc) + ' ' + dev;
+    document.getElementById('doc-pied').textContent = ent.pied_facture || '';
+  } catch (e) {
+    document.getElementById('doc-soustitre').textContent = 'Erreur : ' + e.message;
+  }
+}
+
+// ---- Génération PDF (pdfmake) + aperçu avant impression ----
+const fmt = n => (Number(n) || 0).toLocaleString('fr-FR').replace(/ | /g, ' ');
+
+function libelleTaxe(t) {
+  if (t.type === 'fixe' || /%/.test(t.nom)) return t.nom;
+  return `${t.nom} (${t.taux}%)`;
+}
+function taxesLigneTexte(l) {
+  if (l.taxes && l.taxes.length)
+    return l.taxes.map(t => t.type === 'fixe' ? t.nom : t.taux + '%').join(' + ');
+  return l.taux_tva ? l.taux_tva + '%' : '—';
+}
+
+function construireDocDefinition() {
+  const { doc, ent, tiers } = donnees;
+  const dev = ent.devise || 'FCFA';
+  const typeLbl = TYPES[doc.type_document] || doc.type_document.toUpperCase();
+
+  // Ventilation des taxes (regroupée par nom|type|taux).
+  const ventil = new Map();
+  for (const l of (doc.lignes || []))
+    for (const t of (l.taxes || [])) {
+      const cle = t.nom + '|' + t.type + '|' + t.taux;
+      const cur = ventil.get(cle) || { lib: libelleTaxe(t), montant: 0 };
+      cur.montant += t.montant || 0;
+      ventil.set(cle, cur);
+    }
+  const taxes = [...ventil.values()];
+
+  // En-tête entreprise (bloc gauche) : logo optionnel + identité.
+  const coordEnt = lignesEmetteur(ent).join('\n');
+  const blocGauche = [];
+  if (ent.logo) blocGauche.push({ image: ent.logo, fit: [120, 60], margin: [0, 0, 0, 6] });
+  blocGauche.push({ text: ent.raison_sociale || 'Entreprise', style: 'entNom' });
+  if (coordEnt) blocGauche.push({ text: coordEnt, style: 'muted' });
+
+  // Lignes du tableau.
+  const corps = [[
+    { text: 'Désignation', style: 'th' },
+    { text: 'Qté', style: 'th', alignment: 'right' },
+    { text: 'P.U. HT', style: 'th', alignment: 'right' },
+    { text: 'Total HT', style: 'th', alignment: 'right' },
+  ]];
+  for (const l of (doc.lignes || [])) {
+    corps.push([
+      l.designation,
+      { text: fmt(l.quantite), alignment: 'right' },
+      { text: fmt(l.prix_unitaire), alignment: 'right' },
+      { text: fmt(l.total_ligne_ht), alignment: 'right' },
+    ]);
+  }
+
+  // Bloc totaux (droite).
+  const totRows = [[ { text: 'Total HT', style: 'muted' }, { text: fmt(doc.total_ht), alignment: 'right' } ]];
+  if (taxes.length)
+    taxes.forEach(t => totRows.push([ { text: t.lib, style: 'muted' }, { text: fmt(Math.round(t.montant*100)/100), alignment: 'right' } ]));
+  else
+    totRows.push([ { text: 'TVA', style: 'muted' }, { text: fmt(doc.total_tva), alignment: 'right' } ]);
+  totRows.push([
+    { text: 'Total TTC', bold: true, fontSize: 12 },
+    { text: fmt(doc.total_ttc) + ' ' + dev, alignment: 'right', bold: true, fontSize: 12 },
+  ]);
+
+  const coordCli = tiers ? lignesTiers(tiers).join('\n') : '';
+
+  return {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 54],
+    defaultStyle: { fontSize: 9, color: '#16201a' },
+    styles: {
+      entNom: { fontSize: 14, bold: true },
+      muted: { color: '#5c6a61', fontSize: 9 },
+      docType: { fontSize: 20, bold: true, color: '#0e5a39' },
+      th: { bold: true, fillColor: '#eef3ef', margin: [0, 3, 0, 3] },
+      label: { fontSize: 8, color: '#93a09a', characterSpacing: 0.4 },
+    },
+    content: [
+      {
+        columnGap: 20,
+        columns: [
+          { width: '*', stack: blocGauche },
+          { width: 170, alignment: 'right', stack: [
+            { text: typeLbl, style: 'docType' },
+            { text: 'N° ' + doc.numero, style: 'muted', margin: [0, 2, 0, 0] },
+          ] },
+        ],
+      },
+      { canvas: [{ type: 'line', x1: 0, y1: 10, x2: 515, y2: 10, lineWidth: 0.7, lineColor: '#e2e7e0' }] },
+      {
+        columnGap: 16,
+        columns: [
+          // Bloc client borné à ~35 % de la largeur (515 pt → 180 pt) :
+          // l'adresse longue s'y enroule sans empiéter sur le reste.
+          { width: 180, stack: [
+            { text: (LBL[doc.sens] || 'TIERS').toUpperCase(), style: 'label', margin: [0, 12, 0, 3] },
+            { text: tiers ? tiers.nom : '—', bold: true },
+            { text: coordCli, style: 'muted' },
+          ] },
+          // Espace flexible au centre.
+          { width: '*', text: '' },
+          // Bloc méta à largeur FIXE, aligné à droite : jamais de chevauchement.
+          { width: 150, alignment: 'right', stack: [
+            { text: 'DATE', style: 'label', margin: [0, 12, 0, 2] },
+            { text: Djigui.dateFr(doc.date) },
+            ...(doc.reference_dossier ? [
+              { text: 'N° DE DOSSIER', style: 'label', margin: [0, 8, 0, 2] },
+              { text: doc.reference_dossier },
+            ] : []),
+            { text: 'STATUT', style: 'label', margin: [0, 8, 0, 2] },
+            { text: (STATUTS[doc.statut] || ['', doc.statut])[1] },
+          ] },
+        ],
+      },
+      ...(doc.objet ? [{
+        margin: [0, 16, 0, 0],
+        columnGap: 8,
+        columns: [
+          { width: 46, text: 'OBJET', style: 'label', margin: [0, 1, 0, 0] },
+          { width: '*', text: doc.objet, bold: true },
+        ],
+      }] : []),
+      {
+        margin: [0, 14, 0, 0],
+        table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto'], body: corps },
+        layout: {
+          hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.6 : 0.3,
+          vLineWidth: () => 0,
+          hLineColor: () => '#d7ddd6',
+          paddingTop: () => 4, paddingBottom: () => 4,
+        },
+      },
+      {
+        margin: [0, 16, 0, 0],
+        columns: [
+          { width: '*', text: '' },
+          { width: 230, table: { widths: ['*', 'auto'], body: totRows }, layout: 'noBorders' },
+        ],
+      },
+      ent.pied_facture ? { text: ent.pied_facture, style: 'muted', alignment: 'center', margin: [0, 28, 0, 0] } : {},
+    ],
+    footer: (page, count) => ({ text: `${page} / ${count}`, alignment: 'center', style: 'muted', margin: [0, 8, 0, 0] }),
+  };
+}
+
+let pdfCourant = null;
+function ouvrirApercu() {
+  if (!donnees) { Djigui.toast('Document non chargé', 'warn'); return; }
+  try {
+    pdfCourant = pdfMake.createPdf(construireDocDefinition());
+    pdfCourant.getDataUrl(url => {
+      document.getElementById('pdf-apercu').src = url;
+      document.getElementById('modal-pdf').hidden = false;
+    });
+  } catch (e) { Djigui.toast('Erreur PDF : ' + e.message, 'danger'); }
+}
+function nomFichier() {
+  const d = donnees.doc;
+  return `${(TYPES[d.type_document]||'document')}-${d.numero}`.replace(/\s+/g, '_') + '.pdf';
+}
+
+document.getElementById('btn-imprimer').addEventListener('click', ouvrirApercu);
+document.getElementById('pdf-fermer').addEventListener('click', () => { document.getElementById('modal-pdf').hidden = true; });
+document.getElementById('modal-pdf').addEventListener('click', e => { if (e.target.id === 'modal-pdf') e.currentTarget.hidden = true; });
+document.getElementById('pdf-imprimer').addEventListener('click', () => { if (pdfCourant) pdfCourant.print(); });
+document.getElementById('pdf-telecharger').addEventListener('click', () => { if (pdfCourant) pdfCourant.download(nomFichier()); });
+
+init();
+</script>
+</body>
+</html>

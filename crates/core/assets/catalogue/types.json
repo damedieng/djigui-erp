@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "types": [
+    { "code": "alimentation_generale", "libelle": "Alimentation générale / boutique", "description": "Boutique de quartier, épicerie, libre-service", "icone": "ti-building-store", "ordre": 10, "disponible": true },
+    { "code": "restaurant_fast_food", "libelle": "Restaurant, fast-food & gargote", "description": "Plats locaux, grillades, sandwichs, boissons", "icone": "ti-tools-kitchen-2", "ordre": 20, "disponible": true },
+    { "code": "quincaillerie", "libelle": "Quincaillerie & matériaux", "description": "Outillage, visserie, plomberie, électricité", "icone": "ti-hammer", "ordre": 30, "disponible": false },
+    { "code": "vetements_chaussures", "libelle": "Vêtements & chaussures", "description": "Prêt-à-porter, tissus, chaussures", "icone": "ti-shirt", "ordre": 40, "disponible": false },
+    { "code": "telephonie_accessoires", "libelle": "Téléphonie & accessoires", "description": "Téléphones, accessoires, recharges", "icone": "ti-device-mobile", "ordre": 50, "disponible": false },
+    { "code": "cosmetique_beaute", "libelle": "Cosmétique, coiffure & beauté", "description": "Soins, maquillage, prestations salon", "icone": "ti-scissors", "ordre": 60, "disponible": false },
+    { "code": "papeterie_librairie", "libelle": "Papeterie, librairie & imprimerie", "description": "Fournitures, livres, reprographie", "icone": "ti-notebook", "ordre": 70, "disponible": false },
+    { "code": "pharmacie_para", "libelle": "Pharmacie / parapharmacie", "description": "Parapharmacie et prestations (hors médicaments)", "icone": "ti-vaccine", "ordre": 80, "disponible": false },
+    { "code": "services_atelier", "libelle": "Atelier & prestations de services", "description": "Couture, réparation, cordonnerie", "icone": "ti-settings-cog", "ordre": 90, "disponible": false }
+  ]
+}

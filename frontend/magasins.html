@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Magasins</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Magasins</div>
+        <div class="topbar-date">Dépôts, transferts et inventaire</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <div class="tabs" id="mag-tabs">
+        <span class="tab active" data-tab="depots">Magasins</span>
+        <span class="tab" data-tab="transfert">Transfert</span>
+        <span class="tab" data-tab="inventaire">Inventaire</span>
+      </div>
+
+      <!-- Panneau Magasins (dépôts) -->
+      <div class="tab-panel" data-panel="depots">
+        <div class="page-head">
+          <div style="font-weight:600;font-size:15px">Liste des magasins</div>
+          <button class="btn btn-primary" id="btn-nouveau-depot"><i class="ti ti-plus"></i>Nouveau magasin</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible;max-width:760px">
+          <table class="table">
+            <thead><tr><th>Nom</th><th class="right">Par défaut</th><th class="right">Actions</th></tr></thead>
+            <tbody id="corps-depots"><tr><td colspan="3" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="max-width:760px;margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+          <ul>
+            <li>Un <strong>magasin</strong> (dépôt) est un lieu où votre stock est rangé. Le stock de chaque article est suivi <strong>par magasin</strong>.</li>
+            <li>Le magasin <strong>par défaut</strong> est celui utilisé pour les ventes et les entrées quand aucun autre n'est précisé.</li>
+            <li>Onglet <strong>Transfert</strong> : déplacer des articles d'un magasin à un autre. Onglet <strong>Inventaire</strong> : corriger le stock après comptage.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Panneau Transfert -->
+      <div class="tab-panel" data-panel="transfert" hidden>
+        <div class="card" style="max-width:620px">
+          <div class="card-head"><span class="card-title">Transférer un article entre magasins</span></div>
+          <form id="form-transfert" class="form-grid">
+            <div class="field"><label>Magasin source</label>
+              <select id="tr-source"><option value="">— Choisir —</option></select></div>
+            <div class="field"><label>Magasin destination</label>
+              <select id="tr-dest" disabled><option value="">— Choisir la source d'abord —</option></select></div>
+            <div class="field full"><label>Article (en stock dans la source)</label>
+              <div id="tr-article-mount"></div></div>
+            <div class="field"><label>Quantité</label>
+              <input id="tr-qte" type="number" min="0" step="0.01" required></div>
+            <div class="field"><label>Disponible dans la source</label>
+              <input id="tr-dispo" disabled value="—"></div>
+            <div class="field full" style="flex-direction:row;justify-content:flex-end">
+              <button type="submit" class="btn btn-primary"><i class="ti ti-arrows-exchange"></i>Transférer</button>
+            </div>
+          </form>
+        </div>
+        <div class="aide" style="max-width:620px;margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment ça marche ?</div>
+          <ul>
+            <li>Le transfert <strong>retire</strong> la quantité du magasin source et l'<strong>ajoute</strong> au magasin destination.</li>
+            <li>On ne peut pas transférer <strong>plus que le stock disponible</strong> dans la source.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Panneau Inventaire -->
+      <div class="tab-panel" data-panel="inventaire" hidden>
+
+        <!-- Vue liste (historique des inventaires) -->
+        <div id="inv-vue-liste">
+          <div class="page-head">
+            <div style="font-weight:600;font-size:15px">Historique des inventaires</div>
+            <button class="btn btn-primary" id="btn-nouvel-inv"><i class="ti ti-plus"></i>Nouvel inventaire</button>
+          </div>
+          <div class="card" style="padding:0;overflow:visible">
+            <table class="table">
+              <thead><tr><th>Date</th><th>Magasin</th><th>Auteur</th><th class="right">Lignes</th><th class="right">Écart total</th><th class="right">Voir</th></tr></thead>
+              <tbody id="corps-inv-liste"><tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="aide" style="margin-top:16px">
+            <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert l'inventaire ?</div>
+            <ul>
+              <li>Un inventaire est un <strong>comptage daté</strong> de votre stock. Une fois validé, il est <strong>verrouillé</strong> (non modifiable) : c'est une preuve.</li>
+              <li>À la validation, les <strong>écarts</strong> (compté − théorique) sont <strong>ajustés</strong> automatiquement dans le stock.</li>
+              <li>Cliquez sur un inventaire de la liste pour <strong>revoir son détail</strong> (en lecture seule).</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Vue saisie (nouvel inventaire) -->
+        <div id="inv-vue-saisie" hidden>
+          <div class="page-head">
+            <div style="display:flex;align-items:center;gap:10px">
+              <button class="btn" id="inv-retour"><i class="ti ti-arrow-left"></i>Retour</button>
+              <span style="font-weight:600;font-size:15px">Nouvel inventaire —</span>
+              <select id="inv-depot" class="select-std" style="min-width:220px"></select>
+            </div>
+            <button class="btn btn-primary" id="btn-valider-inv"><i class="ti ti-check"></i>Valider l'inventaire</button>
+          </div>
+          <div class="card" style="padding:0;overflow:visible">
+            <table class="table">
+              <thead><tr><th>Code</th><th>Article</th><th class="right">Stock théorique</th><th class="right">Compté</th><th class="right">Écart</th></tr></thead>
+              <tbody id="corps-inv"><tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Choisissez un magasin…</td></tr></tbody>
+            </table>
+          </div>
+          <p class="muted" style="font-size:12.5px">Saisissez la quantité <strong>comptée</strong> pour les articles concernés. À la validation, l'inventaire est enregistré et verrouillé, et les écarts sont ajustés.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : nouveau / renommer magasin -->
+<div class="modal-overlay" id="modal-depot" hidden>
+  <div class="modal" style="max-width:400px">
+    <div class="card-head"><span class="card-title" id="depot-titre">Nouveau magasin</span>
+      <i class="ti ti-x" id="depot-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-depot" class="form-grid">
+      <div class="field full"><label>Nom du magasin</label>
+        <input name="nom" id="depot-nom" required placeholder="ex. Magasin principal, Boutique 2…"></div>
+      <div class="field full" id="depot-defaut-bloc">
+        <label class="check"><input type="checkbox" id="depot-defaut"> Magasin par défaut</label></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="depot-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : détail d'un inventaire (lecture seule) -->
+<div class="modal-overlay" id="modal-inv-detail" hidden>
+  <div class="modal" style="max-width:640px">
+    <div class="card-head"><span class="card-title" id="inv-det-titre">Inventaire</span>
+      <i class="ti ti-x" id="inv-det-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div id="inv-det-info" class="muted" style="font-size:13px;margin-bottom:12px"></div>
+    <div class="card" style="padding:0;overflow:visible;max-height:52vh;overflow-y:auto">
+      <table class="table">
+        <thead><tr><th>Article</th><th class="right">Théorique</th><th class="right">Compté</th><th class="right">Écart</th></tr></thead>
+        <tbody id="inv-det-lignes"></tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin-top:10px"><i class="ti ti-lock"></i> Inventaire validé — verrouillé, non modifiable.</p>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+// Écran réservé aux administrateurs.
+if (!Djigui.estAdmin()) { Djigui.toast('Accès réservé aux administrateurs', 'warn'); location.replace('accueil.html'); }
+
+let depots = [], articlesStock = [], editionDepotId = null;
+
+// ---- Onglets ----
+document.getElementById('mag-tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('#mag-tabs .tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.hidden = p.dataset.panel !== t.dataset.tab);
+});
+
+// ---- Magasins (dépôts) ----
+async function chargerDepots() {
+  depots = await Djigui.api('/api/depots').catch(()=>[]);
+  document.getElementById('corps-depots').innerHTML = depots.length ? depots.map(d => `
+    <tr>
+      <td>${Djigui.esc(d.nom)}</td>
+      <td class="right">${d.par_defaut ? '<span class="badge ok">Par défaut</span>' : ''}</td>
+      <td class="right actions">
+        <button class="icon-act" data-act="renommer" data-id="${d.id}" title="Renommer"><i class="ti ti-edit"></i></button>
+        ${d.par_defaut ? '' : `<button class="icon-act" data-act="defaut" data-id="${d.id}" title="Définir par défaut"><i class="ti ti-star"></i></button>`}
+      </td>
+    </tr>`).join('') : '<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">Aucun magasin</td></tr>';
+  remplirSelectsDepots();
+}
+function remplirSelectsDepots() {
+  const opts = depots.map(d => `<option value="${d.id}">${Djigui.esc(d.nom)}</option>`).join('');
+  document.getElementById('tr-source').innerHTML = '<option value="">— Choisir —</option>' + opts;
+  document.getElementById('inv-depot').innerHTML = '<option value="">— Choisir —</option>' + opts;
+  majDest();  // destination grisée tant qu'aucune source
+}
+// Destination : grisée sans source ; activée + remplie (hors source) dès qu'une source est choisie.
+function majDest() {
+  const dst = document.getElementById('tr-dest');
+  const src = document.getElementById('tr-source').value;
+  if (!src) {
+    dst.disabled = true;
+    dst.innerHTML = '<option value="">— Choisir la source d\'abord —</option>';
+    return;
+  }
+  dst.disabled = false;
+  dst.innerHTML = depots.filter(d => d.id !== src)
+    .map(d => `<option value="${d.id}">${Djigui.esc(d.nom)}</option>`).join('');
+}
+
+const modalDepot = document.getElementById('modal-depot');
+document.getElementById('btn-nouveau-depot').addEventListener('click', () => {
+  editionDepotId = null;
+  document.getElementById('depot-titre').textContent = 'Nouveau magasin';
+  document.getElementById('depot-nom').value = '';
+  document.getElementById('depot-defaut').checked = false;
+  document.getElementById('depot-defaut-bloc').hidden = false;
+  modalDepot.hidden = false; document.getElementById('depot-nom').focus();
+});
+document.getElementById('depot-fermer').addEventListener('click', () => { modalDepot.hidden = true; });
+document.getElementById('depot-annuler').addEventListener('click', () => { modalDepot.hidden = true; });
+document.getElementById('corps-depots').addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act'); if (!btn) return;
+  const d = depots.find(x => x.id === btn.dataset.id); if (!d) return;
+  if (btn.dataset.act === 'renommer') {
+    editionDepotId = d.id;
+    document.getElementById('depot-titre').textContent = 'Renommer le magasin';
+    document.getElementById('depot-nom').value = d.nom;
+    document.getElementById('depot-defaut-bloc').hidden = true;
+    modalDepot.hidden = false;
+  } else if (btn.dataset.act === 'defaut') {
+    try { await Djigui.api(`/api/depots/${d.id}/defaut`, { method:'POST' });
+      Djigui.toast('Magasin par défaut mis à jour', 'ok'); chargerDepots(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+document.getElementById('form-depot').addEventListener('submit', async e => {
+  e.preventDefault();
+  const nom = document.getElementById('depot-nom').value.trim();
+  try {
+    if (editionDepotId) {
+      await Djigui.api(`/api/depots/${editionDepotId}`, { method:'PUT', body:{ nom } });
+      Djigui.toast('Magasin renommé', 'ok');
+    } else {
+      await Djigui.api('/api/depots', { method:'POST', body:{ nom, par_defaut: document.getElementById('depot-defaut').checked } });
+      Djigui.toast('Magasin créé', 'ok');
+    }
+    modalDepot.hidden = true; chargerDepots();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Transfert ----
+// On ne propose QUE les articles ayant du stock (> 0) dans le magasin SOURCE :
+// on ne transfère que ce qu'on possède. La liste se recharge à chaque changement
+// de magasin source.
+let trSel = null, stockSourceMap = {};
+async function chargerArticlesStock() {
+  trSel = Djigui.selectRecherche(document.getElementById('tr-article-mount'),
+    { items: [], placeholder: 'Choisir un article en stock…', onChange: majDispo });
+  await majArticlesSource();
+}
+async function majArticlesSource() {
+  const src = document.getElementById('tr-source').value;
+  stockSourceMap = {};
+  document.getElementById('tr-dispo').value = '—';
+  if (!trSel) return;
+  if (!src) { trSel.setItems([]); return; }
+  const etat = await Djigui.api(`/api/stock/depot/${src}`).catch(()=>[]);
+  etat.forEach(l => stockSourceMap[l.article_id] = l.stock);
+  const items = etat.filter(l => l.stock > 0)
+    .map(l => ({ id: l.article_id, label: l.designation, sub: `${l.code} · stock ${Djigui.fmt(l.stock)}` }));
+  trSel.setItems(items);
+  trSel.setValue('');
+}
+function majDispo() {
+  const id = trSel && trSel.value;
+  document.getElementById('tr-dispo').value = id ? Djigui.fmt(stockSourceMap[id] ?? 0) : '—';
+}
+document.getElementById('tr-source').addEventListener('change', () => { majDest(); majArticlesSource(); });
+document.getElementById('form-transfert').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = trSel && trSel.value;
+  if (!id) { Djigui.toast('Choisissez un article', 'warn'); return; }
+  const body = {
+    article_id: id,
+    source_depot: document.getElementById('tr-source').value,
+    dest_depot: document.getElementById('tr-dest').value,
+    quantite: Number(document.getElementById('tr-qte').value) || 0,
+  };
+  try {
+    await Djigui.api('/api/stock/transfert', { method:'POST', body });
+    Djigui.toast('Transfert effectué', 'ok');
+    document.getElementById('tr-qte').value = '';
+    majArticlesSource();  // le stock source a changé → on recharge
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// ---- Inventaire : liste (historique) + saisie + détail lecture seule ----
+const invVueListe = document.getElementById('inv-vue-liste');
+const invVueSaisie = document.getElementById('inv-vue-saisie');
+function dateHeureInv(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? Djigui.esc(iso) : d.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function ecartCoul(e) { return Math.abs(e) < 0.005 ? 'var(--text-2)' : 'var(--danger)'; }
+
+async function chargerInventaires() {
+  const corps = document.getElementById('corps-inv-liste');
+  try {
+    const invs = await Djigui.api('/api/inventaires');
+    corps.innerHTML = invs.length ? invs.map(i => `
+      <tr data-id="${i.id}" style="cursor:pointer">
+        <td class="num">${dateHeureInv(i.date)}</td>
+        <td>${Djigui.esc(i.depot_nom)}</td>
+        <td>${Djigui.esc(i.utilisateur_nom)}</td>
+        <td class="right num">${i.nb_lignes}</td>
+        <td class="right num" style="color:${ecartCoul(i.total_ecart)}">${i.total_ecart>=0?'+':''}${Djigui.fmt(i.total_ecart)}</td>
+        <td class="right"><button class="icon-act" data-act="voir" title="Voir le détail"><i class="ti ti-eye"></i></button></td>
+      </tr>`).join('') : '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Aucun inventaire</td></tr>';
+  } catch (e) { corps.innerHTML = `<tr><td colspan="6" class="badge danger" style="text-align:center;padding:20px">Erreur : ${Djigui.esc(e.message)}</td></tr>`; }
+}
+
+// Basculer liste ↔ saisie
+document.getElementById('btn-nouvel-inv').addEventListener('click', () => {
+  invVueListe.hidden = true; invVueSaisie.hidden = false;
+  document.getElementById('inv-depot').innerHTML = '<option value="">— Choisir —</option>' +
+    depots.map(d => `<option value="${d.id}">${Djigui.esc(d.nom)}</option>`).join('');
+  document.getElementById('inv-depot').value = '';
+  document.getElementById('corps-inv').innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Choisissez un magasin…</td></tr>';
+});
+document.getElementById('inv-retour').addEventListener('click', () => {
+  invVueSaisie.hidden = true; invVueListe.hidden = false; chargerInventaires();
+});
+
+document.getElementById('inv-depot').addEventListener('change', async () => {
+  const dep = document.getElementById('inv-depot').value;
+  const corps = document.getElementById('corps-inv');
+  if (!dep) { corps.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Choisissez un magasin…</td></tr>'; return; }
+  corps.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr>';
+  const lignes = await Djigui.api(`/api/stock/depot/${dep}`).catch(()=>[]);
+  corps.innerHTML = lignes.length ? lignes.map(l => `
+    <tr data-id="${l.article_id}">
+      <td class="num">${Djigui.esc(l.code)}</td>
+      <td>${Djigui.esc(l.designation)}</td>
+      <td class="right num theo">${Djigui.fmt(l.stock)}</td>
+      <td class="right"><input class="inv-compte num" type="number" step="0.01" style="width:90px;text-align:right" placeholder="—"></td>
+      <td class="right num ecart muted">—</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Aucun article gérant le stock. Créez des articles « Bien » avec gestion de stock.</td></tr>';
+});
+document.getElementById('corps-inv').addEventListener('input', e => {
+  const inp = e.target.closest('.inv-compte'); if (!inp) return;
+  const tr = inp.closest('tr');
+  const theo = Number(tr.querySelector('.theo').textContent.replace(/\s/g,'').replace(',','.')) || 0;
+  const ec = tr.querySelector('.ecart');
+  if (inp.value === '') { ec.textContent = '—'; ec.style.color = ''; return; }
+  const ecart = Math.round((Number(inp.value) - theo) * 100) / 100;
+  ec.textContent = (ecart>=0?'+':'') + Djigui.fmt(ecart);
+  ec.style.color = ecartCoul(ecart);
+});
+document.getElementById('btn-valider-inv').addEventListener('click', async () => {
+  const dep = document.getElementById('inv-depot').value;
+  if (!dep) { Djigui.toast('Choisissez un magasin', 'warn'); return; }
+  const lignes = [...document.querySelectorAll('#corps-inv tr')].map(tr => {
+    const inp = tr.querySelector('.inv-compte');
+    return inp && inp.value !== '' ? { article_id: tr.dataset.id, stock_compte: Number(inp.value) } : null;
+  }).filter(Boolean);
+  if (!lignes.length) { Djigui.toast('Aucun comptage saisi', 'warn'); return; }
+  if (!await Djigui.confirm(`Valider cet inventaire (${lignes.length} article(s)) ?\n\nIl sera enregistré, verrouillé (non modifiable) et les écarts ajustés dans le stock.`,
+      { titre:'Valider l\'inventaire', okLabel:'Valider' })) return;
+  try {
+    const inv = await Djigui.api('/api/inventaires', { method:'POST', body:{ depot_id: dep, lignes } });
+    Djigui.toast(`Inventaire validé — écart total ${Djigui.fmt(inv.total_ecart)}`, inv.total_ecart===0?'ok':'warn');
+    invVueSaisie.hidden = true; invVueListe.hidden = false; chargerInventaires();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// Détail en lecture seule
+const modalInvDet = document.getElementById('modal-inv-detail');
+document.getElementById('corps-inv-liste').addEventListener('click', async e => {
+  const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+  try {
+    const inv = await Djigui.api('/api/inventaires/' + tr.dataset.id);
+    document.getElementById('inv-det-titre').textContent = 'Inventaire — ' + inv.depot_nom;
+    document.getElementById('inv-det-info').textContent =
+      `${dateHeureInv(inv.date)} · par ${inv.utilisateur_nom} · ${inv.nb_lignes} article(s) · écart total ${Djigui.fmt(inv.total_ecart)}`;
+    document.getElementById('inv-det-lignes').innerHTML = inv.lignes.map(l => `
+      <tr>
+        <td>${Djigui.esc(l.designation)}</td>
+        <td class="right num">${Djigui.fmt(l.stock_theorique)}</td>
+        <td class="right num">${Djigui.fmt(l.stock_compte)}</td>
+        <td class="right num" style="color:${ecartCoul(l.ecart)}">${l.ecart>=0?'+':''}${Djigui.fmt(l.ecart)}</td>
+      </tr>`).join('');
+    modalInvDet.hidden = false;
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('inv-det-fermer').addEventListener('click', () => { modalInvDet.hidden = true; });
+
+(async () => { await chargerDepots(); await chargerArticlesStock(); await chargerInventaires(); })();
+</script>
+</body>
+</html>

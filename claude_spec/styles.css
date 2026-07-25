@@ -1,0 +1,218 @@
+/* Djigui Desktop — feuille de style partagée
+   Charte : chrome foncé vert (marque), contenu clair, chiffres tabulaires.
+   Toutes les pages HTML lient ce fichier. */
+
+:root {
+  --brand:        #16794f;
+  --brand-strong: #0e5a39;
+  --brand-tint:   #e5f2ea;
+
+  --sidebar-bg:     #0c1f17;
+  --sidebar-bg-2:   #0f271c;
+  --sidebar-text:   #b9cabf;
+  --sidebar-muted:  #6f8579;
+  --sidebar-active: #1c8f5c;
+
+  --bg:        #f4f6f3;
+  --surface:   #ffffff;
+  --surface-2: #f8faf7;
+  --border:    #e2e7e0;
+  --border-strong: #cdd4cb;
+
+  --text:      #16201a;
+  --text-2:    #5c6a61;
+  --text-muted:#93a09a;
+
+  --warning:      #9a6a12;
+  --warning-tint: #fbf1dd;
+  --danger:       #b23a2c;
+  --danger-tint:  #fae9e6;
+  --success:      #16794f;
+  --success-tint: #e5f2ea;
+
+  --radius:   9px;
+  --radius-lg:13px;
+  --shadow:   0 1px 2px rgba(20,40,30,.04);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-2); }
+h1,h2,h3 { font-weight: 600; margin: 0; }
+
+/* ---------- Layout ---------- */
+.app { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 240px; flex-shrink: 0;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex; flex-direction: column;
+  padding: 18px 14px;
+}
+.brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 20px; }
+.brand-mark {
+  width: 38px; height: 38px; border-radius: 10px;
+  background: var(--brand); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 21px;
+}
+.brand-name { font-size: 17px; font-weight: 600; color: #fff; line-height: 1.1; }
+.brand-sub  { font-size: 11px; color: var(--sidebar-muted); }
+
+.nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--sidebar-muted); padding: 14px 10px 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px; border-radius: 8px;
+  color: var(--sidebar-text); text-decoration: none;
+  font-size: 14px; cursor: pointer;
+}
+.nav-item i { font-size: 19px; width: 20px; text-align: center; }
+.nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+.nav-item.active { background: var(--sidebar-active); color: #fff; }
+.sidebar-foot { margin-top: auto; }
+
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 24px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-title { font-size: 18px; font-weight: 600; }
+.topbar-date  { font-size: 12px; color: var(--text-muted); }
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+.company { text-align: right; line-height: 1.25; }
+.company-name { font-size: 13px; font-weight: 600; }
+.company-ninea{ font-size: 11px; color: var(--text-muted); }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--brand-tint); color: var(--brand-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+}
+.icon-btn { color: var(--text-2); font-size: 20px; cursor: pointer; background: none; border: 0; }
+
+.content { padding: 22px 24px; display: flex; flex-direction: column; gap: 18px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; }
+
+/* ---------- Cards & metrics ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px 20px; box-shadow: var(--shadow);
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.card-title { font-size: 15px; font-weight: 600; }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 16px 18px; box-shadow: var(--shadow); }
+.metric-label { font-size: 13px; color: var(--text-2); }
+.metric-value { font-size: 27px; font-weight: 600; margin-top: 6px; }
+.metric-unit  { font-size: 12px; color: var(--text-muted); }
+.metric-value.warn { color: var(--warning); }
+
+.grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+@media (max-width: 900px){ .grid-2 { grid-template-columns: 1fr; } }
+
+/* ---------- Table ---------- */
+.table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.table th { text-align: left; font-weight: 600; color: var(--text-2);
+  font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+  padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.table td { padding: 12px; border-bottom: 1px solid var(--border); }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: var(--surface-2); }
+.table .right { text-align: right; }
+
+/* ---------- Badges ---------- */
+.badge { display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+.badge.ok    { background: var(--success-tint); color: var(--success); }
+.badge.warn  { background: var(--warning-tint); color: var(--warning); }
+.badge.danger{ background: var(--danger-tint);  color: var(--danger); }
+.badge.neutral{ background: var(--surface-2); color: var(--text-2); border:1px solid var(--border); }
+
+/* ---------- Buttons ---------- */
+.btn { display: inline-flex; align-items: center; gap: 7px;
+  font-size: 14px; font-weight: 500; padding: 8px 15px;
+  border-radius: var(--radius); border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text); cursor: pointer; }
+.btn:hover { background: var(--surface-2); }
+.btn i { font-size: 17px; }
+.btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-strong); }
+.btn-lg { padding: 12px 18px; font-size: 15px; }
+
+/* ---------- Chips ---------- */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { padding: 6px 13px; border-radius: 20px; border: 1px solid var(--border);
+  font-size: 13px; color: var(--text-2); cursor: pointer; background: var(--surface); }
+.chip.active { background: var(--brand-tint); color: var(--brand-strong); border-color: transparent; }
+
+/* ---------- Bar chart ---------- */
+.bars { display: flex; align-items: flex-end; gap: 12px; height: 140px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bar { width: 100%; background: var(--brand); border-radius: 5px 5px 0 0; }
+.bar-label { font-size: 11px; color: var(--text-muted); }
+
+/* ---------- POS ---------- */
+.pos { display: flex; flex: 1; min-height: 0; }
+.pos-products { flex: 1; min-width: 0; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.pos-search { display: flex; align-items: center; gap: 9px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; color: var(--text-muted); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 13px; cursor: pointer; display: flex; flex-direction: column; gap: 5px; box-shadow: var(--shadow); }
+.tile:hover { border-color: var(--brand); }
+.tile-name { font-size: 14px; font-weight: 500; }
+.tile-price { font-size: 13px; color: var(--text-2); }
+
+.ticket { width: 300px; flex-shrink: 0; background: var(--surface);
+  border-left: 1px solid var(--border); padding: 18px 20px; display: flex; flex-direction: column; }
+.ticket-line { display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.ticket-tot { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 7px; }
+.tot-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-2); }
+.tot-grand { display: flex; justify-content: space-between; font-size: 18px; font-weight: 600; color: var(--text); margin-top: 3px; }
+.pay { display: flex; gap: 8px; margin-top: 16px; }
+.pay-opt { flex: 1; text-align: center; padding: 9px 0; border-radius: 8px;
+  border: 1px solid var(--border); font-size: 13px; color: var(--text-2); cursor: pointer; }
+.pay-opt.active { background: var(--brand-tint); color: var(--brand-strong); border-color: transparent; }
+
+/* ---------- Forms ---------- */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 22px; }
+@media (max-width: 720px){ .form-grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.field input, .field select, .field textarea {
+  font: inherit; padding: 10px 12px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius); background: var(--surface); color: var(--text); width: 100%; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+.logo-drop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
+  padding: 24px; text-align: center; color: var(--text-muted); background: var(--surface-2); }
+
+/* ---------- Document (facture) ---------- */
+.doc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  max-width: 760px; padding: 32px; box-shadow: var(--shadow); }
+.doc-head { display: flex; justify-content: space-between; align-items: flex-start;
+  padding-bottom: 22px; border-bottom: 2px solid var(--brand); }
+.doc-logo { width: 56px; height: 56px; border-radius: 12px; background: var(--brand);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+.doc-title { text-align: right; }
+.doc-title h2 { font-size: 24px; color: var(--brand-strong); letter-spacing: .01em; }
+.doc-meta { display: flex; justify-content: space-between; gap: 24px; margin: 22px 0; font-size: 13px; }
+.doc-foot { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted); text-align: center; }

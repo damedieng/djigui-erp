@@ -1,0 +1,39 @@
+[package]
+name = "djigui-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "djigui_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "djigui-server"
+path = "src/main.rs"
+
+[dependencies]
+djigui-core = { path = "../core" }
+rusqlite.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+# Décodage des pièces jointes envoyées par le navigateur (documents de projet).
+base64 = "0.22"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+printers = "2"
+rust_xlsxwriter = { version = "0.96.0", default-features = false, features = ["constant_memory"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_Xps",
+] }

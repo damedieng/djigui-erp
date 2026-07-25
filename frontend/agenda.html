@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Agenda</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+<style>
+/* Calendrier mensuel */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border);
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.cal-jour-lbl { background: var(--brand); text-align: center; font-size: 11px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: #fff; padding: 9px 0; }
+.cal-cell { background: var(--surface); min-height: 108px; padding: 7px; display: flex; flex-direction: column; gap: 3px;
+  cursor: pointer; transition: background .12s; }
+.cal-cell:hover { background: var(--brand-tint); }
+.cal-cell.autre { background: var(--surface-2); }
+.cal-cell.autre .cal-num { color: var(--text-muted); }
+.cal-cell.aujourdhui { background: var(--brand-tint); }
+.cal-cell.aujourdhui .cal-num { background: var(--brand); color: #fff; }
+.cal-num { align-self: flex-end; font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.cal-rdv { font-size: 11px; font-weight: 500; line-height: 1.3; padding: 3px 6px; border-radius: 6px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; box-shadow: var(--shadow); }
+.cal-rdv.annule { text-decoration: line-through; opacity: .65; }
+.cal-plus { font-size: 10.5px; font-weight: 500; color: var(--text-2); padding-left: 4px; }
+@media (max-width: 720px){ .cal-cell { min-height: 74px; } .cal-rdv { display:none; } }
+/* Vue année : 12 mini-mois */
+.annee-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.mini-mois { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.mini-titre { font-weight: 700; font-size: 13px; color: #fff; background: var(--brand); text-transform: capitalize;
+  padding: 7px 10px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.mini-titre:hover { background: var(--brand-strong); }
+.mini-titre .mini-cpt { margin-left: auto; background: rgba(255,255,255,.25); border-radius: 20px;
+  padding: 0 7px; font-size: 11px; font-weight: 700; }
+.mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 8px; }
+.mini-dl { text-align: center; font-size: 9.5px; color: var(--text-muted); font-weight: 600; }
+.mini-jour { text-align: center; font-size: 11px; color: var(--text-2); padding: 3px 0; border-radius: 5px; cursor: pointer;
+  position: relative; }
+.mini-jour:hover { background: var(--brand-tint); }
+.mini-jour.vide { cursor: default; }
+.mini-jour.auj { outline: 2px solid var(--brand); font-weight: 700; }
+.mini-jour.a-rdv { font-weight: 700; color: #fff; background: var(--brand); }
+.mini-liste { border-top: 1px dashed var(--border); padding: 7px 10px; display: flex; flex-direction: column; gap: 3px; }
+.mini-rdv { font-size: 11px; line-height: 1.3; cursor: pointer; display: flex; gap: 6px; align-items: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-rdv .pt { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.mini-rdv .jr { color: var(--text-muted); font-weight: 600; width: 20px; flex-shrink: 0; }
+.mini-vide { padding: 8px 10px; font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Agenda / Rendez-vous</div>
+        <div class="topbar-date">Planifiez vos rendez-vous clients, visites et échéances</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-plus"></i>Nouveau rendez-vous</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <!-- Barre d'outils : navigation + vue + filtres -->
+      <div class="panel-toolbar" style="border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn" id="nav-prec" title="Précédent"><i class="ti ti-chevron-left"></i></button>
+          <button class="btn" id="nav-auj">Aujourd'hui</button>
+          <button class="btn" id="nav-suiv" title="Suivant"><i class="ti ti-chevron-right"></i></button>
+          <span id="titre-periode" style="font-weight:700;font-size:17px;margin-left:8px;text-transform:capitalize;min-width:150px"></span>
+        </div>
+        <div class="tb-sep"></div>
+        <div class="chips" id="vue-toggle">
+          <span class="chip active" data-vue="calendrier"><i class="ti ti-calendar"></i> Mois</span>
+          <span class="chip" data-vue="annee"><i class="ti ti-calendar-month"></i> Année</span>
+          <span class="chip" data-vue="liste"><i class="ti ti-list"></i> Liste</span>
+        </div>
+        <div class="tb-sep"></div>
+        <select id="f-statut" class="input-date" style="min-width:130px">
+          <option value="">Tous statuts</option>
+          <option value="planifie">Planifié</option>
+          <option value="confirme">Confirmé</option>
+          <option value="honore">Honoré</option>
+          <option value="reporte">Reporté</option>
+          <option value="annule">Annulé</option>
+        </select>
+        <select id="f-responsable" class="input-date" style="min-width:150px"><option value="">Tous responsables</option></select>
+        <div class="tb-sep"></div>
+        <button class="btn" id="btn-ics" title="Exporter tout l'agenda au format iCalendar (importable dans Google Agenda)"><i class="ti ti-calendar-share"></i>Exporter (.ics)</button>
+      </div>
+
+      <!-- Vue CALENDRIER -->
+      <div id="vue-calendrier">
+        <div class="card" style="padding:14px">
+          <div class="cal-grid" id="cal-grid"></div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text-2)" id="cal-legende"></div>
+        </div>
+      </div>
+
+      <!-- Vue ANNÉE (12 mini-mois) -->
+      <div id="vue-annee" hidden>
+        <div class="card" style="padding:16px">
+          <div class="annee-grille" id="annee-grille"></div>
+        </div>
+      </div>
+
+      <!-- Vue LISTE -->
+      <div id="vue-liste" hidden>
+        <!-- Barre d'actions groupées -->
+        <div id="lot-bar" class="panel-toolbar" style="display:none;border-radius:var(--radius);border:1px solid var(--brand);background:var(--brand-tint)">
+          <span id="lot-compte" style="font-weight:600;font-size:13px"></span>
+          <div class="tb-sep"></div>
+          <select id="lot-statut" class="input-date">
+            <option value="">Changer le statut…</option>
+            <option value="planifie">Planifié</option>
+            <option value="confirme">Confirmé</option>
+            <option value="honore">Honoré</option>
+            <option value="reporte">Reporté</option>
+            <option value="annule">Annulé</option>
+          </select>
+          <button class="btn" id="lot-appliquer">Appliquer</button>
+          <button class="btn" id="lot-supprimer" style="color:var(--danger)"><i class="ti ti-trash"></i>Supprimer</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead>
+              <tr><th style="width:34px"><input type="checkbox" id="chk-tous"></th>
+                  <th>Quand</th><th>Titre</th><th>Tiers</th><th>Responsable</th><th>Lieu</th>
+                  <th class="right">Statut</th><th class="right">Actions</th></tr>
+            </thead>
+            <tbody id="corps-liste">
+              <tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Section d'aide -->
+      <div class="aide">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment utiliser l'agenda ?</div>
+        <ul>
+          <li>Cliquez sur un <strong>jour</strong> du calendrier pour créer un rendez-vous à cette date, ou sur le bouton <strong>Nouveau rendez-vous</strong>.</li>
+          <li>Chaque rendez-vous a un <strong>statut coloré</strong> : Planifié, Confirmé, Honoré (fait), Reporté, Annulé. Cliquez sur un rendez-vous pour le modifier.</li>
+          <li>Vous pouvez le rattacher à un <strong>client/fournisseur</strong>, à un <strong>responsable</strong>, à un <strong>lieu</strong> et ajouter une <strong>note</strong>.</li>
+          <li>Basculez entre <strong>Mois</strong> (grille détaillée), <strong>Année</strong> (12 mini-mois, les jours avec rendez-vous ont une pastille verte) et <strong>Liste</strong>. En vue Année, cliquez le nom d'un mois pour l'ouvrir, ou un jour pour créer un rendez-vous.</li>
+          <li>La vue <strong>Liste</strong> permet de cocher plusieurs rendez-vous pour <strong>changer leur statut</strong> ou les <strong>supprimer</strong> d'un coup.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale rendez-vous -->
+<div class="modal-overlay" id="modal-rdv" hidden>
+  <div class="modal" style="max-width:520px">
+    <div class="card-head"><span class="card-title" id="rdv-titre-modal">Nouveau rendez-vous</span>
+      <i class="ti ti-x" id="rdv-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-rdv" class="form-grid">
+      <input type="hidden" id="rdv-id">
+      <div class="field full"><label>Titre</label>
+        <input id="rdv-titre" required placeholder="ex. Rendez-vous client, Livraison, Relance…" autocomplete="off"></div>
+      <div class="field"><label>Date de début</label><input type="date" id="rdv-date-debut" required></div>
+      <div class="field"><label>Heure</label><input type="time" id="rdv-heure-debut" value="09:00"></div>
+      <div class="field"><label>Date de fin</label><input type="date" id="rdv-date-fin"></div>
+      <div class="field"><label>Heure de fin</label><input type="time" id="rdv-heure-fin"></div>
+      <div class="field full"><label class="check"><input type="checkbox" id="rdv-journee"> Toute la journée (sans heure)</label></div>
+      <div class="field"><label>Statut</label>
+        <select id="rdv-statut">
+          <option value="planifie">Planifié</option>
+          <option value="confirme">Confirmé</option>
+          <option value="honore">Honoré</option>
+          <option value="reporte">Reporté</option>
+          <option value="annule">Annulé</option>
+        </select></div>
+      <div class="field"><label>Responsable</label>
+        <select id="rdv-responsable"><option value="">—</option></select></div>
+      <div class="field full"><label>Tiers (client / fournisseur)</label>
+        <div id="rdv-tiers-mount"></div></div>
+      <div class="field full"><label>Lieu</label><input id="rdv-lieu" placeholder="ex. Boutique, chez le client…"></div>
+      <div class="field full"><label>Note</label><textarea id="rdv-note" rows="2"></textarea></div>
+      <div class="field full" id="rdv-alertes"></div>
+      <div class="field full" style="flex-direction:row;justify-content:space-between;gap:10px">
+        <button type="button" class="btn" id="rdv-supprimer" style="color:var(--danger);display:none"><i class="ti ti-trash"></i>Supprimer</button>
+        <div style="display:flex;gap:10px;margin-left:auto">
+          <button type="button" class="btn" id="rdv-annuler">Annuler</button>
+          <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+// Couleurs alignées sur la palette Djigui (brand vert, warning ambre, danger brique).
+const STATUTS = {
+  planifie: ['#4a72a8','Planifié'], confirme: ['#16794f','Confirmé'],
+  honore: ['#5c6a61','Honoré'], reporte: ['#9a6a12','Reporté'], annule: ['#b23a2c','Annulé'],
+};
+const MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const JOURS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+
+let curseur = new Date(); curseur.setDate(1);   // 1er du mois/année affiché
+let vueCourante = 'calendrier';                 // 'calendrier' | 'annee' | 'liste'
+let rdvs = [], tiersListe = [], users = [], tiersSel = null;
+
+const pad = n => String(n).padStart(2,'0');
+const isoJour = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+// Titre d'en-tête selon la vue : « juillet 2026 » (mois) ou « 2026 » (année).
+function majTitre() {
+  const el = document.getElementById('titre-periode');
+  el.textContent = vueCourante === 'annee'
+    ? `${curseur.getFullYear()}`
+    : `${MOIS[curseur.getMonth()]} ${curseur.getFullYear()}`;
+}
+
+// ---- Chargement (la plage dépend de la vue) ----
+async function charger() {
+  let du, au;
+  if (vueCourante === 'annee') {
+    du = new Date(curseur.getFullYear(), 0, 1);
+    au = new Date(curseur.getFullYear(), 11, 31);
+  } else {
+    // mois affiché ± une semaine (débordements de grille)
+    du = new Date(curseur.getFullYear(), curseur.getMonth(), 1); du.setDate(du.getDate()-7);
+    au = new Date(curseur.getFullYear(), curseur.getMonth()+1, 0); au.setDate(au.getDate()+7);
+  }
+  const qs = new URLSearchParams({ du: isoJour(du), au: isoJour(au) });
+  const statut = document.getElementById('f-statut').value;
+  const resp = document.getElementById('f-responsable').value;
+  if (statut) qs.set('statut', statut);
+  if (resp) qs.set('responsable_id', resp);
+  try { rdvs = await Djigui.api('/api/rendez-vous?' + qs.toString()); }
+  catch (e) { rdvs = []; Djigui.toast('Erreur : ' + e.message, 'danger'); }
+  majTitre();
+  if (vueCourante === 'annee') rendreAnnee();
+  else rendreCalendrier();
+  rendreListe();
+}
+
+// ---- Vue calendrier (mois) ----
+function rendreCalendrier() {
+  const an = curseur.getFullYear(), mois = curseur.getMonth();
+  const grid = document.getElementById('cal-grid');
+  let html = JOURS.map(j => `<div class="cal-jour-lbl">${j}</div>`).join('');
+  const premier = new Date(an, mois, 1);
+  const offset = (premier.getDay()+6)%7;                 // lundi = 0
+  const debut = new Date(an, mois, 1 - offset);
+  const auj = isoJour(new Date());
+  // RDV groupés par jour
+  const parJour = {};
+  rdvs.forEach(r => { const j = (r.debut||'').slice(0,10); (parJour[j] ??= []).push(r); });
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(debut); d.setDate(debut.getDate()+i);
+    const key = isoJour(d);
+    const autre = d.getMonth() !== mois;
+    const items = (parJour[key] || []).sort((a,b) => (a.debut||'').localeCompare(b.debut||''));
+    const chips = items.slice(0,3).map(r => {
+      const [coul] = STATUTS[r.statut] || ['#64748b'];
+      const h = r.journee_entiere ? '' : (r.debut.slice(11,16) + ' ');
+      return `<div class="cal-rdv ${r.statut==='annule'?'annule':''}" style="background:${coul}" data-id="${r.id}" title="${Djigui.esc(r.titre)}">${h}${Djigui.esc(r.titre)}</div>`;
+    }).join('');
+    const plus = items.length > 3 ? `<div class="cal-plus">+${items.length-3} autre(s)</div>` : '';
+    html += `<div class="cal-cell ${autre?'autre':''} ${key===auj?'aujourdhui':''}" data-jour="${key}">
+      <span class="cal-num">${d.getDate()}</span>${chips}${plus}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+// ---- Vue année (12 mini-mois + liste des rendez-vous du mois) ----
+function rendreAnnee() {
+  const an = curseur.getFullYear();
+  const auj = isoJour(new Date());
+  // RDV groupés par mois (0-11) et jours occupés
+  const parMois = Array.from({length:12}, () => []);
+  const joursRdv = new Set();
+  rdvs.forEach(r => {
+    const d = (r.debut||''); const m = Number(d.slice(5,7)) - 1;
+    if (m >= 0 && m < 12) parMois[m].push(r);
+    joursRdv.add(d.slice(0,10));
+  });
+  let out = '';
+  for (let m = 0; m < 12; m++) {
+    const premier = new Date(an, m, 1);
+    const offset = (premier.getDay()+6)%7;
+    const nbJours = new Date(an, m+1, 0).getDate();
+    let cells = JOURS.map(j => `<div class="mini-dl">${j[0]}</div>`).join('');
+    for (let i = 0; i < offset; i++) cells += `<div class="mini-jour vide"></div>`;
+    for (let j = 1; j <= nbJours; j++) {
+      const key = `${an}-${pad(m+1)}-${pad(j)}`;
+      const cls = ['mini-jour'];
+      if (key === auj) cls.push('auj');
+      if (joursRdv.has(key)) cls.push('a-rdv');
+      cells += `<div class="${cls.join(' ')}" data-jour="${key}">${j}</div>`;
+    }
+    const items = parMois[m].sort((a,b) => (a.debut||'').localeCompare(b.debut||''));
+    const cpt = items.length ? `<span class="mini-cpt">${items.length}</span>` : '';
+    let liste;
+    if (!items.length) {
+      liste = `<div class="mini-vide">Aucun rendez-vous</div>`;
+    } else {
+      const lignes = items.slice(0,5).map(r => {
+        const [coul] = STATUTS[r.statut] || ['#5c6a61'];
+        return `<div class="mini-rdv" data-id="${r.id}" title="${Djigui.esc(r.titre)}">
+          <span class="pt" style="background:${coul}"></span>
+          <span class="jr">${Number(r.debut.slice(8,10))}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis">${Djigui.esc(r.titre)}</span></div>`;
+      }).join('');
+      const reste = items.length > 5 ? `<div class="mini-vide" style="padding:2px 0">+${items.length-5} autre(s)…</div>` : '';
+      liste = `<div class="mini-liste">${lignes}${reste}</div>`;
+    }
+    out += `<div class="mini-mois">
+      <div class="mini-titre" data-mois="${m}"><i class="ti ti-calendar"></i>${MOIS[m]}${cpt}</div>
+      <div class="mini-grid">${cells}</div>${liste}
+    </div>`;
+  }
+  document.getElementById('annee-grille').innerHTML = out;
+}
+
+// ---- Vue liste ----
+function quandTxt(r) {
+  const d = r.debut || '';
+  const jour = Djigui.dateFr ? Djigui.dateFr(d.slice(0,10)) : d.slice(0,10);
+  return r.journee_entiere ? `${jour} (journée)` : `${jour} ${d.slice(11,16)}`;
+}
+function rendreListe() {
+  const corps = document.getElementById('corps-liste');
+  if (!rdvs.length) { corps.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Aucun rendez-vous sur cette période</td></tr>';
+    majLotBar(); return; }
+  corps.innerHTML = rdvs.map(r => {
+    const [coul, lbl] = STATUTS[r.statut] || ['#64748b', r.statut];
+    return `<tr data-id="${r.id}">
+      <td><input type="checkbox" class="chk-rdv" value="${r.id}"></td>
+      <td class="num">${quandTxt(r)}</td>
+      <td><a href="#" data-edit="${r.id}" style="font-weight:600">${Djigui.esc(r.titre)}</a></td>
+      <td>${Djigui.esc(r.tiers_nom || '—')}</td>
+      <td>${Djigui.esc(r.responsable_nom || '—')}</td>
+      <td>${Djigui.esc(r.lieu || '—')}</td>
+      <td class="right"><span class="badge" style="background:${coul}22;color:${coul}">${lbl}</span></td>
+      <td class="right"><button class="icon-act" data-edit="${r.id}" title="Modifier"><i class="ti ti-edit"></i></button></td>
+    </tr>`;
+  }).join('');
+  majLotBar();
+}
+
+// ---- Traitement par lot ----
+function selection() { return [...document.querySelectorAll('.chk-rdv:checked')].map(c => c.value); }
+function majLotBar() {
+  const n = selection().length;
+  document.getElementById('lot-bar').style.display = n ? '' : 'none';
+  document.getElementById('lot-compte').textContent = `${n} rendez-vous sélectionné(s)`;
+  const tous = document.getElementById('chk-tous');
+  const total = document.querySelectorAll('.chk-rdv').length;
+  tous.checked = total > 0 && n === total;
+}
+document.getElementById('corps-liste').addEventListener('change', e => {
+  if (e.target.classList.contains('chk-rdv')) majLotBar();
+});
+document.getElementById('chk-tous').addEventListener('change', e => {
+  document.querySelectorAll('.chk-rdv').forEach(c => c.checked = e.target.checked); majLotBar();
+});
+document.getElementById('lot-appliquer').addEventListener('click', async () => {
+  const ids = selection(); const statut = document.getElementById('lot-statut').value;
+  if (!ids.length || !statut) { Djigui.toast('Choisissez un statut', 'warn'); return; }
+  try { await Djigui.api('/api/rendez-vous/lot/statut', { method:'POST', body:{ ids, statut } });
+    Djigui.toast('Statut mis à jour', 'ok'); charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+document.getElementById('lot-supprimer').addEventListener('click', async () => {
+  const ids = selection(); if (!ids.length) return;
+  if (!await Djigui.confirm(`Supprimer ${ids.length} rendez-vous ?`, { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+  try { await Djigui.api('/api/rendez-vous/lot/supprimer', { method:'POST', body:{ ids } });
+    Djigui.toast('Rendez-vous supprimés', 'ok'); charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Navigation (mois OU année selon la vue) / vue / filtres ----
+const pasNav = n => {
+  if (vueCourante === 'annee') curseur.setFullYear(curseur.getFullYear()+n);
+  else curseur.setMonth(curseur.getMonth()+n);
+  charger();
+};
+document.getElementById('nav-prec').addEventListener('click', () => pasNav(-1));
+document.getElementById('nav-suiv').addEventListener('click', () => pasNav(1));
+document.getElementById('nav-auj').addEventListener('click', () => { curseur = new Date(); curseur.setDate(1); charger(); });
+document.getElementById('f-statut').addEventListener('change', charger);
+document.getElementById('f-responsable').addEventListener('change', charger);
+document.getElementById('vue-toggle').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  document.querySelectorAll('#vue-toggle .chip').forEach(x => x.classList.toggle('active', x === c));
+  vueCourante = c.dataset.vue;
+  document.getElementById('vue-calendrier').hidden = vueCourante !== 'calendrier';
+  document.getElementById('vue-annee').hidden = vueCourante !== 'annee';
+  document.getElementById('vue-liste').hidden = vueCourante !== 'liste';
+  charger();   // recharge la bonne plage (mois / année) et met à jour le titre
+});
+
+// ---- Clics vue année : jour → nouveau RDV ; titre de mois → vue mois ----
+document.getElementById('annee-grille').addEventListener('click', e => {
+  const rdv = e.target.closest('.mini-rdv');
+  if (rdv) { ouvrirRdv(rdvs.find(r => r.id === rdv.dataset.id)); return; }
+  const titre = e.target.closest('.mini-titre');
+  if (titre) { curseur = new Date(curseur.getFullYear(), Number(titre.dataset.mois), 1);
+    vueCourante = 'calendrier';
+    document.querySelectorAll('#vue-toggle .chip').forEach(x => x.classList.toggle('active', x.dataset.vue === 'calendrier'));
+    document.getElementById('vue-calendrier').hidden = false;
+    document.getElementById('vue-annee').hidden = true;
+    charger(); return; }
+  const jour = e.target.closest('.mini-jour');
+  if (jour && jour.dataset.jour) ouvrirRdv(null, jour.dataset.jour);
+});
+
+// ---- Clics calendrier / liste → modale ----
+document.getElementById('cal-grid').addEventListener('click', e => {
+  const chip = e.target.closest('.cal-rdv');
+  if (chip) { e.stopPropagation(); ouvrirRdv(rdvs.find(r => r.id === chip.dataset.id)); return; }
+  const cell = e.target.closest('.cal-cell'); if (cell) ouvrirRdv(null, cell.dataset.jour);
+});
+document.getElementById('corps-liste').addEventListener('click', e => {
+  const a = e.target.closest('[data-edit]'); if (!a) return;
+  e.preventDefault(); ouvrirRdv(rdvs.find(r => r.id === a.dataset.edit));
+});
+
+// ---- Modale ----
+const modal = document.getElementById('modal-rdv');
+function ouvrirRdv(r, jourParDefaut) {
+  document.getElementById('form-rdv').reset();
+  document.getElementById('rdv-alertes').innerHTML = '';
+  const est = !!r;
+  document.getElementById('rdv-titre-modal').textContent = est ? 'Modifier le rendez-vous' : 'Nouveau rendez-vous';
+  document.getElementById('rdv-supprimer').style.display = est ? '' : 'none';
+  document.getElementById('rdv-id').value = est ? r.id : '';
+  document.getElementById('rdv-titre').value = est ? r.titre : '';
+  const debut = est ? r.debut : `${jourParDefaut || isoJour(new Date())} 09:00`;
+  document.getElementById('rdv-date-debut').value = debut.slice(0,10);
+  document.getElementById('rdv-heure-debut').value = debut.slice(11,16) || '09:00';
+  document.getElementById('rdv-date-fin').value = est && r.fin ? r.fin.slice(0,10) : '';
+  document.getElementById('rdv-heure-fin').value = est && r.fin ? r.fin.slice(11,16) : '';
+  document.getElementById('rdv-journee').checked = est ? !!r.journee_entiere : false;
+  document.getElementById('rdv-statut').value = est ? r.statut : 'planifie';
+  document.getElementById('rdv-responsable').value = est && r.responsable_id ? r.responsable_id : '';
+  document.getElementById('rdv-lieu').value = est ? (r.lieu || '') : '';
+  document.getElementById('rdv-note').value = est ? (r.note || '') : '';
+  tiersSel.setValue(est && r.tiers_id ? r.tiers_id : '');
+  majJournee();
+  syncFinMin();
+  modal.hidden = false;
+  document.getElementById('rdv-titre').focus();
+}
+function majJournee() {
+  const j = document.getElementById('rdv-journee').checked;
+  document.getElementById('rdv-heure-debut').style.display = j ? 'none' : '';
+  document.getElementById('rdv-heure-fin').style.display = j ? 'none' : '';
+}
+document.getElementById('rdv-journee').addEventListener('change', majJournee);
+
+// Alertes de cohérence NON bloquantes (le contrôle fin<début est, lui, bloquant).
+function alertesRdv(debut, fin) {
+  const a = [];
+  const stat = document.getElementById('rdv-statut').value;
+  if (debut.slice(0,10) < isoJour(new Date()) && (stat === 'planifie' || stat === 'confirme'))
+    a.push('Ce rendez-vous est dans le passé mais pas encore marqué « Honoré » ou « Annulé ».');
+  return a;
+}
+
+// Guide la saisie : la date de fin ne peut pas être avant la date de début.
+function syncFinMin() {
+  const deb = document.getElementById('rdv-date-debut').value;
+  document.getElementById('rdv-date-fin').min = deb || '';
+}
+document.getElementById('rdv-date-debut').addEventListener('change', syncFinMin);
+
+// Export iCalendar (tout l'agenda) → fichier ouvrable / importable dans Google Agenda.
+document.getElementById('btn-ics').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-ics'); btn.disabled = true;
+  try {
+    const r = await Djigui.api('/api/rendez-vous/export-ics', { method:'POST' });
+    Djigui.alert(`${r.nb} rendez-vous exporté(s) au format iCalendar (.ics).\n\nFichier :\n${r.chemin}\n\nVous pouvez l'importer dans Google Agenda (Paramètres → Importer et exporter → Importer).`,
+      { titre:'Export agenda (.ics)' });
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+  finally { btn.disabled = false; }
+});
+
+document.getElementById('btn-nouveau').addEventListener('click', () => ouvrirRdv(null));
+document.getElementById('rdv-fermer').addEventListener('click', () => modal.hidden = true);
+document.getElementById('rdv-annuler').addEventListener('click', () => modal.hidden = true);
+
+document.getElementById('form-rdv').addEventListener('submit', async e => {
+  e.preventDefault();
+  const journee = document.getElementById('rdv-journee').checked;
+  const dDeb = document.getElementById('rdv-date-debut').value;
+  if (!dDeb) { Djigui.toast('La date de début est requise', 'warn'); return; }
+  const hDeb = journee ? '00:00' : (document.getElementById('rdv-heure-debut').value || '00:00');
+  const dFin = document.getElementById('rdv-date-fin').value;
+  const hFin = journee ? '23:59' : (document.getElementById('rdv-heure-fin').value || '');
+  const debut = `${dDeb} ${hDeb}`;
+  const fin = dFin ? `${dFin} ${hFin || '23:59'}` : null;
+
+  // CONTRÔLE BLOQUANT : la fin doit être après le début.
+  if (fin && fin < debut) {
+    document.getElementById('rdv-alertes').innerHTML =
+      `<div class="badge danger" style="white-space:normal">La date/heure de fin (${Djigui.esc(fin)}) doit être <strong>après</strong> le début (${Djigui.esc(debut)}).</div>`;
+    Djigui.toast('La fin doit être après le début', 'warn');
+    return;
+  }
+
+  // Alerte non bloquante : on prévient sans empêcher (RDV passé non honoré…).
+  const alertes = alertesRdv(debut, fin);
+  if (alertes.length) {
+    const box = document.getElementById('rdv-alertes');
+    box.innerHTML = `<div class="badge warn" style="white-space:normal">${alertes.map(Djigui.esc).join('<br>')}</div>`;
+  }
+
+  const body = {
+    titre: document.getElementById('rdv-titre').value.trim(),
+    debut, fin, journee_entiere: journee,
+    statut: document.getElementById('rdv-statut').value,
+    responsable_id: document.getElementById('rdv-responsable').value || null,
+    tiers_id: (tiersSel && tiersSel.value) || null,
+    lieu: document.getElementById('rdv-lieu').value.trim() || null,
+    note: document.getElementById('rdv-note').value.trim() || null,
+  };
+  const id = document.getElementById('rdv-id').value;
+  try {
+    if (id) await Djigui.api('/api/rendez-vous/' + id, { method:'PUT', body });
+    else await Djigui.api('/api/rendez-vous', { method:'POST', body });
+    Djigui.toast('Rendez-vous enregistré', 'ok'); modal.hidden = true; charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+document.getElementById('rdv-supprimer').addEventListener('click', async () => {
+  const id = document.getElementById('rdv-id').value; if (!id) return;
+  if (!await Djigui.confirm('Supprimer ce rendez-vous ?', { titre:'Supprimer', okLabel:'Supprimer', danger:true })) return;
+  try { await Djigui.api('/api/rendez-vous/' + id, { method:'DELETE' });
+    Djigui.toast('Rendez-vous supprimé', 'ok'); modal.hidden = true; charger(); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Initialisation ----
+async function init() {
+  tiersSel = Djigui.selectRecherche(document.getElementById('rdv-tiers-mount'),
+    { items: [], placeholder: 'Aucun (facultatif)…' });
+  [tiersListe, users] = await Promise.all([
+    Djigui.api('/api/tiers?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/utilisateurs').catch(()=>[]),
+  ]);
+  tiersSel.setItems([{ value:'', label:'— Aucun —' }].concat(
+    tiersListe.map(t => ({ value: t.id, label: t.nom, sub: t.code }))));
+  const selResp = document.getElementById('rdv-responsable');
+  const filResp = document.getElementById('f-responsable');
+  users.filter(u => u.actif !== false).forEach(u => {
+    selResp.insertAdjacentHTML('beforeend', `<option value="${u.id}">${Djigui.esc(u.nom)}</option>`);
+    filResp.insertAdjacentHTML('beforeend', `<option value="${u.id}">${Djigui.esc(u.nom)}</option>`);
+  });
+  document.getElementById('cal-legende').innerHTML = Object.values(STATUTS).map(([c, l]) =>
+    `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:${c}"></span>${l}</span>`).join('');
+  await charger();
+}
+init();
+</script>
+</body>
+</html>

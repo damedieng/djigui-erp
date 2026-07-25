@@ -1,0 +1,78 @@
+{
+  "code": "alimentation_generale",
+  "version": 1,
+  "categories": [
+    {
+      "code": "boissons", "libelle": "Boissons", "icone": "ti-bottle", "couleur": "#2563eb", "ordre": 10,
+      "articles": [
+        { "code": "eau_minerale_1_5l", "libelle": "Eau minérale 1,5 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/eau_minerale_1_5l.webp" },
+        { "code": "eau_minerale_50cl", "libelle": "Eau minérale 50 cl", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/eau_minerale_50cl.webp" },
+        { "code": "soda_33cl", "libelle": "Soda en canette 33 cl", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/soda_33cl.webp" },
+        { "code": "soda_1_5l", "libelle": "Soda 1,5 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/soda_1_5l.webp" },
+        { "code": "jus_bissap_1l", "libelle": "Jus de bissap 1 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/jus_bissap_1l.webp" },
+        { "code": "jus_bouye_1l", "libelle": "Jus de bouye 1 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/jus_bouye_1l.webp" },
+        { "code": "cafe_touba_sachet", "libelle": "Café Touba (sachet)", "unite": "sachet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/cafe_touba_sachet.webp" },
+        { "code": "cafe_instantane_stick", "libelle": "Café instantané (stick)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/cafe_instantane_stick.webp" },
+        { "code": "the_vert_paquet", "libelle": "Thé vert en paquet", "unite": "paquet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/the_vert_paquet.webp" }
+      ]
+    },
+    {
+      "code": "epicerie_seche", "libelle": "Épicerie sèche", "icone": "ti-shopping-bag", "couleur": "#d97706", "ordre": 20,
+      "articles": [
+        { "code": "huile_vegetale_1l", "libelle": "Huile végétale 1 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/huile_vegetale_1l.webp" },
+        { "code": "huile_vegetale_5l", "libelle": "Huile végétale 5 L", "unite": "bidon", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/huile_vegetale_5l.webp" },
+        { "code": "sucre_morceaux_1kg", "libelle": "Sucre en morceaux 1 kg", "unite": "paquet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/sucre_morceaux_1kg.webp" },
+        { "code": "sucre_poudre_1kg", "libelle": "Sucre en poudre 1 kg", "unite": "paquet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/sucre_poudre_1kg.webp" },
+        { "code": "tomate_concentree_70g", "libelle": "Tomate concentrée 70 g", "unite": "boite", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/tomate_concentree_70g.webp" },
+        { "code": "pates_alimentaires_500g", "libelle": "Pâtes alimentaires 500 g", "unite": "paquet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/pates_alimentaires_500g.webp" },
+        { "code": "sardine_boite", "libelle": "Sardines à l'huile (boîte)", "unite": "boite", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/sardine_boite.webp" },
+        { "code": "farine_ble_1kg", "libelle": "Farine de blé 1 kg", "unite": "paquet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/farine_ble_1kg.webp" }
+      ]
+    },
+    {
+      "code": "cereales_legumineuses", "libelle": "Céréales & légumineuses", "icone": "ti-wheat", "couleur": "#65a30d", "ordre": 30,
+      "articles": [
+        { "code": "riz_brise_parfume_kg", "libelle": "Riz brisé parfumé", "unite": "kg", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/riz_brise_parfume_kg.webp" },
+        { "code": "riz_brise_ordinaire_kg", "libelle": "Riz brisé ordinaire", "unite": "kg", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/riz_brise_ordinaire_kg.webp" },
+        { "code": "mil_kg", "libelle": "Mil", "unite": "kg", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/mil_kg.webp" },
+        { "code": "mais_kg", "libelle": "Maïs", "unite": "kg", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/mais_kg.webp" },
+        { "code": "niebe_kg", "libelle": "Niébé (haricot)", "unite": "kg", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/niebe_kg.webp" },
+        { "code": "arachide_decortiquee_kg", "libelle": "Arachide décortiquée", "unite": "kg", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/arachide_decortiquee_kg.webp" }
+      ]
+    },
+    {
+      "code": "produits_laitiers", "libelle": "Produits laitiers", "icone": "ti-milk", "couleur": "#0891b2", "ordre": 40,
+      "articles": [
+        { "code": "lait_poudre_sachet", "libelle": "Lait en poudre (sachet)", "unite": "sachet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/lait_poudre_sachet.webp" },
+        { "code": "lait_concentre_sucre", "libelle": "Lait concentré sucré", "unite": "boite", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/lait_concentre_sucre.webp" },
+        { "code": "lait_uht_1l", "libelle": "Lait UHT 1 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/lait_uht_1l.webp" },
+        { "code": "yaourt_pot", "libelle": "Yaourt (pot)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/yaourt_pot.webp" },
+        { "code": "beurre_plaquette", "libelle": "Beurre (plaquette)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/beurre_plaquette.webp" }
+      ]
+    },
+    {
+      "code": "condiments_epices", "libelle": "Condiments & épices", "icone": "ti-pepper", "couleur": "#dc2626", "ordre": 50,
+      "articles": [
+        { "code": "bouillon_cube", "libelle": "Bouillon cube", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/bouillon_cube.webp" },
+        { "code": "sel_fin_1kg", "libelle": "Sel fin 1 kg", "unite": "paquet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/sel_fin_1kg.webp" },
+        { "code": "poivre_moulu_sachet", "libelle": "Poivre moulu (sachet)", "unite": "sachet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/poivre_moulu_sachet.webp" },
+        { "code": "nete_sachet", "libelle": "Nététou (sachet)", "unite": "sachet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/nete_sachet.webp" },
+        { "code": "vinaigre_bouteille", "libelle": "Vinaigre (bouteille)", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/vinaigre_bouteille.webp" },
+        { "code": "moutarde_pot", "libelle": "Moutarde (pot)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/moutarde_pot.webp" }
+      ]
+    },
+    {
+      "code": "hygiene_entretien", "libelle": "Hygiène & entretien", "icone": "ti-spray", "couleur": "#7c3aed", "ordre": 60,
+      "articles": [
+        { "code": "savon_menage_barre", "libelle": "Savon de ménage (barre)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/savon_menage_barre.webp" },
+        { "code": "savon_toilette", "libelle": "Savon de toilette", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/savon_toilette.webp" },
+        { "code": "lessive_poudre_sachet", "libelle": "Lessive en poudre (sachet)", "unite": "sachet", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/lessive_poudre_sachet.webp" },
+        { "code": "eau_javel_1l", "libelle": "Eau de javel 1 L", "unite": "bouteille", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/eau_javel_1l.webp" },
+        { "code": "papier_hygienique_rouleau", "libelle": "Papier hygiénique (rouleau)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/papier_hygienique_rouleau.webp" },
+        { "code": "dentifrice_tube", "libelle": "Dentifrice (tube)", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/dentifrice_tube.webp" },
+        { "code": "allumettes_boite", "libelle": "Allumettes (boîte)", "unite": "boite", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/allumettes_boite.webp" },
+        { "code": "bougie_piece", "libelle": "Bougie", "unite": "piece", "gere_stock": true, "tva": 18, "prix_vente": null, "image": "articles/bougie_piece.webp" }
+      ]
+    }
+  ]
+}

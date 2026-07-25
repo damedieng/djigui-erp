@@ -1,0 +1,10 @@
+{
+  "name": "djigui-tests-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node smoke-menu.mjs && node smoke-notifications.mjs && node smoke-projet-detail.mjs && node geometrie-fleches.mjs",
+    "test:navigateur": "node navigateur-projet.mjs"
+  },
+  "devDependencies": { "jsdom": "^24", "puppeteer-core": "^23" }
+}

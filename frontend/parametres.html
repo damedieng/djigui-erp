@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Paramètres</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Paramètres de l'entreprise</div>
+        <div class="topbar-date">Ces informations apparaissent sur chaque facture</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" id="btn-enregistrer"><i class="ti ti-device-floppy"></i>Enregistrer</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="tabs" id="param-tabs">
+        <span class="tab active" data-tab="societe">Info société</span>
+        <span class="tab" data-tab="taxes">Taxes</span>
+        <span class="tab" data-tab="moyens">Moyens de paiement</span>
+        <span class="tab" data-tab="impression">Impression</span>
+        <span class="tab" data-tab="catalogue">Catalogue</span>
+      </div>
+
+      <div class="tab-panel" data-panel="societe">
+      <form id="form-ent" class="card" style="max-width:760px">
+        <div class="card-head"><span class="card-title">Identité de l'entreprise</span></div>
+
+        <div style="display:flex;gap:20px;align-items:center;margin-bottom:22px">
+          <div class="doc-logo" id="logo-apercu" style="width:64px;height:64px;font-size:32px;overflow:hidden"><i class="ti ti-building-store"></i></div>
+          <label class="logo-drop" style="flex:1;cursor:pointer;margin:0">
+            <i class="ti ti-upload" style="font-size:20px"></i>&nbsp; Cliquez pour choisir un logo
+            <input type="file" id="logo-file" accept="image/*" hidden>
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <div class="field full"><label>Raison sociale</label><input name="raison_sociale" required></div>
+          <div class="field"><label>NINEA</label><input name="ninea" class="num"></div>
+          <div class="field"><label>RCCM</label><input name="rccm" class="num"></div>
+          <div class="field full"><label>Adresse</label><input name="adresse"></div>
+          <div class="field"><label>Téléphone</label><input name="telephone" class="num"></div>
+          <div class="field"><label>Email</label><input name="email" type="email"></div>
+          <div class="field"><label>Devise</label><input name="devise" placeholder="FCFA"></div>
+          <div class="field"><label>Forme juridique</label>
+            <input name="forme_juridique" placeholder="SARL, SA, GIE, Entreprise individuelle…"></div>
+          <div class="field"><label>Capital social</label><input name="capital" class="num" inputmode="decimal"></div>
+          <div class="field"><label>Régime fiscal</label>
+            <input name="regime_fiscal" placeholder="Réel normal, Réel simplifié, CGU…"></div>
+          <div class="field full"><div class="alert warn" id="alertes-societe" style="display:block" hidden></div></div>
+          <div class="field full"><label>Pied de facture (mentions légales)</label>
+            <textarea name="pied_facture" rows="3"></textarea></div>
+        </div>
+      </form>
+      </div>
+
+      <div class="tab-panel" data-panel="taxes" hidden>
+      <div class="card" style="max-width:760px">
+        <div class="card-head"><span class="card-title">Taxes</span></div>
+        <p class="muted" style="margin-top:0;font-size:13px">TVA et autres taxes. Elles sont proposées à la création d'un article (plusieurs taxes possibles par article). La taxe « par défaut » est présélectionnée.</p>
+        <form id="form-taxe-add" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+          <div class="field" style="flex:1;min-width:150px"><label>Nom</label><input name="nom" placeholder="ex. TVA 18 %" required></div>
+          <div class="field" style="width:100px"><label>Taux</label><input name="taux" type="number" step="0.01" required></div>
+          <div class="field" style="width:130px"><label>Type</label>
+            <select name="type"><option value="pourcentage">Pourcentage</option><option value="fixe">Montant fixe</option></select></div>
+          <label class="check" style="margin-bottom:8px"><input type="checkbox" name="par_defaut"> Défaut</label>
+          <button type="submit" class="btn btn-primary" style="margin-bottom:0"><i class="ti ti-plus"></i>Ajouter</button>
+        </form>
+        <div id="taxe-liste"></div>
+      </div>
+      </div>
+
+      <div class="tab-panel" data-panel="moyens" hidden>
+        <div class="card" style="max-width:760px">
+          <div class="card-head"><span class="card-title">Moyens de paiement</span>
+            <button class="btn btn-primary" id="btn-moyen-add" style="padding:6px 12px"><i class="ti ti-plus"></i>Ajouter</button>
+          </div>
+          <p class="muted" style="margin-top:0;font-size:13px">
+            Ces moyens s'affichent à la caisse au moment d'encaisser. Glissez-les pour changer l'ordre.
+          </p>
+          <div id="moyens-liste" style="display:flex;flex-direction:column;gap:8px"><div class="muted">Chargement…</div></div>
+        </div>
+
+        <div class="aide" style="max-width:760px;margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment ça marche ?</div>
+          <ul>
+            <li>Ajoutez vos moyens d'encaissement : <strong>Espèce, Orange Money, Wave, Free Money, Virement, Chèque…</strong> chacun avec une <strong>image et un nom</strong>.</li>
+            <li>La <strong>famille</strong> indique le type : choisissez « Espèce » pour un moyen qui doit calculer le <strong>rendu de monnaie</strong>, sinon « Mobile money », « Virement » ou « Chèque ».</li>
+            <li>Si vous ne mettez pas d'image, une <strong>pastille colorée</strong> avec les initiales s'affiche automatiquement.</li>
+            <li><strong>Désactivez</strong> un moyen (interrupteur) pour le cacher de la caisse sans perdre l'historique. Un moyen déjà utilisé ne peut plus être supprimé, seulement désactivé.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Modale d'édition d'un moyen de paiement -->
+      <div class="modal-overlay" id="modal-moyen" hidden>
+        <div class="modal" style="max-width:440px">
+          <div class="card-head"><span class="card-title" id="moyen-titre">Nouveau moyen</span>
+            <i class="ti ti-x" id="moyen-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+          <form id="form-moyen" class="form-grid">
+            <input type="hidden" name="id">
+            <div class="field full"><label>Nom</label>
+              <input name="nom" required placeholder="Ex. Orange Money" autocomplete="off"></div>
+            <div class="field full"><label>Famille</label>
+              <select name="famille">
+                <option value="mobile_money">Mobile money (Orange, Wave, Free…)</option>
+                <option value="espece">Espèce (calcule le rendu)</option>
+                <option value="virement">Virement</option>
+                <option value="cheque">Chèque</option>
+              </select></div>
+            <div class="field full">
+              <label class="check"><input type="checkbox" name="rendu_monnaie"> Calculer le rendu de monnaie (espèce)</label></div>
+            <div class="field full"><label>Image (optionnelle)</label>
+              <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+                <div id="moyen-apercu" style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:#64748b"></div>
+                <input type="file" id="moyen-file" accept="image/*">
+                <button type="button" class="btn" id="moyen-img-clear" style="padding:5px 10px">Retirer</button>
+              </div>
+            </div>
+            <div class="field full"><label>Couleur de repli</label>
+              <input name="couleur" type="color" value="#64748b" style="width:64px;height:38px;padding:2px"></div>
+            <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px;margin-top:8px">
+              <button type="button" class="btn" id="moyen-annuler">Annuler</button>
+              <button type="submit" class="btn btn-primary">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="impression" hidden>
+        <div class="card" style="max-width:760px">
+          <div class="card-head"><span class="card-title">Impression du ticket</span></div>
+          <label class="check" style="justify-content:space-between;width:100%">
+            <span>Imprimer automatiquement le ticket après chaque vente</span>
+            <span class="switch"><input type="checkbox" id="imp-auto"><span class="slider"></span></span>
+          </label>
+          <p class="muted" style="font-size:13px;margin-bottom:0">
+            Si désactivé, le ticket n'est pas imprimé automatiquement : un bouton
+            « Imprimer le dernier ticket » reste disponible en caisse (impression à la demande).
+          </p>
+        </div>
+
+        <div class="card" style="max-width:760px;margin-top:18px">
+          <div class="card-head"><span class="card-title">Imprimante des tickets</span></div>
+          <p class="muted" style="font-size:13px;margin-top:0">
+            Choisissez l'imprimante utilisée pour les tickets de caisse. Une fois
+            sélectionnée, les tickets s'impriment <strong>en arrière-plan</strong>, sans
+            boîte de dialogue (imprimante thermique ESC/POS recommandée).
+          </p>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:220px;margin:0">
+              <label>Imprimante</label>
+              <select id="sel-imprimante"><option value="">— Aucune (impression manuelle) —</option></select>
+            </div>
+            <div class="field" style="width:210px;margin:0">
+              <label>Type d'imprimante</label>
+              <select id="sel-mode">
+                <option value="standard">Standard (bureautique / A4)</option>
+                <option value="thermique">Thermique (ticket ESC/POS)</option>
+              </select>
+            </div>
+            <button type="button" class="btn" id="btn-rescan"><i class="ti ti-refresh"></i>Rechercher</button>
+            <button type="button" class="btn" id="btn-test-imp"><i class="ti ti-printer"></i>Test</button>
+          </div>
+          <p class="muted" style="font-size:12.5px;margin-top:8px;margin-bottom:0">
+            <strong>Standard</strong> : imprimante classique (jet d'encre/laser), le ticket sort sur une page — choisis ceci pour une HP, Canon, etc.
+            <strong>Thermique</strong> : imprimante à reçu 58/80 mm (coupe automatique).
+          </p>
+          <p class="muted" style="font-size:12.5px;margin-bottom:0" id="imp-etat"></p>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="catalogue" hidden>
+        <!-- Étape 1 : choix du/des catalogue(s) selon le type de commerce -->
+        <div class="card" id="seed-etape1" style="max-width:760px">
+          <div class="card-head"><span class="card-title">1. Choisissez votre type de commerce</span></div>
+          <p class="muted" style="margin-top:0;font-size:13px">
+            Cochez le(s) modèle(s) qui correspond(ent) à votre boutique (elle peut être hybride).
+            Vous choisirez ensuite précisément les articles à créer.
+          </p>
+          <div id="catalogues-liste" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+            <div class="muted">Chargement…</div>
+          </div>
+          <button class="btn btn-primary" id="btn-etape2"><i class="ti ti-arrow-right"></i>Suivant : choisir les articles</button>
+        </div>
+
+        <!-- Étape 2 : choix des articles -->
+        <div class="card" id="seed-etape2" style="max-width:760px" hidden>
+          <div class="card-head"><span class="card-title">2. Choisissez les articles à créer</span></div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+            <button type="button" class="btn" id="seed-tout-cocher"><i class="ti ti-checks"></i>Tout cocher</button>
+            <button type="button" class="btn" id="seed-tout-decocher"><i class="ti ti-square"></i>Tout décocher</button>
+            <span class="muted" style="font-size:13px" id="seed-compte">0 article coché</span>
+          </div>
+          <div id="seed-articles" style="max-height:52vh;overflow:auto"></div>
+          <div style="display:flex;justify-content:space-between;gap:10px;margin-top:16px">
+            <button type="button" class="btn" id="btn-retour-etape1"><i class="ti ti-arrow-left"></i>Retour</button>
+            <button type="button" class="btn btn-primary" id="btn-appliquer-seed"><i class="ti ti-download"></i>Créer les articles cochés</button>
+          </div>
+        </div>
+
+        <div class="aide" style="max-width:760px;margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment ça marche ?</div>
+          <ul>
+            <li>Vous choisissez d'abord votre <strong>type de commerce</strong>, puis exactement les <strong>articles</strong> que vous vendez (tout est coché au départ, décochez ce que vous ne vendez pas).</li>
+            <li>Les articles sont créés <strong>sans prix</strong> (« à compléter ») : vous fixez vos prix vous-même.</li>
+            <li>C'est <strong>additif et sans risque</strong> : rien n'est créé sans votre validation, aucun doublon, et un article que vous avez modifié n'est jamais écrasé.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const formEnt = document.getElementById('form-ent');
+const logoApercu = document.getElementById('logo-apercu');
+let logoCourant = null;
+
+async function chargerEntreprise() {
+  try {
+    const p = await Djigui.api('/api/parametres');
+    for (const k of ['raison_sociale','ninea','rccm','adresse','telephone','email','devise','pied_facture',
+                     'forme_juridique','regime_fiscal'])
+      if (formEnt[k]) formEnt[k].value = p[k] || '';
+    if (formEnt.capital) formEnt.capital.value = p.capital ?? '';
+    alerterSociete();
+    logoCourant = p.logo || null;
+    if (logoCourant) logoApercu.innerHTML = `<img src="${logoCourant}" style="width:100%;height:100%;object-fit:cover">`;
+  } catch (e) { Djigui.toast('Erreur chargement : ' + e.message, 'danger'); }
+}
+// Mentions légales OHADA manquantes : on avertit, on n'empêche jamais
+// d'enregistrer ni de facturer.
+function alerterSociete() {
+  const boite = document.getElementById('alertes-societe');
+  if (!boite) return;
+  const vide = n => !((formEnt[n] && formEnt[n].value) || '').trim();
+  const manque = [
+    ['ninea', 'NINEA'], ['rccm', 'RCCM'], ['forme_juridique', 'forme juridique'],
+    ['regime_fiscal', 'régime fiscal'], ['adresse', 'adresse'],
+  ].filter(([n]) => vide(n)).map(([, l]) => l);
+  boite.hidden = manque.length === 0;
+  if (manque.length) boite.innerHTML =
+    `<div><i class="ti ti-alert-triangle"></i> Mentions attendues sur une facture, absentes : `
+    + `<b>${manque.join(', ')}</b>.</div>`
+    + `<div class="muted" style="margin-top:4px">Vous pouvez enregistrer et facturer quand même.</div>`;
+}
+formEnt.addEventListener('input', alerterSociete);
+
+document.getElementById('logo-file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (f.size > 1024*1024) { Djigui.alert('Logo trop lourd (max 1 Mo).'); return; }
+  const r = new FileReader();
+  r.onload = () => { logoCourant = r.result; logoApercu.innerHTML = `<img src="${logoCourant}" style="width:100%;height:100%;object-fit:cover">`; };
+  r.readAsDataURL(f);
+});
+document.getElementById('btn-enregistrer').addEventListener('click', async () => {
+  const f = new FormData(formEnt);
+  const g = k => (f.get(k) || '').trim() || null;
+  const payload = {
+    raison_sociale: g('raison_sociale') || '', ninea: g('ninea') || '',
+    rccm: g('rccm'), adresse: g('adresse') || '', telephone: g('telephone') || '',
+    email: g('email'), logo: logoCourant, devise: g('devise') || 'FCFA',
+    taux_tva_defaut: 18, pied_facture: g('pied_facture'),
+    forme_juridique: g('forme_juridique'), regime_fiscal: g('regime_fiscal'),
+    capital: g('capital') ? Number(g('capital')) : null,
+  };
+  try { await Djigui.api('/api/parametres', { method:'PUT', body: payload });
+    Djigui.toast('Paramètres enregistrés', 'ok'); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Taxes (multi-taxes) ----
+const taxeListe = document.getElementById('taxe-liste');
+const TYPE_LBL = { pourcentage: '%', fixe: 'fixe' };
+async function chargerTaxes() {
+  try {
+    const taxes = await Djigui.api('/api/taxes?tous=true');
+    taxeListe.innerHTML = taxes.map(t => `
+      <div class="cat-ligne" data-id="${t.id}" data-nom="${Djigui.esc(t.nom)}" data-taux="${t.taux}" data-type="${t.type}" style="${t.actif?'':'opacity:.55'}">
+        <label class="switch" title="${t.actif?'Active (comptabilisée)':'Inactive'}">
+          <input type="checkbox" data-toggle="1" ${t.actif?'checked':''}><span class="slider"></span></label>
+        <span style="flex:1">${Djigui.esc(t.nom)} <span class="muted num">(${t.taux}${t.type==='fixe'?' FCFA':' %'})</span></span>
+        ${t.par_defaut ? '<span class="badge ok">Par défaut</span>'
+          : (t.actif ? `<button class="btn" data-def="1" style="padding:5px 10px">Définir par défaut</button>` : '<span class="badge neutral">Inactive</span>')}
+        <button class="icon-act danger" data-del="1" title="Supprimer"><i class="ti ti-trash"></i></button>
+      </div>`).join('') || '<div class="muted">Aucune taxe</div>';
+  } catch (e) { taxeListe.innerHTML = `<div class="badge danger">Erreur : ${Djigui.esc(e.message)}</div>`; }
+}
+document.getElementById('form-taxe-add').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const payload = { nom: (f.get('nom')||'').trim(), taux: Number(f.get('taux')), type: f.get('type'), par_defaut: f.get('par_defaut') === 'on' };
+  try { await Djigui.api('/api/taxes', { method:'POST', body: payload });
+    e.target.reset(); Djigui.toast('Taxe enregistrée', 'ok'); chargerTaxes(); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+taxeListe.addEventListener('change', async e => {
+  const tog = e.target.closest('[data-toggle]'); if (!tog) return;
+  const id = tog.closest('.cat-ligne').dataset.id;
+  try { await Djigui.api('/api/taxes/' + id + '/actif', { method:'POST', body:{ actif: tog.checked } });
+    Djigui.toast(tog.checked ? 'Taxe activée' : 'Taxe désactivée', 'ok'); chargerTaxes(); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); chargerTaxes(); }
+});
+taxeListe.addEventListener('click', async e => {
+  const ligne = e.target.closest('.cat-ligne'); if (!ligne) return;
+  const id = ligne.dataset.id;
+  if (e.target.closest('[data-del]')) {
+    if (!await Djigui.confirm('Supprimer cette taxe ?')) return;
+    try { await Djigui.api('/api/taxes/' + id, { method:'DELETE' }); Djigui.toast('Taxe supprimée','ok'); chargerTaxes(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  } else if (e.target.closest('[data-def]')) {
+    try { await Djigui.api('/api/taxes/' + id, { method:'PUT',
+        body:{ nom: ligne.dataset.nom, taux: Number(ligne.dataset.taux), type: ligne.dataset.type, par_defaut: true } });
+      Djigui.toast('Taxe par défaut mise à jour','ok'); chargerTaxes(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+// ---- Onglets ----
+document.getElementById('param-tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab'); if (!t) return;
+  document.querySelectorAll('#param-tabs .tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.tab-panel').forEach(p => p.hidden = p.dataset.panel !== t.dataset.tab);
+  document.getElementById('btn-enregistrer').style.display = t.dataset.tab === 'societe' ? '' : 'none';
+});
+
+// ---- Impression (paramètre global) ----
+const impAuto = document.getElementById('imp-auto');
+async function chargerImpression() {
+  try { const cfg = await Djigui.api('/api/config'); impAuto.checked = cfg.impression_auto === '1'; }
+  catch (e) { /* défaut : décoché */ }
+}
+impAuto.addEventListener('change', async () => {
+  try { await Djigui.api('/api/config/impression_auto', { method:'PUT', body:{ valeur: impAuto.checked ? '1':'0' } });
+    Djigui.toast('Réglage enregistré', 'ok'); }
+  catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Imprimante des tickets (recherche + sélection stockée) ----
+const selImp = document.getElementById('sel-imprimante');
+const selMode = document.getElementById('sel-mode');
+const impEtat = document.getElementById('imp-etat');
+let imprimanteStockee = '';
+
+async function chargerImprimante() {
+  try {
+    const cfg = await Djigui.api('/api/config');
+    imprimanteStockee = cfg.imprimante_ticket || '';
+    selMode.value = cfg.imprimante_mode || 'standard';
+  } catch (e) { imprimanteStockee = ''; }
+  await rechercherImprimantes(true);
+}
+
+selMode.addEventListener('change', async () => {
+  try {
+    await Djigui.api('/api/config/imprimante_mode', { method:'PUT', body:{ valeur: selMode.value } });
+    Djigui.toast('Type d’imprimante enregistré', 'ok');
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+async function rechercherImprimantes(silencieux) {
+  if (!silencieux) impEtat.textContent = 'Recherche des imprimantes…';
+  try {
+    const liste = await Djigui.api('/api/imprimantes');
+    selImp.innerHTML = '<option value="">— Aucune (impression manuelle) —</option>'
+      + liste.map(n => `<option value="${Djigui.esc(n)}">${Djigui.esc(n)}</option>`).join('');
+    // conserve la sélection stockée même si absente de la liste courante
+    if (imprimanteStockee && !liste.includes(imprimanteStockee)) {
+      selImp.insertAdjacentHTML('beforeend',
+        `<option value="${Djigui.esc(imprimanteStockee)}">${Djigui.esc(imprimanteStockee)} (hors ligne)</option>`);
+    }
+    selImp.value = imprimanteStockee;
+    impEtat.textContent = liste.length
+      ? `${liste.length} imprimante${liste.length>1?'s':''} détectée${liste.length>1?'s':''}.`
+      : 'Aucune imprimante détectée sur ce poste.';
+  } catch (e) {
+    impEtat.textContent = 'Erreur : ' + e.message;
+  }
+}
+
+selImp.addEventListener('change', async () => {
+  imprimanteStockee = selImp.value;
+  try {
+    await Djigui.api('/api/config/imprimante_ticket', { method:'PUT', body:{ valeur: imprimanteStockee } });
+    Djigui.toast(imprimanteStockee ? 'Imprimante enregistrée' : 'Impression manuelle', 'ok');
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+document.getElementById('btn-rescan').addEventListener('click', () => rechercherImprimantes(false));
+
+document.getElementById('btn-test-imp').addEventListener('click', async () => {
+  if (!selImp.value) { Djigui.toast('Choisissez d’abord une imprimante', 'warn'); return; }
+  const texte = [
+    '      DJIGUI — TEST',
+    '--------------------------------',
+    'Impression de test réussie.',
+    'Imprimante : ' + selImp.value,
+    new Date().toLocaleString('fr-FR'),
+    '--------------------------------',
+  ].join('\n');
+  try {
+    await Djigui.api('/api/imprimer', { method:'POST', body:{ texte, imprimante: selImp.value, mode: selMode.value } });
+    Djigui.toast('Ticket de test envoyé', 'ok');
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Assistant catalogue (seeder) : 1) type de commerce  2) articles ----
+const cataloguesListe = document.getElementById('catalogues-liste');
+const etape1 = document.getElementById('seed-etape1');
+const etape2 = document.getElementById('seed-etape2');
+const seedArticles = document.getElementById('seed-articles');
+
+// Étape 1 : liste des types de commerce.
+async function chargerCatalogues() {
+  try {
+    const types = await Djigui.api('/api/catalogues');
+    cataloguesListe.innerHTML = types.map(t => {
+      const dispo = t.disponible;
+      return `<label class="check" style="justify-content:flex-start;gap:10px;${dispo?'':'opacity:.5'}">
+        <input type="checkbox" value="${t.code}" ${dispo ? '' : 'disabled'}>
+        <i class="ti ${Djigui.esc(t.icone)}" style="font-size:19px;color:var(--brand)"></i>
+        <span style="flex:1">
+          <span style="font-weight:600">${Djigui.esc(t.libelle)}</span>
+          <span class="muted" style="display:block;font-size:12px">${Djigui.esc(t.description||'')}</span>
+        </span>
+        ${t.applique ? '<span class="badge ok">déjà appliqué</span>'
+                     : (dispo ? '' : '<span class="badge neutral">bientôt</span>')}
+      </label>`;
+    }).join('');
+  } catch (e) { cataloguesListe.innerHTML = `<div class="badge danger">Erreur : ${Djigui.esc(e.message)}</div>`; }
+}
+
+function majCompteSeed() {
+  const n = seedArticles.querySelectorAll('input.seed-art:checked').length;
+  document.getElementById('seed-compte').textContent = `${n} article${n>1?'s':''} coché${n>1?'s':''}`;
+}
+
+// Étape 1 → 2 : charge le détail des catalogues cochés et affiche les articles.
+document.getElementById('btn-etape2').addEventListener('click', async () => {
+  const codes = [...cataloguesListe.querySelectorAll('input:checked')].map(c => c.value);
+  if (!codes.length) { Djigui.toast('Cochez au moins un type de commerce', 'warn'); return; }
+  seedArticles.innerHTML = '<div class="muted">Chargement…</div>';
+  etape1.hidden = true; etape2.hidden = false;
+  try {
+    const details = await Promise.all(codes.map(c => Djigui.api('/api/catalogues/' + c)));
+    seedArticles.innerHTML = details.map(d => `
+      <div style="margin-bottom:16px">
+        <div style="font-weight:700;margin-bottom:6px">${Djigui.esc(d.libelle)}</div>
+        ${d.categories.map(cat => `
+          <div style="margin:8px 0 4px;display:flex;align-items:center;gap:8px">
+            <i class="ti ${Djigui.esc(cat.icone)}" style="color:${Djigui.esc(cat.couleur)}"></i>
+            <span style="font-weight:600;font-size:13px">${Djigui.esc(cat.libelle)}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px;padding-left:6px">
+            ${cat.articles.map(a => `
+              <label class="check" style="justify-content:flex-start;gap:8px;font-size:13px">
+                <input type="checkbox" class="seed-art" data-type="${d.code}" value="${a.code}" checked>
+                <span style="flex:1">${Djigui.esc(a.libelle)}</span>
+                ${a.existe ? '<span class="badge neutral" style="font-size:10px">déjà là</span>' : ''}
+              </label>`).join('')}
+          </div>`).join('')}
+      </div>`).join('');
+    majCompteSeed();
+  } catch (e) { seedArticles.innerHTML = `<div class="badge danger">Erreur : ${Djigui.esc(e.message)}</div>`; }
+});
+
+document.getElementById('btn-retour-etape1').addEventListener('click', () => { etape2.hidden = true; etape1.hidden = false; });
+document.getElementById('seed-tout-cocher').addEventListener('click', () => {
+  seedArticles.querySelectorAll('input.seed-art').forEach(c => c.checked = true); majCompteSeed();
+});
+document.getElementById('seed-tout-decocher').addEventListener('click', () => {
+  seedArticles.querySelectorAll('input.seed-art').forEach(c => c.checked = false); majCompteSeed();
+});
+seedArticles.addEventListener('change', majCompteSeed);
+
+// Appliquer : on n'envoie QUE les articles cochés, groupés par type.
+document.getElementById('btn-appliquer-seed').addEventListener('click', async () => {
+  const parType = {};
+  seedArticles.querySelectorAll('input.seed-art:checked').forEach(c => {
+    (parType[c.dataset.type] ??= []).push(c.value);
+  });
+  const selections = Object.entries(parType).map(([code, articles]) => ({ code, articles }));
+  const total = selections.reduce((s, x) => s + x.articles.length, 0);
+  if (!total) { Djigui.toast('Cochez au moins un article', 'warn'); return; }
+  if (!await Djigui.confirm(`${total} article(s) vont être créés (sans prix, à compléter). Continuer ?`,
+      { titre:'Créer le catalogue', okLabel:'Créer' })) return;
+  try {
+    const r = await Djigui.api('/api/catalogues/appliquer', { method:'POST', body: selections });
+    Djigui.toast(`${r.articles_crees} article(s) créé(s)`, 'ok');
+    etape2.hidden = true; etape1.hidden = false;
+    chargerCatalogues();
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Moyens de paiement ----
+const moyensListe = document.getElementById('moyens-liste');
+const modalMoyen = document.getElementById('modal-moyen');
+const formMoyen = document.getElementById('form-moyen');
+const moyenApercu = document.getElementById('moyen-apercu');
+let moyenImage = null;
+const FAM_LBL = { espece:'Espèce', mobile_money:'Mobile money', virement:'Virement', cheque:'Chèque' };
+
+function initiales(nom) {
+  return (nom || '?').trim().split(/\s+/).slice(0,2).map(m => m[0]||'').join('').toUpperCase() || '?';
+}
+function vignette(m, taille) {
+  const t = taille || 40;
+  if (m.image) return `<div style="width:${t}px;height:${t}px;border-radius:10px;overflow:hidden;flex-shrink:0"><img src="${m.image}" style="width:100%;height:100%;object-fit:cover"></div>`;
+  return `<div style="width:${t}px;height:${t}px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:${Math.round(t*0.36)}px;background:${Djigui.esc(m.couleur||'#64748b')}">${Djigui.esc(initiales(m.nom))}</div>`;
+}
+
+async function chargerMoyens() {
+  try {
+    const moyens = await Djigui.api('/api/moyens-paiement');
+    moyensListe.innerHTML = moyens.map(m => `
+      <div class="cat-ligne" draggable="true" data-id="${m.id}" style="${m.actif?'':'opacity:.55'}">
+        <i class="ti ti-grip-vertical" style="cursor:grab;color:var(--text-2)"></i>
+        ${vignette(m, 40)}
+        <span style="flex:1">
+          <span style="font-weight:600">${Djigui.esc(m.nom)}</span>
+          <span class="muted" style="display:block;font-size:12px">${Djigui.esc(FAM_LBL[m.famille]||m.famille)}${m.rendu_monnaie?' · rend la monnaie':''}</span>
+        </span>
+        <label class="switch" title="${m.actif?'Affiché à la caisse':'Caché'}">
+          <input type="checkbox" data-toggle="1" ${m.actif?'checked':''}><span class="slider"></span></label>
+        <button class="icon-act" data-edit="1" title="Modifier"><i class="ti ti-pencil"></i></button>
+        <button class="icon-act danger" data-del="1" title="Supprimer"><i class="ti ti-trash"></i></button>
+      </div>`).join('') || '<div class="muted">Aucun moyen. Cliquez sur « Ajouter ».</div>';
+  } catch (e) { moyensListe.innerHTML = `<div class="badge danger">Erreur : ${Djigui.esc(e.message)}</div>`; }
+}
+
+function ouvrirMoyen(m) {
+  formMoyen.reset();
+  formMoyen.id.value = m ? m.id : '';
+  formMoyen.nom.value = m ? m.nom : '';
+  formMoyen.famille.value = m ? m.famille : 'mobile_money';
+  formMoyen.rendu_monnaie.checked = m ? !!m.rendu_monnaie : false;
+  formMoyen.couleur.value = (m && m.couleur) || '#64748b';
+  moyenImage = (m && m.image) || null;
+  majApercuMoyen();
+  document.getElementById('moyen-titre').textContent = m ? 'Modifier le moyen' : 'Nouveau moyen';
+  modalMoyen.hidden = false;
+  formMoyen.nom.focus();
+}
+function majApercuMoyen() {
+  const nom = formMoyen.nom.value || '';
+  if (moyenImage) { moyenApercu.innerHTML = `<img src="${moyenImage}" style="width:100%;height:100%;object-fit:cover">`; moyenApercu.style.background = 'transparent'; }
+  else { moyenApercu.innerHTML = Djigui.esc(initiales(nom)); moyenApercu.style.background = formMoyen.couleur.value || '#64748b'; }
+}
+formMoyen.nom.addEventListener('input', majApercuMoyen);
+formMoyen.couleur.addEventListener('input', majApercuMoyen);
+formMoyen.famille.addEventListener('change', () => {
+  if (formMoyen.famille.value === 'espece') formMoyen.rendu_monnaie.checked = true;
+});
+document.getElementById('moyen-file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (f.size > 512*1024) { Djigui.alert('Image trop lourde (max 512 Ko).'); return; }
+  const r = new FileReader();
+  r.onload = () => { moyenImage = r.result; majApercuMoyen(); };
+  r.readAsDataURL(f);
+});
+document.getElementById('moyen-img-clear').addEventListener('click', () => { moyenImage = null; document.getElementById('moyen-file').value=''; majApercuMoyen(); });
+
+document.getElementById('btn-moyen-add').addEventListener('click', () => ouvrirMoyen(null));
+document.getElementById('moyen-fermer').addEventListener('click', () => modalMoyen.hidden = true);
+document.getElementById('moyen-annuler').addEventListener('click', () => modalMoyen.hidden = true);
+
+formMoyen.addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = formMoyen.id.value;
+  const payload = {
+    nom: formMoyen.nom.value.trim(), famille: formMoyen.famille.value,
+    image: moyenImage, couleur: formMoyen.couleur.value,
+    rendu_monnaie: formMoyen.rendu_monnaie.checked, actif: true,
+  };
+  try {
+    if (id) await Djigui.api('/api/moyens-paiement/' + id, { method:'PUT', body: payload });
+    else await Djigui.api('/api/moyens-paiement', { method:'POST', body: payload });
+    Djigui.toast('Moyen enregistré', 'ok'); modalMoyen.hidden = true; chargerMoyens();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+moyensListe.addEventListener('change', async e => {
+  const tog = e.target.closest('[data-toggle]'); if (!tog) return;
+  const id = tog.closest('.cat-ligne').dataset.id;
+  try { await Djigui.api('/api/moyens-paiement/lot/actif', { method:'POST', body:{ ids:[id], actif: tog.checked } });
+    Djigui.toast(tog.checked ? 'Moyen activé' : 'Moyen désactivé', 'ok'); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); chargerMoyens(); }
+});
+moyensListe.addEventListener('click', async e => {
+  const ligne = e.target.closest('.cat-ligne'); if (!ligne) return;
+  const id = ligne.dataset.id;
+  if (e.target.closest('[data-edit]')) {
+    const moyens = await Djigui.api('/api/moyens-paiement');
+    ouvrirMoyen(moyens.find(m => m.id === id));
+  } else if (e.target.closest('[data-del]')) {
+    if (!await Djigui.confirm('Supprimer ce moyen de paiement ?')) return;
+    try { await Djigui.api('/api/moyens-paiement/' + id, { method:'DELETE' }); Djigui.toast('Moyen supprimé','ok'); chargerMoyens(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+// Réordonnancement par glisser-déposer.
+let moyenDrag = null;
+moyensListe.addEventListener('dragstart', e => { moyenDrag = e.target.closest('.cat-ligne'); if (moyenDrag) moyenDrag.style.opacity = '.4'; });
+moyensListe.addEventListener('dragend', async () => {
+  if (!moyenDrag) return; moyenDrag.style.opacity = '';
+  moyenDrag = null;
+  const ids = [...moyensListe.querySelectorAll('.cat-ligne')].map(l => l.dataset.id);
+  try { await Djigui.api('/api/moyens-paiement/ordre', { method:'POST', body:{ ids } }); }
+  catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+moyensListe.addEventListener('dragover', e => {
+  e.preventDefault();
+  const cible = e.target.closest('.cat-ligne'); if (!cible || cible === moyenDrag || !moyenDrag) return;
+  const r = cible.getBoundingClientRect();
+  const apres = (e.clientY - r.top) / r.height > 0.5;
+  moyensListe.insertBefore(moyenDrag, apres ? cible.nextSibling : cible);
+});
+
+chargerEntreprise();
+chargerTaxes();
+chargerMoyens();
+chargerImpression();
+chargerImprimante();
+chargerCatalogues();
+</script>
+</body>
+</html>

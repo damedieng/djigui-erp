@@ -1,0 +1,5 @@
+# Contournement Windows : la vérification de révocation de certificat via
+# schannel échoue sur ce poste (CRYPT_E_NO_REVOCATION_CHECK). On la désactive
+# pour les téléchargements cargo. Sans effet sur la sécurité TLS elle-même.
+[http]
+check-revoke = false

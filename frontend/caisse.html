@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Caisse</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Caisse</div>
+        <div class="topbar-date">Point de vente</div>
+      </div>
+      <div class="topbar-right">
+        <div class="company"><div class="company-name"></div>
+          <div class="company-ninea"></div></div>
+        <div class="avatar">TD</div>
+      </div>
+    </header>
+
+    <!-- Barre de session de caisse -->
+    <div class="sess-bar" id="sess-bar">
+      <div id="sess-info" class="sess-info"></div>
+      <div style="flex:1"></div>
+      <button class="btn" id="btn-ouvrir-caisse" hidden><i class="ti ti-lock-open"></i>Ouvrir la caisse</button>
+      <button class="btn" id="btn-fermer-caisse" hidden><i class="ti ti-lock"></i>Fermer la caisse</button>
+    </div>
+
+    <div class="pos" id="pos-zone">
+      <!-- Conteneur 1 : catégories -->
+      <div class="pos-cats" id="cats"></div>
+
+      <!-- Conteneur 2 : articles -->
+      <div class="pos-products">
+        <div class="pos-search">
+          <i class="ti ti-search" style="font-size:18px"></i>
+          <input id="recherche" type="search" autocomplete="off"
+                 placeholder="Rechercher un article ou scanner un code-barres…">
+        </div>
+        <div class="tiles" id="tiles"></div>
+      </div>
+
+      <!-- Conteneur 3 : panier (tickets en attente en liste) -->
+      <aside class="ticket">
+        <div class="tk-panel">
+          <div class="tk-panel-head">
+            <span>Tickets en attente</span>
+            <button class="btn" id="tk-add" title="Nouveau ticket"><i class="ti ti-plus"></i>Nouveau</button>
+          </div>
+          <div class="tk-list" id="tabs"></div>
+        </div>
+
+        <div id="lignes" style="flex:1;min-height:0;overflow-y:auto"></div>
+
+        <div class="ticket-tot">
+          <div class="tot-row"><span>Sous-total HT</span><span class="num" id="t-ht">0</span></div>
+          <div id="t-taxes"></div>
+          <div class="tot-grand"><span>Total</span><span class="num" id="t-ttc">0 FCFA</span></div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btn-encaisser" style="margin-top:12px;width:100%;justify-content:center">
+          <i class="ti ti-cash"></i>Encaisser · <span class="num" id="t-btn">0</span>
+        </button>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- Modale de règlement -->
+<div class="modal-overlay" id="modal-pay" hidden>
+  <div class="modal" style="max-width:420px">
+    <div class="card-head"><span class="card-title">Encaissement</span>
+      <i class="ti ti-x" id="pay-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+
+    <div class="tot-grand" style="margin-bottom:8px"><span>À payer</span><span class="num" id="pay-total">0 FCFA</span></div>
+
+    <div class="pay" id="pay-modes"></div>
+
+    <div id="bloc-espece">
+      <div class="recu-box" style="margin-top:14px">
+        <label style="white-space:nowrap;font-weight:500">Montant reçu</label>
+        <input id="recu" type="number" step="1" inputmode="numeric" placeholder="0">
+      </div>
+      <div class="pay-grid" id="coupures"></div>
+      <div class="rendu" id="rendu-box"><span>Rendu à donner</span><span class="rendu-val" id="rendu">0</span></div>
+    </div>
+
+    <button class="btn btn-primary btn-lg" id="pay-confirmer" style="margin-top:16px;width:100%;justify-content:center">
+      <i class="ti ti-check"></i>Valider l'encaissement
+    </button>
+  </div>
+</div>
+
+<!-- Modale : ouverture de caisse -->
+<div class="modal-overlay" id="modal-ouvrir" hidden>
+  <div class="modal" style="max-width:420px">
+    <div class="card-head"><span class="card-title">Ouvrir la caisse</span>
+      <i class="ti ti-x" id="ouvrir-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form-ouvrir" class="form-grid">
+      <div class="field full"><label>Caisse</label>
+        <select name="caisse_id" id="ouvrir-caisse"></select></div>
+      <div class="field full"><label>Fond de caisse (espèces de départ)</label>
+        <input name="fond" id="ouvrir-fond" type="number" min="0" step="0.01" value="0" required></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="ouvrir-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-lock-open"></i>Ouvrir</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale : fermeture de caisse -->
+<div class="modal-overlay" id="modal-fermer" hidden>
+  <div class="modal" style="max-width:460px">
+    <div class="card-head"><span class="card-title">Fermer la caisse</span>
+      <i class="ti ti-x" id="fermer-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div id="fermer-recap" style="font-size:13.5px;margin-bottom:14px"></div>
+    <form id="form-fermer" class="form-grid">
+      <div class="field full"><label>Espèces comptées en caisse</label>
+        <input name="montant" id="fermer-montant" type="number" min="0" step="0.01" required></div>
+      <div class="field full" id="fermer-ecart-bloc" hidden>
+        <div class="solde-bloc" style="margin:0">
+          <div><div class="solde-label">Écart (compté − théorique)</div>
+            <div class="solde-montant num" id="fermer-ecart">0</div></div>
+        </div>
+      </div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="fermer-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-lock"></i>Fermer la caisse</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Ticket imprimable (masqué à l'écran, visible à l'impression) -->
+<div id="recu-print"><div class="recu-ticket" id="recu-contenu"></div></div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+const elCats = document.getElementById('cats');
+const elTiles = document.getElementById('tiles');
+const elLignes = document.getElementById('lignes');
+const elTabs = document.getElementById('tabs');
+const recherche = document.getElementById('recherche');
+
+let articles = [], categories = [], taxesActives = [], moyensPaiement = [];
+let catSel = '';
+let comptoirId = null;
+let entreprise = {};
+let impressionAuto = false;   // réglé dans Paramètres → Impression
+let imprimanteTicket = '';    // imprimante native choisie (Paramètres → Impression)
+let dernierTicketHtml = null; // pour l'impression à la demande (repli navigateur)
+let dernierTicketTexte = null;// pour l'impression native (ESC/POS)
+
+// Plusieurs tickets ouverts en parallèle (un par client), listés avec horodatage.
+let tickets = [{ id: 1, panier: [], cree: new Date() }];
+let actifIdx = 0;
+let seq = 1;
+const ticketActif = () => tickets[actifIdx];
+const nouveauTicket = () => ({ id: ++seq, panier: [], cree: new Date() });
+// Date + heure:minute de création (identifiant lisible d'un ticket en attente).
+const horodatage = d => new Date(d).toLocaleString('fr-FR',
+  { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+// Un ticket « en attente » = un ticket qui contient au moins un article.
+const ticketsEnAttente = () => tickets.filter(t => t.panier.length > 0);
+// Publie le nombre de tickets en attente vers le serveur (garde-fou fermeture Tauri).
+function majEtatServeur() {
+  Djigui.api('/api/etat/tickets-attente', { method:'PUT', body:{ n: ticketsEnAttente().length } }).catch(()=>{});
+}
+
+// ---- Chargement ----
+async function init() {
+  [articles, categories, entreprise, taxesActives, moyensPaiement] = await Promise.all([
+    Djigui.api('/api/articles?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/categories').catch(()=>[]),
+    Djigui.api('/api/parametres').catch(()=>({})),
+    Djigui.api('/api/taxes').catch(()=>[]),  // actives uniquement
+    Djigui.api('/api/moyens-paiement?actifs_seulement=true').catch(()=>[]),
+  ]);
+  if (!moyensPaiement.length) moyensPaiement = [{ id:null, nom:'Espèce', famille:'espece', rendu_monnaie:true, couleur:'#16a34a' }];
+  const cfg = await Djigui.api('/api/config').catch(()=>({}));
+  impressionAuto = cfg.impression_auto === '1';
+  imprimanteTicket = cfg.imprimante_ticket || '';
+  comptoirId = await assurerComptoir();
+  rendreCats(); rendreTiles(); rendreTabs(); rendrePanier();
+  await chargerSession();
+}
+
+// ---- Session de caisse (ouverture / fermeture) ----
+let caisses = [], caisseCourante = null, sessionCourante = null;
+const posZone = document.getElementById('pos-zone');
+
+async function chargerSession() {
+  caisses = await Djigui.api('/api/caisses').catch(()=>[]);
+  if (!caisseCourante && caisses.length) caisseCourante = caisses[0].id;
+  sessionCourante = caisseCourante
+    ? await Djigui.api(`/api/caisses/${caisseCourante}/session`).catch(()=>null)
+    : null;
+  rendreSession();
+}
+
+function rendreSession() {
+  const info = document.getElementById('sess-info');
+  const bar = document.getElementById('sess-bar');
+  const ouverte = !!sessionCourante;
+  document.getElementById('btn-ouvrir-caisse').hidden = ouverte;
+  document.getElementById('btn-fermer-caisse').hidden = !ouverte;
+  bar.classList.toggle('fermee', !ouverte);
+  // Caisse fermée : on bloque la vente (voile) tant qu'elle n'est pas ouverte.
+  posZone.classList.toggle('pos-bloque', !ouverte);
+  const nomCaisse = (caisses.find(c => c.id === caisseCourante) || {}).nom || 'Caisse';
+  if (ouverte) {
+    const s = sessionCourante;
+    info.innerHTML = `<i class="ti ti-lock-open" style="color:var(--brand-strong)"></i>
+      <strong>${Djigui.esc(nomCaisse)}</strong> ouverte ·
+      Fond ${Djigui.fmt(s.fond_ouverture)} · Encaissé ${Djigui.fmt(s.encaissements)} ·
+      Théorique <strong>${Djigui.fmt(s.theorique)} FCFA</strong>`;
+  } else {
+    info.innerHTML = `<i class="ti ti-lock" style="color:var(--danger)"></i>
+      <strong>${Djigui.esc(nomCaisse)}</strong> fermée — ouvrez la caisse pour encaisser.`;
+  }
+}
+
+// Ouverture
+const modalOuvrir = document.getElementById('modal-ouvrir');
+document.getElementById('btn-ouvrir-caisse').addEventListener('click', () => {
+  document.getElementById('ouvrir-caisse').innerHTML =
+    caisses.map(c => `<option value="${c.id}" ${c.id===caisseCourante?'selected':''}>${Djigui.esc(c.nom)}</option>`).join('');
+  document.getElementById('ouvrir-fond').value = 0;
+  modalOuvrir.hidden = false;
+});
+const fermerOuvrir = () => { modalOuvrir.hidden = true; };
+document.getElementById('ouvrir-fermer').addEventListener('click', fermerOuvrir);
+document.getElementById('ouvrir-annuler').addEventListener('click', fermerOuvrir);
+document.getElementById('form-ouvrir').addEventListener('submit', async e => {
+  e.preventDefault();
+  const caisse_id = document.getElementById('ouvrir-caisse').value;
+  const fond = Number(document.getElementById('ouvrir-fond').value) || 0;
+  try {
+    await Djigui.api('/api/sessions/ouvrir', { method:'POST', body:{ caisse_id, fond_ouverture: fond } });
+    caisseCourante = caisse_id;
+    Djigui.toast('Caisse ouverte', 'ok'); fermerOuvrir(); chargerSession();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+// Fermeture
+const modalFermer = document.getElementById('modal-fermer');
+document.getElementById('btn-fermer-caisse').addEventListener('click', () => {
+  const s = sessionCourante; if (!s) return;
+  document.getElementById('fermer-recap').innerHTML =
+    `Fond d'ouverture : <strong>${Djigui.fmt(s.fond_ouverture)}</strong> FCFA<br>
+     Encaissements : +${Djigui.fmt(s.encaissements)} · Décaissements : −${Djigui.fmt(s.decaissements)}<br>
+     Théorique en caisse : <strong>${Djigui.fmt(s.theorique)} FCFA</strong>`;
+  document.getElementById('fermer-montant').value = '';
+  document.getElementById('fermer-ecart-bloc').hidden = true;
+  modalFermer.hidden = false;
+});
+const fermerFermer = () => { modalFermer.hidden = true; };
+document.getElementById('fermer-fermer').addEventListener('click', fermerFermer);
+document.getElementById('fermer-annuler').addEventListener('click', fermerFermer);
+document.getElementById('fermer-montant').addEventListener('input', () => {
+  const s = sessionCourante; if (!s) return;
+  const compte = Number(document.getElementById('fermer-montant').value) || 0;
+  const ecart = Math.round((compte - s.theorique) * 100) / 100;
+  const el = document.getElementById('fermer-ecart');
+  el.textContent = (ecart >= 0 ? '+' : '') + Djigui.fmt(ecart) + ' FCFA';
+  el.style.color = Math.abs(ecart) < 0.005 ? 'var(--brand-strong)' : 'var(--danger)';
+  document.getElementById('fermer-ecart-bloc').hidden = false;
+});
+document.getElementById('form-fermer').addEventListener('submit', async e => {
+  e.preventDefault();
+  const montant = Number(document.getElementById('fermer-montant').value) || 0;
+  try {
+    const s = await Djigui.api(`/api/sessions/${sessionCourante.id}/fermer`, { method:'POST', body:{ montant_compte: montant } });
+    Djigui.toast(`Caisse fermée · écart ${Djigui.fmt(s.ecart)} FCFA`, s.ecart===0?'ok':'warn');
+    fermerFermer(); chargerSession();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+async function assurerComptoir() {
+  const t = await Djigui.api('/api/tiers?filtre=tous').catch(()=>[]);
+  const c = t.find(x => x.code.toLowerCase() === 'comptoir' || x.nom.toLowerCase().includes('comptoir'));
+  if (c) return c.id;
+  try { return (await Djigui.api('/api/tiers', { method:'POST',
+      body:{ code:'COMPTOIR', type_role:'client', nom:'Client comptoir' } })).id; }
+  catch { return t[0] ? t[0].id : null; }
+}
+
+// ---- Catégories ----
+function rendreCats() {
+  const tuile = (id, ico, lbl, on, img, coul) =>
+    `<div class="cat-tile ${on?'active':''} ${img?'cat-tile-img':''}" data-cat="${id}"
+          ${img ? `style="background-image:url('${img}')"` : ''}>
+       ${img ? '' : `<div class="cat-tile-ico"${coul?` style="color:${Djigui.esc(coul)}"`:''}><i class="ti ${Djigui.esc(ico)}"></i></div>`}
+       <div class="cat-tile-lbl">${Djigui.esc(lbl)}</div></div>`;
+  // On n'affiche que les catégories contenant au moins un article (§ caisse).
+  const avecArticles = categories.filter(c => (c.nb_articles ?? 0) > 0);
+  elCats.innerHTML = tuile('', 'ti-layout-grid', 'Tout', catSel==='')
+    + avecArticles.map(c => tuile(c.id, c.icone || 'ti-tag', c.nom, catSel===c.id, c.image, c.couleur)).join('');
+}
+
+// Repli image « pictogramme » : pastille couleur + initiales, stable par article.
+function couleurDe(s) {
+  let h = 0; for (const ch of String(s||'')) h = (h*31 + ch.charCodeAt(0)) >>> 0;
+  const t = ['#2563eb','#d97706','#65a30d','#0891b2','#dc2626','#7c3aed','#b45309','#ea580c','#0f766e','#9333ea'];
+  return t[h % t.length];
+}
+function initiales(nom) {
+  const m = String(nom||'').trim().split(/\s+/).filter(Boolean);
+  if (!m.length) return '?';
+  return (m.length === 1 ? m[0].slice(0,2) : m[0][0] + m[1][0]).toUpperCase();
+}
+elCats.addEventListener('click', e => {
+  const t = e.target.closest('.cat-tile'); if (!t) return;
+  catSel = t.dataset.cat; rendreCats(); rendreTiles();
+});
+
+// ---- Articles ----
+function articlesVisibles() {
+  const q = recherche.value.trim().toLowerCase();
+  return articles.filter(a => {
+    if (catSel && a.categorie_id !== catSel) return false;
+    if (!q) return true;
+    return a.designation.toLowerCase().includes(q)
+        || (a.code||'').toLowerCase().includes(q)
+        || (a.code_barre||'').toLowerCase().includes(q);
+  });
+}
+function rendreTiles() {
+  const vus = articlesVisibles();
+  if (!vus.length) { elTiles.innerHTML = '<div class="muted" style="padding:20px">Aucun article</div>'; return; }
+  elTiles.innerHTML = vus.map(a => {
+    const rupture = a.gere_stock && (a.stock ?? 0) <= 0;
+    const img = a.image ? `<img class="tile-img" src="${Djigui.esc(a.image)}" alt="">`
+                        : `<div class="tile-img-init" style="background:${couleurDe(a.code||a.designation)}">${Djigui.esc(initiales(a.designation))}</div>`;
+    return `<div class="tile" data-id="${a.id}">${img}
+      <div class="tile-body">
+        <span class="tile-name">${Djigui.esc(a.designation)}</span>
+        <span class="tile-price num">${Djigui.fmt(a.prix_vente)} FCFA</span>
+        ${rupture ? '<span class="tile-rupture">Rupture</span>' : ''}
+      </div></div>`;
+  }).join('');
+}
+elTiles.addEventListener('click', e => {
+  const t = e.target.closest('.tile'); if (!t) return; ajouter(t.dataset.id);
+});
+recherche.addEventListener('input', rendreTiles);
+recherche.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const q = recherche.value.trim().toLowerCase();
+  const exact = articles.find(a => (a.code_barre||'').toLowerCase() === q || (a.code||'').toLowerCase() === q);
+  const vus = articlesVisibles();
+  const cible = exact || (vus.length === 1 ? vus[0] : null);
+  if (cible) { ajouter(cible.id); recherche.value = ''; rendreTiles(); }
+});
+
+// ---- Liste des tickets en attente ----
+function rendreTabs() {
+  elTabs.innerHTML = tickets.map((tk, i) => {
+    const n = tk.panier.reduce((s,l)=>s+l.qte,0);
+    return `<div class="tk-item ${i===actifIdx?'active':''}" data-i="${i}">
+      <i class="ti ti-receipt"></i>
+      <div class="tk-item-txt">
+        <span class="tk-item-titre">Ticket ${tk.id}</span>
+        <span class="tk-item-meta">${horodatage(tk.cree)}${n?` · ${n} art.`:' · vide'}</span>
+      </div>
+      <i class="ti ti-x tk-x" data-close="${i}" title="Fermer ce ticket"></i>
+    </div>`;
+  }).join('');
+  majEtatServeur();
+}
+document.getElementById('tk-add').addEventListener('click', () => {
+  tickets.push(nouveauTicket()); actifIdx = tickets.length-1; rendreTabs(); rendrePanier();
+});
+elTabs.addEventListener('click', e => {
+  const close = e.target.closest('[data-close]');
+  if (close) {
+    const i = Number(close.dataset.close);
+    if (tickets[i].panier.length && !confirm(`Supprimer le ticket ${tickets[i].id} ?`)) return;
+    tickets.splice(i, 1);
+    if (!tickets.length) { tickets.push(nouveauTicket()); }
+    actifIdx = Math.max(0, Math.min(actifIdx, tickets.length-1));
+    rendreTabs(); rendrePanier(); return;
+  }
+  const item = e.target.closest('.tk-item'); if (!item) return;
+  actifIdx = Number(item.dataset.i); rendreTabs(); rendrePanier();
+});
+
+// ---- Panier du ticket actif ----
+function ajouter(id) {
+  const a = articles.find(x => x.id === id); if (!a) return;
+  const p = ticketActif().panier;
+  const l = p.find(x => x.article.id === id);
+  if (l) l.qte += 1; else p.push({ article: a, qte: 1 });
+  rendrePanier(); rendreTabs();
+}
+function changerQte(id, d) {
+  const tk = ticketActif();
+  const l = tk.panier.find(x => x.article.id === id); if (!l) return;
+  l.qte += d;
+  if (l.qte <= 0) tk.panier = tk.panier.filter(x => x.article.id !== id);
+  rendrePanier(); rendreTabs();
+}
+function montantTaxe(ht, qte, t) {
+  return t.type === 'fixe' ? t.taux*qte : ht*t.taux/100;
+}
+// Taxes appliquées à une ligne : celles de l'article, sinon repli sur les taxes actives.
+function taxesDeLigne(article) {
+  return (article.taxes && article.taxes.length) ? article.taxes : taxesActives;
+}
+// Ventilation : total HT + un montant par taxe (agrégé par nom) + total TTC.
+function totaux(p = ticketActif().panier) {
+  let ht = 0;
+  const parTaxe = new Map(); // nom -> montant cumulé
+  p.forEach(l => {
+    const lht = l.article.prix_vente * l.qte; ht += lht;
+    taxesDeLigne(l.article).forEach(t => {
+      const m = montantTaxe(lht, l.qte, t);
+      parTaxe.set(t.nom, (parTaxe.get(t.nom) || 0) + m);
+    });
+  });
+  ht = Math.round(ht*100)/100;
+  const taxes = [...parTaxe.entries()].map(([nom, m]) => ({ nom, montant: Math.round(m*100)/100 }));
+  const totalTaxes = Math.round(taxes.reduce((s,t)=>s+t.montant, 0)*100)/100;
+  return { ht, taxes, totalTaxes, ttc: Math.round((ht+totalTaxes)*100)/100 };
+}
+function rendrePanier() {
+  const p = ticketActif().panier;
+  elLignes.innerHTML = p.length ? p.map(l => `
+    <div class="ticket-line">
+      <span style="flex:1">${Djigui.esc(l.article.designation)}<br>
+        <span class="muted num" style="font-size:12px">${Djigui.fmt(l.article.prix_vente)} × ${l.qte}</span></span>
+      <span class="qte-step">
+        <button class="qte-btn" data-id="${l.article.id}" data-d="-1">−</button>
+        <span class="num">${l.qte}</span>
+        <button class="qte-btn" data-id="${l.article.id}" data-d="1">+</button>
+      </span>
+      <span class="num" style="min-width:60px;text-align:right">${Djigui.fmt(l.article.prix_vente*l.qte)}</span>
+    </div>`).join('') : '<div class="ticket-vide">Panier vide — cliquez un article</div>';
+  const t = totaux();
+  document.getElementById('t-ht').textContent = Djigui.fmt(t.ht);
+  document.getElementById('t-taxes').innerHTML = t.taxes.map(x =>
+    `<div class="tot-row"><span>${Djigui.esc(x.nom)}</span><span class="num">${Djigui.fmt(x.montant)}</span></div>`).join('');
+  document.getElementById('t-ttc').textContent = Djigui.fmt(t.ttc) + ' FCFA';
+  document.getElementById('t-btn').textContent = Djigui.fmt(t.ttc);
+}
+elLignes.addEventListener('click', e => {
+  const b = e.target.closest('.qte-btn'); if (!b) return; changerQte(b.dataset.id, Number(b.dataset.d));
+});
+
+// ---- Règlement (reçu → rendu) ----
+const modalPay = document.getElementById('modal-pay');
+const inputRecu = document.getElementById('recu');
+let moyenActif = null;                 // moyen de paiement sélectionné
+const modePaiement = () => (moyenActif && moyenActif.famille) || 'espece';
+const rendActif = () => !!(moyenActif && moyenActif.rendu_monnaie);
+const COUPURES = [500, 1000, 2000, 5000, 10000];
+
+function initialesMoyen(nom) {
+  return (nom || '?').trim().split(/\s+/).slice(0,2).map(m => m[0]||'').join('').toUpperCase() || '?';
+}
+function vignetteMoyen(m) {
+  if (m.image) return `<span class="pay-ic" style="background-image:url('${m.image}')"></span>`;
+  return `<span class="pay-ic pay-ic-txt" style="background:${Djigui.esc(m.couleur||'#64748b')}">${Djigui.esc(initialesMoyen(m.nom))}</span>`;
+}
+function rendrePayModes() {
+  const zone = document.getElementById('pay-modes');
+  zone.innerHTML = moyensPaiement.map((m, i) =>
+    `<span class="pay-opt${i===0?' active':''}" data-idx="${i}">${vignetteMoyen(m)}<span>${Djigui.esc(m.nom)}</span></span>`
+  ).join('');
+}
+
+function choisirMoyen(idx) {
+  moyenActif = moyensPaiement[idx] || moyensPaiement[0];
+  document.querySelectorAll('#pay-modes .pay-opt').forEach(x => x.classList.toggle('active', Number(x.dataset.idx) === idx));
+  document.getElementById('bloc-espece').style.display = rendActif() ? '' : 'none';
+  majRendu();
+}
+
+function ouvrirPay() {
+  const t = totaux();
+  if (t.ttc <= 0) { Djigui.toast('Panier vide', 'warn'); return; }
+  rendrePayModes();
+  document.getElementById('pay-total').textContent = Djigui.fmt(t.ttc) + ' FCFA';
+  inputRecu.value = '';
+  document.getElementById('coupures').innerHTML =
+    `<div class="cash-btn" data-exact="1">Appoint</div>` +
+    COUPURES.map(c => `<div class="cash-btn" data-add="${c}">+${Djigui.fmt(c)}</div>`).join('');
+  choisirMoyen(0);
+  modalPay.hidden = false;
+  if (rendActif()) inputRecu.focus();
+}
+function majRendu() {
+  const t = totaux().ttc;
+  const recu = Number(inputRecu.value) || 0;
+  const rendu = recu - t;
+  const box = document.getElementById('rendu-box');
+  document.getElementById('rendu').textContent = Djigui.fmt(Math.max(0, rendu));
+  const manque = rendActif() && recu > 0 && rendu < 0;
+  box.classList.toggle('insuffisant', manque);
+  box.querySelector('span').textContent = manque ? 'Manque' : 'Rendu à donner';
+  if (manque) document.getElementById('rendu').textContent = Djigui.fmt(-rendu);
+}
+inputRecu.addEventListener('input', majRendu);
+document.getElementById('coupures').addEventListener('click', e => {
+  const b = e.target.closest('.cash-btn'); if (!b) return;
+  if (b.dataset.exact) inputRecu.value = totaux().ttc;
+  else inputRecu.value = (Number(inputRecu.value)||0) + Number(b.dataset.add);
+  majRendu();
+});
+document.getElementById('pay-modes').addEventListener('click', e => {
+  const o = e.target.closest('.pay-opt'); if (!o) return;
+  choisirMoyen(Number(o.dataset.idx));
+});
+document.getElementById('btn-encaisser').addEventListener('click', ouvrirPay);
+document.getElementById('pay-fermer').addEventListener('click', () => modalPay.hidden = true);
+// Le clic sur le fond ne ferme pas l'encaissement (fermeture via le X seulement).
+
+document.getElementById('pay-confirmer').addEventListener('click', async () => {
+  const tk = ticketActif();
+  if (!tk.panier.length) { Djigui.toast('Panier vide', 'warn'); return; }
+  if (!sessionCourante) { Djigui.toast('Ouvrez d’abord la caisse', 'warn'); return; }
+  const t = totaux();
+  if (rendActif() && (Number(inputRecu.value)||0) < t.ttc) {
+    Djigui.toast('Montant reçu insuffisant', 'warn'); return;
+  }
+  const lignes = tk.panier.map(l => ({
+    article_id: l.article.id, designation: l.article.designation,
+    quantite: l.qte, prix_unitaire: l.article.prix_vente, remise: 0,
+    taxes: taxesDeLigne(l.article).map(t => ({ nom: t.nom, taux: t.taux, type: t.type })),
+  }));
+  try {
+    // Le stock est déduit du magasin rattaché à la caisse ouverte.
+    const caisseDepot = (caisses.find(c => c.id === caisseCourante) || {}).depot_id || null;
+    const doc = await Djigui.api('/api/documents', { method:'POST',
+      body:{ type_document:'facture', sens:'vente', tiers_id: comptoirId, depot_id: caisseDepot, lignes } });
+    await Djigui.api(`/api/documents/${doc.id}/valider`, { method:'POST' });
+    // §6.4 : persiste le règlement (met à jour solde caisse + solde tiers).
+    await Djigui.api('/api/paiements', { method:'POST', body:{
+      tiers_id: comptoirId, document_id: doc.id, sens: 'encaissement',
+      montant: t.ttc, mode: modePaiement(), moyen_paiement_id: moyenActif ? moyenActif.id : null,
+      caisse_id: caisseCourante,
+    } });
+    const recu = Number(inputRecu.value)||0;
+    const rendu = rendActif() ? Math.max(0, recu - t.ttc) : 0;
+    Djigui.toast(`Vente ${doc.numero} encaissée${rendu?` · rendu ${Djigui.fmt(rendu)}`:''}`, 'ok');
+    // impression du ticket (nom du moyen affiché)
+    imprimerRecu(doc.numero, [...tk.panier], t, (moyenActif && moyenActif.nom) || 'Espèce', recu, rendu, rendActif());
+    // ferme ce ticket
+    tickets.splice(actifIdx, 1);
+    if (!tickets.length) { tickets.push(nouveauTicket()); }
+    actifIdx = Math.max(0, Math.min(actifIdx, tickets.length-1));
+    modalPay.hidden = true;
+    articles = await Djigui.api('/api/articles?filtre=tous').catch(()=>articles);
+    rendreTiles(); rendreTabs(); rendrePanier();
+    chargerSession();  // met à jour le théorique de la session
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+
+// ---- Ticket imprimable ----
+function imprimerRecu(numero, lignes, t, moyenLbl, recu, rendu, avecRendu) {
+  const dev = entreprise.devise || 'FCFA';
+  const now = new Date();
+  const dt = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+  const coord = [entreprise.adresse, entreprise.ninea && 'NINEA ' + entreprise.ninea, entreprise.telephone].filter(Boolean);
+  const rows = lignes.map(l => {
+    const montant = l.article.prix_vente * l.qte;
+    return `<tr><td>${Djigui.esc(l.article.designation)}<br><span>${l.qte} × ${Djigui.fmt(l.article.prix_vente)}</span></td>
+      <td class="r-right">${Djigui.fmt(montant)}</td></tr>`;
+  }).join('');
+  dernierTicketHtml = `<div class="recu-ticket">
+    <div class="r-c r-big">${Djigui.esc(entreprise.raison_sociale || 'Djigui')}</div>
+    <div class="r-c">${coord.map(Djigui.esc).join('<br>')}</div>
+    <div class="r-sep"></div>
+    <div class="r-row"><span>Ticket</span><span>${Djigui.esc(numero)}</span></div>
+    <div class="r-row"><span>Date</span><span>${dt}</span></div>
+    <div class="r-sep"></div>
+    <table>${rows}</table>
+    <div class="r-sep"></div>
+    <div class="r-row"><span>Total HT</span><span>${Djigui.fmt(t.ht)}</span></div>
+    ${t.taxes.map(x => `<div class="r-row"><span>${Djigui.esc(x.nom)}</span><span>${Djigui.fmt(x.montant)}</span></div>`).join('')}
+    <div class="r-row r-big"><span>TOTAL</span><span>${Djigui.fmt(t.ttc)} ${dev}</span></div>
+    <div class="r-sep"></div>
+    <div class="r-row"><span>Règlement</span><span>${Djigui.esc(moyenLbl)}</span></div>
+    ${avecRendu ? `<div class="r-row"><span>Reçu</span><span>${Djigui.fmt(recu)}</span></div>
+      <div class="r-row"><span>Rendu</span><span>${Djigui.fmt(rendu)}</span></div>` : ''}
+    <div class="r-sep"></div>
+    <div class="r-c">${Djigui.esc(entreprise.pied_facture || 'Merci de votre visite !')}</div></div>`;
+  dernierTicketTexte = ticketTexte(numero, lignes, t, moyenLbl, recu, rendu, dt, coord, avecRendu);
+  if (impressionAuto) lancerImpression();  // arrière-plan si imprimante ; sinon dialogue
+}
+
+// Ticket en texte brut (mono-largeur ~32 col) pour l'impression ESC/POS native.
+const LARG = 32;
+function ligneLR(g, d) {
+  g = String(g); d = String(d);
+  const espace = Math.max(1, LARG - g.length - d.length);
+  return (g + ' '.repeat(espace) + d).slice(0, LARG);
+}
+const centre = s => { s = String(s).slice(0, LARG); const p = Math.max(0, (LARG - s.length) >> 1); return ' '.repeat(p) + s; };
+const tiret = '-'.repeat(LARG);
+
+function ticketTexte(numero, lignes, t, moyenLbl, recu, rendu, dt, coord, avecRendu) {
+  const dev = entreprise.devise || 'FCFA';
+  const L = [];
+  L.push(centre((entreprise.raison_sociale || 'Djigui').toUpperCase()));
+  coord.forEach(c => L.push(centre(c)));
+  L.push(tiret);
+  L.push(ligneLR('Ticket', numero));
+  L.push(ligneLR('Date', dt));
+  L.push(tiret);
+  lignes.forEach(l => {
+    L.push(l.article.designation.slice(0, LARG)); // désignation (texte brut)
+    L.push(ligneLR(`  ${l.qte} x ${Djigui.fmt(l.article.prix_vente)}`, Djigui.fmt(l.article.prix_vente * l.qte)));
+  });
+  L.push(tiret);
+  L.push(ligneLR('Total HT', Djigui.fmt(t.ht)));
+  t.taxes.forEach(x => L.push(ligneLR(x.nom, Djigui.fmt(x.montant))));
+  L.push(ligneLR('TOTAL', `${Djigui.fmt(t.ttc)} ${dev}`));
+  L.push(tiret);
+  L.push(ligneLR('Reglement', moyenLbl));
+  if (avecRendu) {
+    L.push(ligneLR('Recu', Djigui.fmt(recu)));
+    L.push(ligneLR('Rendu', Djigui.fmt(rendu)));
+  }
+  L.push(tiret);
+  L.push(centre(entreprise.pied_facture || 'Merci de votre visite !'));
+  // désignation : garder les accents (l'encodage CP858 est géré côté serveur)
+  return L.join('\n').replace(/[   ]/g, ' ');
+}
+
+// Impression : native (arrière-plan) si une imprimante est configurée, sinon
+// repli sur le dialogue navigateur (iframe).
+async function lancerImpression() {
+  if (imprimanteTicket && dernierTicketTexte) {
+    try {
+      await Djigui.api('/api/imprimer', { method:'POST', body:{ texte: dernierTicketTexte } });
+      return;
+    } catch (e) {
+      Djigui.toast('Impression : ' + e.message + ' — repli à l’écran', 'warn');
+    }
+  }
+  if (dernierTicketHtml) Djigui.imprimer(dernierTicketHtml);
+}
+
+// ---- Encaissement rapide : Entrée dans « Montant reçu » valide ----
+inputRecu.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('pay-confirmer').click(); }
+});
+
+// ---- Garde-fou : ne pas quitter s'il reste des tickets en attente ----
+let sortieConfirmee = false;
+function confirmerSortie() {
+  const n = ticketsEnAttente().length;
+  if (!n) return true;
+  return confirm(`Il reste ${n} ticket${n>1?'s':''} en attente (non encaissé${n>1?'s':''}). Quitter la caisse ? Ces tickets seront perdus.`);
+}
+// Navigation interne (liens du menu) : confirmation personnalisée.
+document.querySelector('.sidebar').addEventListener('click', e => {
+  const lien = e.target.closest('a.nav-item[href]');
+  if (!lien || lien.getAttribute('href') === '#' || sortieConfirmee) return;
+  if (!ticketsEnAttente().length) return;
+  e.preventDefault();
+  if (confirmerSortie()) { sortieConfirmee = true; location.href = lien.href; }
+});
+// Fermeture / rechargement de la fenêtre : invite native du navigateur.
+window.addEventListener('beforeunload', e => {
+  if (!sortieConfirmee && ticketsEnAttente().length) { e.preventDefault(); e.returnValue = ''; }
+});
+
+init();
+</script>
+</body>
+</html>

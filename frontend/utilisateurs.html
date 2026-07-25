@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Utilisateurs</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=19">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Utilisateurs</div>
+        <div class="topbar-date">Comptes de connexion et rôles</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div></div>
+        <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-plus"></i>Nouvel utilisateur</button>
+      </div>
+
+      <div class="card" style="padding:0;overflow:visible">
+        <table class="table">
+          <thead>
+            <tr><th>Identifiant</th><th>Nom</th><th>Rôle</th><th class="right">État</th><th class="right">Actions</th></tr>
+          </thead>
+          <tbody id="corps">
+            <tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="aide">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Créez un <strong>compte par personne</strong> qui utilise le logiciel. Chaque action (vente, paiement, facture…) est <strong>enregistrée au nom de l'utilisateur connecté</strong>.</li>
+          <li>Deux rôles : <strong>Administrateur</strong> (accès à tout, dont cet écran et les paramètres) et <strong>Caissier</strong> (caisse, ventes, tiers).</li>
+          <li>On ne supprime pas un utilisateur, on le <strong>désactive</strong> (il ne peut plus se connecter, mais son historique reste). Il doit toujours rester au moins un administrateur actif.</li>
+          <li>Pour changer un mot de passe, ouvrez la fiche de l'utilisateur et saisissez le nouveau ; laissez vide pour ne pas le modifier.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modale : créer / modifier un utilisateur -->
+<div class="modal-overlay" id="modal" hidden>
+  <div class="modal">
+    <div class="card-head"><span class="card-title" id="modal-titre">Nouvel utilisateur</span>
+      <i class="ti ti-x" id="modal-fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <form id="form" class="form-grid">
+      <div class="field"><label>Identifiant (login)</label>
+        <input name="login" id="in-login" required autocomplete="off"></div>
+      <div class="field"><label>Nom complet</label>
+        <input name="nom" id="in-nom" required></div>
+      <div class="field"><label>Rôle</label>
+        <select name="role" id="in-role">
+          <option value="caissier">Caissier</option>
+          <option value="admin">Administrateur</option>
+        </select></div>
+      <div class="field" id="champ-actif" hidden><label>État</label>
+        <select name="actif" id="in-actif">
+          <option value="1">Actif</option>
+          <option value="0">Désactivé</option>
+        </select></div>
+      <div class="field full"><label id="label-mdp">Mot de passe</label>
+        <input name="mot_de_passe" id="in-mdp" type="password" autocomplete="new-password">
+        <span class="check-hint muted" id="hint-mdp">Au moins 4 caractères.</span></div>
+      <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
+        <button type="button" class="btn" id="modal-annuler">Annuler</button>
+        <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="assets/app.js?v=9"></script>
+<script>
+// Écran réservé aux administrateurs.
+if (!Djigui.estAdmin()) { Djigui.toast('Accès réservé aux administrateurs', 'warn'); location.replace('accueil.html'); }
+
+const corps = document.getElementById('corps');
+const modal = document.getElementById('modal');
+const form = document.getElementById('form');
+let utilisateurs = [];
+let editionId = null;
+
+const ROLES = { admin:'Administrateur', caissier:'Caissier' };
+function badgeRole(r){ return `<span class="badge ${r==='admin'?'ok':'neutral'}">${ROLES[r]||r}</span>`; }
+
+function rendre() {
+  corps.innerHTML = utilisateurs.length ? utilisateurs.map(u => `
+    <tr style="${u.actif?'':'opacity:.55'}">
+      <td class="num">${Djigui.esc(u.login)}</td>
+      <td>${Djigui.esc(u.nom)}</td>
+      <td>${badgeRole(u.role)}</td>
+      <td class="right">${u.actif ? '<span class="badge ok">Actif</span>' : '<span class="badge neutral">Désactivé</span>'}</td>
+      <td class="right actions">
+        <button class="icon-act" data-act="edit" data-id="${u.id}" title="Modifier"><i class="ti ti-edit"></i></button>
+        ${u.actif ? `<button class="icon-act danger" data-act="del" data-id="${u.id}" title="Désactiver"><i class="ti ti-user-off"></i></button>` : ''}
+      </td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Aucun utilisateur</td></tr>';
+}
+
+async function charger() {
+  try { utilisateurs = await Djigui.api('/api/utilisateurs'); rendre(); }
+  catch (e) { corps.innerHTML = `<tr><td colspan="5" class="badge danger" style="text-align:center;padding:24px">Erreur : ${Djigui.esc(e.message)}</td></tr>`; }
+}
+
+function ouvrirCreation() {
+  editionId = null; form.reset();
+  document.getElementById('modal-titre').textContent = 'Nouvel utilisateur';
+  document.getElementById('in-login').disabled = false;
+  document.getElementById('champ-actif').hidden = true;
+  document.getElementById('label-mdp').textContent = 'Mot de passe';
+  document.getElementById('hint-mdp').textContent = 'Au moins 4 caractères.';
+  document.getElementById('in-mdp').required = true;
+  modal.hidden = false; document.getElementById('in-login').focus();
+}
+function ouvrirEdition(u) {
+  editionId = u.id; form.reset();
+  document.getElementById('modal-titre').textContent = 'Modifier l\'utilisateur';
+  document.getElementById('in-login').value = u.login;
+  document.getElementById('in-login').disabled = true; // le login ne change pas
+  document.getElementById('in-nom').value = u.nom;
+  document.getElementById('in-role').value = u.role;
+  document.getElementById('champ-actif').hidden = false;
+  document.getElementById('in-actif').value = u.actif ? '1' : '0';
+  document.getElementById('label-mdp').textContent = 'Nouveau mot de passe';
+  document.getElementById('hint-mdp').textContent = 'Laissez vide pour garder le mot de passe actuel.';
+  document.getElementById('in-mdp').required = false;
+  modal.hidden = false;
+}
+const fermer = () => { modal.hidden = true; };
+document.getElementById('btn-nouveau').addEventListener('click', ouvrirCreation);
+document.getElementById('modal-fermer').addEventListener('click', fermer);
+document.getElementById('modal-annuler').addEventListener('click', fermer);
+
+corps.addEventListener('click', async e => {
+  const btn = e.target.closest('.icon-act'); if (!btn) return;
+  const u = utilisateurs.find(x => x.id === btn.dataset.id); if (!u) return;
+  if (btn.dataset.act === 'edit') ouvrirEdition(u);
+  else if (btn.dataset.act === 'del') {
+    if (!await Djigui.confirm(`Désactiver le compte « ${u.login} » ?`)) return;
+    try { await Djigui.api(`/api/utilisateurs/${u.id}`, { method:'DELETE' });
+      Djigui.toast('Utilisateur désactivé', 'ok'); charger(); }
+    catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+  }
+});
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const mdp = document.getElementById('in-mdp').value;
+  try {
+    if (editionId) {
+      await Djigui.api(`/api/utilisateurs/${editionId}`, { method:'PUT', body: {
+        nom: document.getElementById('in-nom').value.trim(),
+        role: document.getElementById('in-role').value,
+        actif: document.getElementById('in-actif').value === '1',
+        mot_de_passe: mdp || null,
+      }});
+      Djigui.toast('Utilisateur modifié', 'ok');
+    } else {
+      await Djigui.api('/api/utilisateurs', { method:'POST', body: {
+        login: document.getElementById('in-login').value.trim(),
+        nom: document.getElementById('in-nom').value.trim(),
+        role: document.getElementById('in-role').value,
+        mot_de_passe: mdp,
+      }});
+      Djigui.toast('Utilisateur créé', 'ok');
+    }
+    fermer(); charger();
+  } catch (err) { Djigui.toast('Erreur : ' + err.message, 'danger'); }
+});
+
+charger();
+</script>
+</body>
+</html>

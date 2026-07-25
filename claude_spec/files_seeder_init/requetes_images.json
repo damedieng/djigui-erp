@@ -1,0 +1,87 @@
+{
+  "_commentaire": "Mapping code_article -> requetes de recherche. Les requetes sont en anglais : les moteurs d'images libres sont indexes en anglais. 'q' est la requete principale, 'alt' la requete de secours si 'q' ne donne rien d'exploitable. Voir IMAGES-SOURCING.md.",
+  "_licences_autorisees": ["cc0", "pdm"],
+  "articles": {
+    "eau_minerale_1_5l": { "q": "plastic water bottle isolated", "alt": "mineral water bottle" },
+    "eau_minerale_50cl": { "q": "small water bottle isolated", "alt": "drinking water bottle" },
+    "soda_33cl": { "q": "soda can isolated", "alt": "beverage can" },
+    "soda_1_5l": { "q": "soft drink bottle isolated", "alt": "plastic soda bottle" },
+    "jus_bissap_1l": { "q": "hibiscus juice glass", "alt": "red fruit juice bottle" },
+    "jus_bouye_1l": { "q": "baobab fruit juice", "alt": "baobab fruit" },
+    "cafe_touba_sachet": { "q": "ground coffee powder", "alt": "coffee grounds spoon" },
+    "cafe_instantane_stick": { "q": "instant coffee sachet", "alt": "instant coffee powder" },
+    "the_vert_paquet": { "q": "green tea leaves package", "alt": "loose green tea" },
+
+    "huile_vegetale_1l": { "q": "vegetable oil bottle isolated", "alt": "cooking oil bottle" },
+    "huile_vegetale_5l": { "q": "large oil container plastic", "alt": "cooking oil jerrycan" },
+    "sucre_morceaux_1kg": { "q": "sugar cubes pile", "alt": "sugar cube box" },
+    "sucre_poudre_1kg": { "q": "white granulated sugar", "alt": "sugar bowl white" },
+    "tomate_concentree_70g": { "q": "tomato paste can", "alt": "tomato puree tin" },
+    "pates_alimentaires_500g": { "q": "dry pasta spaghetti", "alt": "uncooked macaroni" },
+    "sardine_boite": { "q": "canned sardines tin", "alt": "sardine can open" },
+    "farine_ble_1kg": { "q": "wheat flour bowl", "alt": "flour pile white" },
+
+    "riz_brise_parfume_kg": { "q": "white rice grains bowl", "alt": "raw rice pile" },
+    "riz_brise_ordinaire_kg": { "q": "broken rice grains", "alt": "uncooked white rice" },
+    "mil_kg": { "q": "millet grains", "alt": "pearl millet seeds" },
+    "mais_kg": { "q": "maize corn kernels", "alt": "dried corn grains" },
+    "niebe_kg": { "q": "cowpea beans", "alt": "black eyed peas dried" },
+    "arachide_decortiquee_kg": { "q": "shelled peanuts", "alt": "raw groundnuts" },
+
+    "lait_poudre_sachet": { "q": "milk powder", "alt": "powdered milk spoon" },
+    "lait_concentre_sucre": { "q": "condensed milk tin", "alt": "evaporated milk can" },
+    "lait_uht_1l": { "q": "milk carton isolated", "alt": "milk bottle white" },
+    "yaourt_pot": { "q": "yogurt pot", "alt": "plain yoghurt cup" },
+    "beurre_plaquette": { "q": "butter block", "alt": "butter stick" },
+
+    "bouillon_cube": { "q": "bouillon cube", "alt": "stock cube seasoning" },
+    "sel_fin_1kg": { "q": "table salt pile", "alt": "fine salt bowl" },
+    "poivre_moulu_sachet": { "q": "ground black pepper", "alt": "pepper powder spoon" },
+    "nete_sachet": { "q": "fermented locust bean", "alt": "african spice seeds" },
+    "vinaigre_bouteille": { "q": "vinegar bottle", "alt": "white vinegar bottle" },
+    "moutarde_pot": { "q": "mustard jar", "alt": "yellow mustard pot" },
+
+    "savon_menage_barre": { "q": "soap bar plain", "alt": "laundry soap bar" },
+    "savon_toilette": { "q": "bath soap bar", "alt": "toilet soap" },
+    "lessive_poudre_sachet": { "q": "laundry detergent powder", "alt": "washing powder" },
+    "eau_javel_1l": { "q": "bleach bottle cleaning", "alt": "household bleach" },
+    "papier_hygienique_rouleau": { "q": "toilet paper roll", "alt": "tissue roll white" },
+    "dentifrice_tube": { "q": "toothpaste tube plain", "alt": "toothpaste squeeze" },
+    "allumettes_boite": { "q": "matchbox matches", "alt": "wooden matches" },
+    "bougie_piece": { "q": "white candle", "alt": "wax candle plain" },
+
+    "thieboudienne": { "q": "rice fish dish west african", "alt": "jollof rice fish" },
+    "yassa_poulet": { "q": "chicken onion sauce rice", "alt": "grilled chicken rice plate" },
+    "mafe": { "q": "peanut stew meat", "alt": "groundnut soup meat" },
+    "domoda": { "q": "meat stew rice plate", "alt": "beef stew bowl" },
+    "soupe_kandia": { "q": "okra stew", "alt": "okra soup bowl" },
+    "thiou_viande": { "q": "meat tomato stew rice", "alt": "beef tomato stew" },
+
+    "poulet_braise_entier": { "q": "whole grilled chicken", "alt": "roast chicken plate" },
+    "demi_poulet_braise": { "q": "half grilled chicken", "alt": "grilled chicken pieces" },
+    "dibi_mouton_kg": { "q": "grilled mutton meat", "alt": "barbecue lamb pieces" },
+    "poisson_braise": { "q": "grilled fish whole", "alt": "barbecue fish plate" },
+    "brochette_viande": { "q": "meat skewer grilled", "alt": "beef kebab stick" },
+
+    "sandwich_viande": { "q": "meat sandwich baguette", "alt": "beef sandwich" },
+    "sandwich_poulet": { "q": "chicken sandwich baguette", "alt": "chicken sub sandwich" },
+    "sandwich_omelette": { "q": "egg omelette sandwich", "alt": "egg baguette" },
+    "chawarma": { "q": "shawarma wrap", "alt": "doner kebab wrap" },
+    "burger_simple": { "q": "hamburger plain", "alt": "burger bun beef" },
+    "frites_portion": { "q": "french fries portion", "alt": "fried potato chips" },
+
+    "cafe_touba_tasse": { "q": "cup of black coffee", "alt": "coffee cup spiced" },
+    "cafe_au_lait": { "q": "coffee with milk cup", "alt": "cafe au lait glass" },
+    "the_tasse": { "q": "cup of tea", "alt": "tea glass mint" },
+    "pain_beurre": { "q": "bread with butter", "alt": "baguette butter slice" },
+    "bouillie_mil": { "q": "millet porridge bowl", "alt": "cereal porridge bowl" },
+
+    "jus_bissap_verre": { "q": "hibiscus drink glass", "alt": "red juice glass ice" },
+    "jus_gingembre_verre": { "q": "ginger juice glass", "alt": "ginger drink" },
+
+    "supplement_riz": { "q": "cooked white rice plate", "alt": "steamed rice bowl" },
+    "supplement_sauce": { "q": "sauce bowl", "alt": "gravy bowl" },
+    "salade_portion": { "q": "green salad plate", "alt": "vegetable salad bowl" },
+    "emballage_a_emporter": { "q": "takeaway food container", "alt": "food box packaging" }
+  }
+}
