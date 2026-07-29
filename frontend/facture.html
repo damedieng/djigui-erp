@@ -6,7 +6,7 @@
 <title>Djigui · Facture</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=33">
 <script src="assets/vendor/pdfmake.min.js"></script>
 <script src="assets/vendor/vfs_fonts.js"></script>
 </head>
@@ -91,7 +91,27 @@
             <div class="tot-row"><span>Total HT</span><span class="num" id="f-ht">0</span></div>
             <div id="f-ventilation"></div>
             <div class="tot-grand" style="border-top:1px solid var(--border);padding-top:10px"><span>Total TTC</span><span class="num" id="f-ttc">0</span></div>
+            <!-- Retenue à la source (mig 0043) : elle SE SOUSTRAIT de ce que le
+                 client verse, contrairement à une taxe. D'où le net à payer,
+                 mis en évidence : c'est le montant que le client règle. -->
+            <div class="tot-row" id="f-retenue-row" hidden>
+              <span id="f-retenue-lbl">Retenue à la source</span>
+              <span class="num" id="f-retenue">0</span>
+            </div>
+            <div class="tot-grand" id="f-net-row" hidden
+                 style="border-top:1px solid var(--border);padding-top:10px">
+              <span>Net à payer</span><span class="num" id="f-net">0</span>
+            </div>
           </div>
+        </div>
+
+        <!-- Mention légale obligatoire (N1 OHADA). Elle fait foi en cas de
+             litige : un chiffre se falsifie d'un trait de stylo, pas une
+             phrase. Elle est calculée par le serveur, donc identique au mot
+             près sur l'écran et sur le PDF. -->
+        <div id="f-lettres-bloc" class="doc-lettres" hidden>
+          <span class="doc-lettres-lbl">Arrêtée la présente facture à la somme de</span>
+          <span class="doc-lettres-txt" id="f-lettres"></span>
         </div>
 
         <div class="doc-foot" id="doc-pied"></div>
@@ -115,7 +135,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=9"></script>
+<script src="assets/app.js?v=16"></script>
 <script>
 // --- Mentions légales (OHADA) -------------------------------------------
 // Toute mention absente est simplement omise : rien n'est obligatoire, une
@@ -222,6 +242,30 @@ async function init() {
       : `<div class="tot-row"><span>TVA</span><span class="num">${Djigui.fmt(doc.total_tva)}</span></div>`;
 
     document.getElementById('f-ttc').textContent = Djigui.fmt(doc.total_ttc) + ' ' + dev;
+
+    // Retenue à la source : affichée seulement si elle s'applique. Une ligne
+    // « Retenue : 0 » sur toutes les factures ne ferait qu'encombrer.
+    const retenue = doc.montant_retenue || 0;
+    document.getElementById('f-retenue-row').hidden = retenue === 0;
+    document.getElementById('f-net-row').hidden = retenue === 0;
+    if (retenue) {
+      document.getElementById('f-retenue-lbl').textContent =
+        'Retenue à la source' + (doc.retenue_taux ? ` (${doc.retenue_taux} %)` : '');
+      // Le signe « − » est explicite : c'est ce qui distingue une retenue
+      // d'une taxe, et l'oublier ferait lire la ligne à l'envers.
+      document.getElementById('f-retenue').textContent =
+        '− ' + Djigui.fmt(retenue) + ' ' + dev;
+      document.getElementById('f-net').textContent =
+        Djigui.fmt(doc.net_a_payer) + ' ' + dev;
+    }
+
+    // Mention en toutes lettres : elle vient du SERVEUR, jamais recalculée ici.
+    // La recalculer côté écran ferait courir le risque que le PDF et l'écran
+    // finissent par ne plus dire la même chose.
+    const enLettres = doc.montant_ttc_lettres || '';
+    document.getElementById('f-lettres').textContent = enLettres;
+    document.getElementById('f-lettres-bloc').hidden = !enLettres;
+
     document.getElementById('doc-pied').textContent = ent.pied_facture || '';
   } catch (e) {
     document.getElementById('doc-soustitre').textContent = 'Erreur : ' + e.message;
@@ -290,6 +334,20 @@ function construireDocDefinition() {
     { text: 'Total TTC', bold: true, fontSize: 12 },
     { text: fmt(doc.total_ttc) + ' ' + dev, alignment: 'right', bold: true, fontSize: 12 },
   ]);
+  // Retenue à la source : elle SE SOUSTRAIT du versement, contrairement à une
+  // taxe. Le « − » explicite évite de lire la ligne à l'envers, et le net à
+  // payer devient le montant mis en avant — c'est celui que le client règle.
+  if (doc.montant_retenue) {
+    totRows.push([
+      { text: 'Retenue à la source' + (doc.retenue_taux ? ` (${doc.retenue_taux} %)` : ''),
+        style: 'muted' },
+      { text: '− ' + fmt(doc.montant_retenue), alignment: 'right' },
+    ]);
+    totRows.push([
+      { text: 'NET À PAYER', bold: true, fontSize: 12 },
+      { text: fmt(doc.net_a_payer) + ' ' + dev, alignment: 'right', bold: true, fontSize: 12 },
+    ]);
+  }
 
   const coordCli = tiers ? lignesTiers(tiers).join('\n') : '';
 
@@ -366,6 +424,27 @@ function construireDocDefinition() {
           { width: 230, table: { widths: ['*', 'auto'], body: totRows }, layout: 'noBorders' },
         ],
       },
+      // Mention obligatoire du montant arrêté en toutes lettres (N1 OHADA).
+      // ⚠️ Elle vient du serveur (`doc.montant_ttc_lettres`) et n'est JAMAIS
+      // recalculée ici : l'écran et le PDF doivent dire la même phrase au mot
+      // près, sinon la mention perd tout intérêt.
+      // ⚠️ Encadrée, pas noyée dans le pied de page : c'est elle qui fait foi
+      // en cas de litige, elle doit se repérer du premier coup d'œil.
+      doc.montant_ttc_lettres ? {
+        margin: [0, 18, 0, 0],
+        table: { widths: ['*'], body: [[{
+          stack: [
+            { text: 'Arrêtée la présente ' + (typeLbl || 'pièce').toLowerCase()
+                    + ' à la somme de :', style: 'muted' },
+            { text: doc.montant_ttc_lettres, bold: true, margin: [0, 3, 0, 0] },
+          ],
+          margin: [6, 5, 6, 5],
+        }]] },
+        layout: {
+          hLineWidth: () => 0.6, vLineWidth: () => 0.6,
+          hLineColor: () => '#d7ddd6', vLineColor: () => '#d7ddd6',
+        },
+      } : {},
       ent.pied_facture ? { text: ent.pied_facture, style: 'muted', alignment: 'center', margin: [0, 28, 0, 0] } : {},
     ],
     footer: (page, count) => ({ text: `${page} / ${count}`, alignment: 'center', style: 'muted', margin: [0, 8, 0, 0] }),

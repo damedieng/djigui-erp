@@ -53,6 +53,65 @@ const Djigui = (() => {
     setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3200);
   }
 
+  // Info-bulle maison, valable sur TOUTES les pages.
+  //
+  // Pourquoi ne pas se contenter de `title` : l'info-bulle du navigateur met une
+  // seconde à venir, disparaît toute seule, ne se met pas en forme et sort de
+  // l'écran quand le texte fait plusieurs lignes. Ici c'est un texte
+  // d'explication qu'on veut lire, pas une étiquette.
+  //
+  // Usage : poser `data-tip="…"` sur n'importe quel élément (les sauts de ligne
+  // et les puces « • » sont conservés). Fonctionne aussi sur le contenu créé
+  // après coup, puisque l'écoute est posée sur `document`.
+  function installerInfobulles() {
+    let boite = null, minuteur = null;
+    const fermer = () => {
+      clearTimeout(minuteur);
+      if (boite) { boite.classList.remove('show'); const b = boite; boite = null;
+                   setTimeout(() => b.remove(), 160); }
+    };
+    const ouvrir = cible => {
+      const texte = cible.getAttribute('data-tip');
+      if (!texte) return;
+      fermer();
+      boite = document.createElement('div');
+      boite.className = 'dj-tip';
+      boite.textContent = texte;             // textContent : aucune injection possible
+      document.body.appendChild(boite);
+      // Placement : au-dessus si ça tient, sinon en dessous. Toujours ramené
+      // dans l'écran — une bulle coupée ne sert à rien.
+      const r = cible.getBoundingClientRect();
+      const b = boite.getBoundingClientRect();
+      const marge = 8;
+      let top = r.top - b.height - marge;
+      if (top < marge) top = r.bottom + marge;
+      let left = r.left + r.width / 2 - b.width / 2;
+      left = Math.max(marge, Math.min(left, window.innerWidth - b.width - marge));
+      boite.style.top = Math.round(top) + 'px';
+      boite.style.left = Math.round(left) + 'px';
+      requestAnimationFrame(() => boite.classList.add('show'));
+    };
+    document.addEventListener('mouseover', e => {
+      const c = e.target.closest('[data-tip]');
+      if (!c) return;
+      clearTimeout(minuteur);
+      minuteur = setTimeout(() => ouvrir(c), 120);   // court délai anti-clignotement
+    });
+    document.addEventListener('mouseout', e => {
+      if (e.target.closest('[data-tip]')) fermer();
+    });
+    // Au clavier : l'explication doit rester atteignable sans souris.
+    document.addEventListener('focusin', e => {
+      const c = e.target.closest('[data-tip]'); if (c) ouvrir(c);
+    });
+    document.addEventListener('focusout', fermer);
+    // Défilement ou redimensionnement : la bulle serait au mauvais endroit.
+    window.addEventListener('scroll', fermer, true);
+    window.addEventListener('resize', fermer);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fermer(); });
+  }
+  installerInfobulles();
+
   // Impression isolée : on écrit le contenu dans un iframe caché et on imprime
   // CE document. La fenêtre principale de l'application n'est pas affectée
   // (contrairement à window.print() sur la page, qui pouvait fermer l'appli).
@@ -198,6 +257,7 @@ const Djigui = (() => {
   const estAdmin = () => { const u = user(); return !!u && u.role === 'admin'; };
 
   return { api, fmt, esc, dateFr, toast, imprimer, confirm: confirmer, alert: alerte,
+    rafraichirMenu: () => rafraichirMenu(),
            selectRecherche, user, setUser, logout, estAdmin };
 })();
 
@@ -219,24 +279,49 @@ const Djigui = (() => {
 const MENU = [
   { href: 'accueil.html', icone: 'ti-home', libelle: 'Accueil' },
   { groupe: 'Commerce' },
-  { href: 'documents.html?sens=vente', icone: 'ti-shopping-cart', libelle: 'Ventes' },
-  { href: 'caisse.html', icone: 'ti-cash', libelle: 'Caisse' },
-  { href: 'caisse-etat.html', icone: 'ti-wallet', libelle: 'État de caisse' },
-  { href: 'documents.html', icone: 'ti-file-invoice', libelle: 'Factures' },
-  { href: 'abonnements.html', icone: 'ti-repeat', libelle: 'Abonnements' },
-  { href: 'agenda.html', icone: 'ti-calendar-event', libelle: 'Agenda' },
-  { href: 'projets.html', icone: 'ti-briefcase', libelle: 'Projets' },
-  { href: 'documents.html?sens=achat', icone: 'ti-truck', libelle: 'Achats' },
+  { href: 'documents.html?sens=vente', icone: 'ti-shopping-cart', libelle: 'Ventes', module: 'facturation' },
+  { href: 'caisse.html', icone: 'ti-cash', libelle: 'Caisse', module: 'caisse' },
+  { href: 'caisse-etat.html', icone: 'ti-wallet', libelle: 'État de caisse', module: 'caisse' },
+  { href: 'documents.html', icone: 'ti-file-invoice', libelle: 'Factures', module: 'facturation' },
+  { href: 'abonnements.html', icone: 'ti-repeat', libelle: 'Abonnements', module: 'abonnements' },
+  { href: 'agenda.html', icone: 'ti-calendar-event', libelle: 'Agenda', module: 'agenda' },
+  { href: 'documents.html?sens=achat', icone: 'ti-truck', libelle: 'Achats', module: 'facturation' },
+  // Groupe à part, et ce n'est pas cosmétique : l'application peut être livrée
+  // avec CES DEUX MODULES SEULS (cas d'une ONG, qui pilote des projets et passe
+  // des marchés sans tenir de caisse). Les isoler ici est la première marche
+  // vers des modules activables dans les paramètres.
+  { groupe: 'Projets & Marchés' },
+  { href: 'projets.html', icone: 'ti-briefcase', libelle: 'Projets', module: 'projets' },
+  { href: 'marches.html', icone: 'ti-gavel', libelle: 'Marchés', module: 'marches' },
   { groupe: 'Catalogue' },
   { href: 'articles.html', icone: 'ti-box', libelle: 'Articles' },
-  { href: 'magasins.html', icone: 'ti-building-warehouse', libelle: 'Magasins', admin: 1 },
-  { href: '#', icone: 'ti-tools', libelle: 'Production' },
+  { href: 'magasins.html', icone: 'ti-building-warehouse', libelle: 'Magasins', admin: 1, module: 'magasins' },
+  { href: 'production.html', icone: 'ti-tools', libelle: 'Production', module: 'production' },
+  // Sans prix d'achat, la marge affichée est fausse : cet écran existe pour
+  // que le commerçant s'en aperçoive et le corrige.
+  { href: 'completer-prix.html', icone: 'ti-tag', libelle: 'Compléter mes prix', admin: 1 },
+  { groupe: 'Paie & RH' },
+  // Les paramètres légaux passent AVANT les salariés dans le menu : sans eux,
+  // aucun bulletin ne peut être calculé. L'ordre du menu dit l'ordre de mise
+  // en route.
+  { href: 'paie-employes.html', icone: 'ti-users-group', libelle: 'Salariés',
+    admin: 1, module: 'paie' },
+  { href: 'paie-parametres.html', icone: 'ti-adjustments-dollar', libelle: 'Paramètres de paie',
+    admin: 1, module: 'paie' },
   { groupe: 'Contacts' },
   { href: 'tiers.html', icone: 'ti-users', libelle: 'Tiers' },
-  { href: '#', icone: 'ti-chart-bar', libelle: 'Rapports' },
+  { href: 'rapports.html', icone: 'ti-chart-bar', libelle: 'Rapports', module: 'rapports' },
+  // Écran du comptable : il crée ses comptes, écrit ses règles et range
+  // l'historique. Le commerçant n'y met jamais les pieds — d'où `admin`.
+  { href: 'comptabilite.html', icone: 'ti-book-2', libelle: 'Comptabilité', admin: 1, module: 'comptabilite' },
   { pied: 1 },
   { href: 'utilisateurs.html', icone: 'ti-user-shield', libelle: 'Utilisateurs', admin: 1 },
   { href: 'journal-audit.html', icone: 'ti-history', libelle: "Journal d'audit", admin: 1 },
+  { href: 'modules.html', icone: 'ti-puzzle', libelle: 'Modules', admin: 1 },
+  // Pas de `module:` — la sauvegarde fait partie du socle. Elle ne se vend pas
+  // et ne se masque pas : c'est la seule chose qui distingue une panne de
+  // disque d'une fermeture d'entreprise.
+  { href: 'sauvegarde.html', icone: 'ti-database-export', libelle: 'Sauvegarde', admin: 1 },
   { href: 'parametres.html', icone: 'ti-settings', libelle: 'Paramètres' },
 ];
 
@@ -248,10 +333,62 @@ function entreeActive(href) {
   const cible = href.split('?')[0];
   const sensCible = (href.split('?')[1] || '').replace('sens=', '');
   if (page === 'projet-detail.html') return cible === 'projets.html';
+  if (page === 'marche-detail.html') return cible === 'marches.html';
   if (page === 'facture.html') return cible === 'documents.html' && !sensCible;
   if (cible !== page) return false;
   // Ventes / Factures / Achats pointent tous vers documents.html.
   return sensCible === sens;
+}
+
+
+// ---------------------------------------------------------------------------
+// Modules visibles (migration 0040)
+//
+// Le menu ne doit PAS clignoter au chargement : construire avec tout puis
+// retirer ferait apparaitre une fraction de seconde des ecrans auxquels le
+// client n'a pas droit. On construit donc a partir d'un CACHE local, puis on
+// reconstruit en silence si le serveur dit autre chose.
+//
+// Le cache n'est qu'un confort d'affichage : le serveur reste seul juge, et une
+// entree de menu forcee a la main ne donnerait acces a rien de plus.
+const CLE_MODULES = 'djigui-modules-visibles';
+
+function modulesEnCache() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLE_MODULES) || 'null');
+    return Array.isArray(v) ? v : null;
+  } catch { return null; }
+}
+
+// Une entree sans `module` appartient au socle : elle est toujours affichee.
+//
+// ⚠️ Une liste VIDE est traitée comme « pas d'information », donc tout reste
+// visible. Sans cette précaution, une réponse serveur inattendue ferait
+// disparaître le menu entier — et l'utilisateur croirait son logiciel cassé.
+// Le sens de l'erreur compte : trop de menu se corrige d'un clic, plus de menu
+// du tout ressemble à une panne.
+function entreeVisible(e, visibles) {
+  if (!e.module) return true;
+  if (!visibles || !visibles.length) return true;
+  return visibles.includes(e.module);
+}
+
+// Recharge la liste depuis le serveur et reconstruit le menu si elle a change.
+async function rafraichirMenu() {
+  try {
+    const r = await Djigui.api('/api/modules');
+    // Réponse inexploitable (route absente, ancienne version du serveur…) :
+    // on ne touche à rien plutôt que de masquer le menu à tort.
+    if (!r || !Array.isArray(r.modules) || !r.modules.length) return;
+    const codes = r.modules.filter(m => m.visible).map(m => m.code);
+    if (!codes.length) return;   // le socle est toujours visible : liste vide = anomalie
+    const avant = localStorage.getItem(CLE_MODULES);
+    const apres = JSON.stringify(codes);
+    if (avant === apres) return;
+    localStorage.setItem(CLE_MODULES, apres);
+    const aside = document.querySelector('.sidebar');
+    if (aside) { aside.dataset.rempli = ''; aside.innerHTML = ''; construireMenu(); }
+  } catch { /* hors ligne ou route absente : on garde le menu affiche */ }
 }
 
 function construireMenu() {
@@ -259,6 +396,7 @@ function construireMenu() {
   if (!aside || aside.dataset.rempli) return;
   aside.dataset.rempli = '1';
   const admin = Djigui.estAdmin();
+  const visibles = modulesEnCache();
 
   let html = `<div class="brand">
       <div class="brand-mark"><img src="assets/logo-djigui.png" alt="Djigui"></div>
@@ -266,11 +404,48 @@ function construireMenu() {
     </div>`;
   let pied = '';
   let auPied = false;
+  let groupeOuvert = false;   // un groupe est-il en cours d'écriture ?
+
+  // ⚠️ Groupes repliables (demande utilisateur du 2026-07-27). Ils sont
+  // **DÉPLIÉS PAR DÉFAUT** : seul un repli explicite est mémorisé. Trois fois
+  // l'utilisateur a dit « ça disparaît » à propos de comportements qui se
+  // refermaient tout seuls — ici c'est lui qui décide, et rien ne se cache au
+  // premier lancement.
+  const replie = nom => localStorage.getItem(`nav-groupe-replie:${nom}`) === '1';
+
   for (const e of MENU) {
-    if (e.pied) { auPied = true; continue; }
-    if (e.groupe) { html += `<div class="nav-label">${Djigui.esc(e.groupe)}</div>`; continue; }
+    if (e.pied) {
+      if (groupeOuvert) { html += `</div>`; groupeOuvert = false; }
+      auPied = true;
+      continue;
+    }
+    if (e.groupe) {
+      // Un groupe dont aucune entrée n'est visible ne s'affiche pas : un titre
+      // seul, sans rien dessous, ferait croire à un écran cassé.
+      const i = MENU.indexOf(e);
+      const suite = MENU.slice(i + 1);
+      const fin = suite.findIndex(x => x.groupe || x.pied);
+      const dedans = (fin === -1 ? suite : suite.slice(0, fin))
+        .filter(x => (!x.admin || admin) && entreeVisible(x, visibles));
+      if (!dedans.length) { if (groupeOuvert) { html += `</div>`; groupeOuvert = false; } continue; }
+      if (groupeOuvert) html += `</div>`;
+      const ferme = replie(e.groupe);
+      html += `<div class="nav-label nav-groupe${ferme ? ' replie' : ''}" role="button"
+                    tabindex="0" data-groupe="${Djigui.esc(e.groupe)}"
+                    aria-expanded="${!ferme}">
+                 <span>${Djigui.esc(e.groupe)}</span>
+                 <i class="ti ti-chevron-down nav-groupe-fleche"></i>
+               </div>
+               <div class="nav-groupe-corps"${ferme ? ' hidden' : ''}
+                    data-corps="${Djigui.esc(e.groupe)}">`;
+      groupeOuvert = true;
+      continue;
+    }
     // Les entrées réservées disparaissent purement pour un non-admin.
     if (e.admin && !admin) continue;
+    // Un module non souscrit ou masqué ne figure PAS dans le menu de travail.
+    // (Il reste visible, grisé, sur l'écran Modules : c'est la vitrine.)
+    if (!entreeVisible(e, visibles)) continue;
     const actif = entreeActive(e.href);
     // L'entrée active n'est pas un lien : on ne recharge pas la page courante.
     const lien = actif ? '' : ` href="${e.href}"`;
@@ -278,7 +453,39 @@ function construireMenu() {
       `<i class="ti ${e.icone}"></i>${Djigui.esc(e.libelle)}</a>`;
     if (auPied) pied += ligne; else html += ligne;
   }
+  if (groupeOuvert) html += `</div>`;
   aside.innerHTML = html + `<div class="sidebar-foot">${pied}</div>`;
+
+  // Un groupe qui contient la page courante s'ouvre, même s'il était replié :
+  // on ne cache jamais à l'utilisateur où il se trouve.
+  const actif = aside.querySelector('.nav-groupe-corps .nav-item.active');
+  if (actif) {
+    const corps = actif.closest('.nav-groupe-corps');
+    corps.hidden = false;
+    const entete = aside.querySelector(`.nav-groupe[data-groupe="${corps.dataset.corps}"]`);
+    if (entete) { entete.classList.remove('replie'); entete.setAttribute('aria-expanded', 'true'); }
+  }
+
+  aside.addEventListener('click', e => basculerGroupe(e.target.closest('.nav-groupe')));
+  aside.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const g = e.target.closest('.nav-groupe');
+    if (!g) return;
+    e.preventDefault();
+    basculerGroupe(g);
+  });
+
+  function basculerGroupe(entete) {
+    if (!entete) return;
+    const nom = entete.dataset.groupe;
+    const corps = aside.querySelector(`.nav-groupe-corps[data-corps="${nom}"]`);
+    if (!corps) return;
+    const ferme = !corps.hidden;
+    corps.hidden = ferme;
+    entete.classList.toggle('replie', ferme);
+    entete.setAttribute('aria-expanded', String(!ferme));
+    localStorage.setItem(`nav-groupe-replie:${nom}`, ferme ? '1' : '0');
+  }
 }
 
 // ===========================================================================
@@ -458,8 +665,11 @@ function clocheNotifications() {
   document.addEventListener('DOMContentLoaded', () => {
     const u = Djigui.user();
     if (!u) return;
-    // Le menu est construit ici, à partir de la liste unique MENU.
+    // Le menu est construit ici, à partir de la liste unique MENU. Il part du
+    // cache des modules visibles (pas de clignotement), puis se recale en
+    // silence sur ce que dit le serveur.
     construireMenu();
+    rafraichirMenu();
     aidesRepliables();
     clocheNotifications();
     // Masque les éléments réservés admin si l'utilisateur n'est pas admin.

@@ -32,6 +32,16 @@ enum_texte!(TypeRole { Client => "client", Fournisseur => "fournisseur", LesDeux
 // Aucune de ces mentions n'est obligatoire — voir migration 0027.
 enum_texte!(NatureTiers { Particulier => "particulier", Entreprise => "entreprise" });
 enum_texte!(TypeArticle { Bien => "bien", Service => "service" });
+// Nature comptable OHADA d'un article (migration 0032). Pilote à la fois les
+// listes des écrans (ce qui se vend / ce qui se consomme) et, à terme, les
+// comptes employés : marchandise 601/701/31, matière première 602/32,
+// produit fini 702/36 (+ 73 production stockée), service 706.
+// Un négociant et un fabricant ne se comptabilisent pas pareil : c'est ce champ
+// qui fait la différence.
+enum_texte!(NatureComptable {
+    Marchandise => "marchandise", MatierePremiere => "matiere_premiere",
+    ProduitFini => "produit_fini", Service => "service",
+});
 enum_texte!(TypeTaxe { Pourcentage => "pourcentage", Fixe => "fixe" });
 enum_texte!(TypeDocument {
     Devis => "devis", Facture => "facture", Avoir => "avoir",
@@ -78,5 +88,37 @@ enum_texte!(StatutTache {
 enum_texte!(TypeRessource {
     Materiel => "materiel", Budget => "budget", SousTraitance => "sous_traitance",
 });
-enum_texte!(TypeIntervenant { Interne => "interne", Externe => "externe" });
+// Ordre de fabrication. Le stock n'est touché qu'au passage en `termine`
+// (sorties des composants + entrée du produit fini) — voir migration 0031.
+enum_texte!(StatutOrdreProduction {
+    Brouillon => "brouillon", EnCours => "en_cours",
+    Termine => "termine", Annule => "annule",
+});
+enum_texte!(TypeIntervenant{ Interne => "interne", Externe => "externe" });
 enum_texte!(TypeTaux { Horaire => "horaire", Journalier => "journalier", Forfait => "forfait" });
+
+// --- Comptabilité (migration 0034) -----------------------------------------
+// Djigui ne devine rien : le comptable crée ses comptes et écrit ses règles.
+// Ces énumérations décrivent le vocabulaire de SON écran, pas une norme imposée.
+
+// Place qu'un compte occupe dans une écriture. Le moteur connaît le schéma de
+// chaque opération ; la règle du comptable ne fait que NOMMER les comptes.
+enum_texte!(RoleCompte {
+    Produit => "produit", Charge => "charge", Tiers => "tiers",
+    Taxe => "taxe", Tresorerie => "tresorerie", Stock => "stock",
+});
+// Nature de l'opération à rattacher — sert de critère de règle et choisit le
+// journal par défaut (vente → VT, achat → AC, encaissement → CA ou BQ…).
+enum_texte!(DomaineComptable {
+    Vente => "vente", Achat => "achat", Encaissement => "encaissement",
+    Decaissement => "decaissement", Stock => "stock",
+});
+// Sens habituel du solde d'un compte. Indicatif : signale un solde anormal
+// dans la balance, ne refuse jamais une écriture.
+enum_texte!(SensCompte { Debit => "debit", Credit => "credit" });
+// Pièce dont l'écriture est issue. `Manuel` = saisie directe du comptable ;
+// une écriture n'est jamais modifiée, elle est contre-passée.
+enum_texte!(OrigineEcriture {
+    Document => "document", Paiement => "paiement", Mouvement => "mouvement",
+    Manuel => "manuel", Contrepassation => "contrepassation",
+});

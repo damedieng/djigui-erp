@@ -6,7 +6,7 @@
 <title>Djigui · Agenda</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=33">
 <style>
 /* Calendrier mensuel */
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--border);
@@ -49,6 +49,21 @@
 .mini-rdv .pt { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .mini-rdv .jr { color: var(--text-muted); font-weight: 600; width: 20px; flex-shrink: 0; }
 .mini-vide { padding: 8px 10px; font-size: 11px; color: var(--text-muted); }
+
+  /* ---- Calendriers superposés (décision du 2026-07-28) ----
+     L'agenda affiche PAR-DESSUS ses rendez-vous les échéances des autres
+     modules. ⚠️ LECTURE SEULE : on voit, on ne modifie pas ici. */
+  .cal-sources { display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
+  .cal-src { display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; user-select:none; }
+  .cal-src .pastille { width:11px; height:11px; border-radius:3px; flex:none; }
+  .cal-src .nb { font-size:11px; color:var(--text-muted); font-weight:700; }
+  /* Un élément superposé se distingue d'un rendez-vous : liseré à gauche et
+     fond pâle. On voit au premier coup d'œil ce qui est à soi et ce qui vient
+     d'ailleurs. */
+  .cal-ext { font-size:10.5px; padding:2px 5px; border-radius:4px; margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;
+    border-left:3px solid; background:var(--surface-2); color:var(--text); }
+  .cal-ext.retard { background:var(--danger-tint); font-weight:600; }
 </style>
 </head>
 <body>
@@ -93,6 +108,17 @@
         <select id="f-responsable" class="input-date" style="min-width:150px"><option value="">Tous responsables</option></select>
         <div class="tb-sep"></div>
         <button class="btn" id="btn-ics" title="Exporter tout l'agenda au format iCalendar (importable dans Google Agenda)"><i class="ti ti-calendar-share"></i>Exporter (.ics)</button>
+      </div>
+
+      <!-- Calendriers superposables. Chacun n'apparaît que si SON MODULE est
+           visible : proposer d'afficher les marchés à qui vient de masquer le
+           module serait incohérent. -->
+      <div class="card" id="carte-sources" style="margin-bottom:12px" hidden>
+        <div class="cal-sources" id="cal-sources"></div>
+        <div class="muted" style="font-size:12px;margin-top:8px">
+          Les échéances venues des autres modules sont <strong>en lecture seule</strong> :
+          cliquez pour voir le détail, la modification se fait dans l'écran d'origine.
+        </div>
       </div>
 
       <!-- Vue CALENDRIER -->
@@ -148,6 +174,10 @@
           <li>Cliquez sur un <strong>jour</strong> du calendrier pour créer un rendez-vous à cette date, ou sur le bouton <strong>Nouveau rendez-vous</strong>.</li>
           <li>Chaque rendez-vous a un <strong>statut coloré</strong> : Planifié, Confirmé, Honoré (fait), Reporté, Annulé. Cliquez sur un rendez-vous pour le modifier.</li>
           <li>Vous pouvez le rattacher à un <strong>client/fournisseur</strong>, à un <strong>responsable</strong>, à un <strong>lieu</strong> et ajouter une <strong>note</strong>.</li>
+          <li><strong>Vos calendriers superposés.</strong> Si vous utilisez les projets ou les marchés, l'agenda peut afficher <strong>par-dessus</strong> vos rendez-vous leurs échéances : jalons, livrables, fins d'activités, étapes de marché. Les cases <strong>Calendriers</strong> en haut allument ou éteignent chacun d'eux, comme dans Google Agenda. Votre choix est mémorisé.</li>
+          <li>⚠️ Ces échéances sont <strong>en lecture seule</strong> : elles sont là pour la visibilité. Un clic ouvre un <strong>aperçu</strong> (d'où elle vient, son état) et un bouton mène à sa fiche. <strong>On modifie toujours dans l'écran d'origine</strong>, là où Djigui vérifie l'ordre des étapes et la cohérence des dates.</li>
+          <li>Une échéance <strong>passée et non honorée</strong> apparaît sur fond rouge. Si le calendrier devient chargé, éteignez « Fins d'activités » : c'est le plus fourni.</li>
+          <li>Un calendrier n'est proposé que si son <strong>module est actif</strong>. Si vous masquez Marchés dans l'écran Modules, son calendrier disparaît aussi.</li>
           <li>Basculez entre <strong>Mois</strong> (grille détaillée), <strong>Année</strong> (12 mini-mois, les jours avec rendez-vous ont une pastille verte) et <strong>Liste</strong>. En vue Année, cliquez le nom d'un mois pour l'ouvrir, ou un jour pour créer un rendez-vous.</li>
           <li>La vue <strong>Liste</strong> permet de cocher plusieurs rendez-vous pour <strong>changer leur statut</strong> ou les <strong>supprimer</strong> d'un coup.</li>
         </ul>
@@ -196,7 +226,25 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=9"></script>
+
+<!-- ==================== APERÇU D'UNE ÉCHÉANCE SUPERPOSÉE ====================
+     ⚠️ LECTURE SEULE. Aucun champ n'est modifiable ici : les garde-fous
+     (verrou d'ordre des étapes, contrôle chronologique des dates) vivent dans
+     l'écran d'origine, et les contourner reviendrait à les supprimer. -->
+<div class="modal-overlay" id="modal-apercu" hidden>
+  <div class="modal" style="max-width:480px">
+    <div class="card-head"><span class="card-title" id="apercu-titre"></span>
+      <i class="ti ti-x" data-fermer-apercu title="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body" id="apercu-corps"></div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer-apercu>Fermer</button>
+      <a class="btn btn-primary" id="apercu-lien" href="#">
+        <i class="ti ti-external-link"></i>Ouvrir la fiche</a>
+    </div>
+  </div>
+</div>
+<script src="assets/app.js?v=16"></script>
 <script>
 // Couleurs alignées sur la palette Djigui (brand vert, warning ambre, danger brique).
 const STATUTS = {
@@ -209,6 +257,18 @@ const JOURS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 let curseur = new Date(); curseur.setDate(1);   // 1er du mois/année affiché
 let vueCourante = 'calendrier';                 // 'calendrier' | 'annee' | 'liste'
 let rdvs = [], tiersListe = [], users = [], tiersSel = null;
+
+// ---- Calendriers superposés ------------------------------------------------
+// L'agenda affiche PAR-DESSUS ses rendez-vous les échéances des autres modules.
+// ⚠️ LECTURE SEULE : aucune modification ici, on ouvre la fiche d'origine.
+// Le choix des calendriers affichés est mémorisé — c'est un réglage personnel,
+// pas une donnée.
+let sources = [], evenements = [];
+const CLE_SOURCES = 'agenda-sources-masquees';
+const masquees = new Set(JSON.parse(localStorage.getItem(CLE_SOURCES) || '[]'));
+// Le calendrier des rendez-vous est déjà rendu par l'agenda lui-même : on ne le
+// superpose pas une seconde fois.
+const estSuperpose = code => code !== 'rendez_vous';
 
 const pad = n => String(n).padStart(2,'0');
 const isoJour = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -239,10 +299,65 @@ async function charger() {
   if (resp) qs.set('responsable_id', resp);
   try { rdvs = await Djigui.api('/api/rendez-vous?' + qs.toString()); }
   catch (e) { rdvs = []; Djigui.toast('Erreur : ' + e.message, 'danger'); }
+
+  // Les échéances superposées, sur la MÊME plage : sinon un mois afficherait
+  // des repères venus d'ailleurs.
+  //
+  // ⚠️ L'ORDRE COMPTE : on charge d'abord la liste des calendriers, ensuite
+  // seulement on sait lesquels demander. L'inverse ne ramenait rien au premier
+  // affichage (`sources` était encore vide).
+  const qsc = new URLSearchParams({ du: isoJour(du), au: isoJour(au) });
+  try {
+    sources = await Djigui.api('/api/calendrier/sources?' + qsc.toString());
+    const voulues = sources.filter(c => estSuperpose(c.code) && !masquees.has(c.code))
+                           .map(c => c.code);
+    evenements = voulues.length
+      ? await Djigui.api('/api/calendrier?' + qsc.toString() + '&sources=' + voulues.join(','))
+      : [];
+  } catch { sources = []; evenements = []; }   // route absente : l'agenda marche quand même
+  rendreSources();
   majTitre();
   if (vueCourante === 'annee') rendreAnnee();
   else rendreCalendrier();
   rendreListe();
+}
+
+// ---- Barre des calendriers superposables ----
+function rendreSources() {
+  const superposables = sources.filter(c => estSuperpose(c.code));
+  const carte = document.getElementById('carte-sources');
+  // Aucun module superposable actif : la barre n'a rien à dire, elle disparaît.
+  carte.hidden = superposables.length === 0;
+  if (carte.hidden) return;
+  document.getElementById('cal-sources').innerHTML =
+    `<span style="font-weight:600;font-size:12.5px;color:var(--text-2)">Calendriers</span>` +
+    superposables.map(c => `<label class="cal-src">
+      <input type="checkbox" data-src="${Djigui.esc(c.code)}" ${masquees.has(c.code) ? '' : 'checked'}>
+      <span class="pastille" style="background:${c.couleur}"></span>
+      ${Djigui.esc(c.libelle)} <span class="nb">${c.nb}</span></label>`).join('');
+}
+
+document.getElementById('cal-sources').addEventListener('change', e => {
+  const c = e.target.closest('[data-src]');
+  if (!c) return;
+  if (c.checked) masquees.delete(c.dataset.src); else masquees.add(c.dataset.src);
+  localStorage.setItem(CLE_SOURCES, JSON.stringify([...masquees]));
+  charger();
+});
+
+// Les échéances d'un jour donné, dans l'ordre d'affichage.
+function extrasDuJour(key) {
+  return evenements.filter(e => e.date === key);
+}
+const couleurSource = code =>
+  (sources.find(c => c.code === code) || {}).couleur || '#64748b';
+
+// Une échéance superposée : liseré coloré, jamais un rendez-vous ordinaire.
+function chipExtra(e) {
+  return `<div class="cal-ext ${e.en_retard ? 'retard' : ''}"
+     style="border-left-color:${couleurSource(e.source)}"
+     data-extra="${Djigui.esc(e.source)}|${Djigui.esc(e.id)}"
+     >${Djigui.esc(e.titre)}</div>`;
 }
 
 // ---- Vue calendrier (mois) ----
@@ -267,9 +382,15 @@ function rendreCalendrier() {
       const h = r.journee_entiere ? '' : (r.debut.slice(11,16) + ' ');
       return `<div class="cal-rdv ${r.statut==='annule'?'annule':''}" style="background:${coul}" data-id="${r.id}" title="${Djigui.esc(r.titre)}">${h}${Djigui.esc(r.titre)}</div>`;
     }).join('');
-    const plus = items.length > 3 ? `<div class="cal-plus">+${items.length-3} autre(s)</div>` : '';
+    // Les échéances superposées viennent APRÈS les rendez-vous : la journée
+    // se lit d'abord par ce qui est à soi.
+    const extras = extrasDuJour(key);
+    const chipsX = extras.slice(0, 3).map(chipExtra).join('');
+    const total = items.length + extras.length;
+    const affiches = Math.min(items.length, 3) + Math.min(extras.length, 3);
+    const plus = total > affiches ? `<div class="cal-plus">+${total-affiches} autre(s)</div>` : '';
     html += `<div class="cal-cell ${autre?'autre':''} ${key===auj?'aujourdhui':''}" data-jour="${key}">
-      <span class="cal-num">${d.getDate()}</span>${chips}${plus}</div>`;
+      <span class="cal-num">${d.getDate()}</span>${chips}${chipsX}${plus}</div>`;
   }
   grid.innerHTML = html;
 }
@@ -421,12 +542,56 @@ document.getElementById('annee-grille').addEventListener('click', e => {
 document.getElementById('cal-grid').addEventListener('click', e => {
   const chip = e.target.closest('.cal-rdv');
   if (chip) { e.stopPropagation(); ouvrirRdv(rdvs.find(r => r.id === chip.dataset.id)); return; }
+  // ⚠️ Une échéance superposée n'ouvre PAS le formulaire de rendez-vous : elle
+  // ne s'y modifie pas. On montre un aperçu, avec un lien vers son écran.
+  const ext = e.target.closest('[data-extra]');
+  if (ext) {
+    e.stopPropagation();
+    const [source, id] = ext.dataset.extra.split('|');
+    ouvrirApercu(evenements.find(x => x.source === source && x.id === id));
+    return;
+  }
   const cell = e.target.closest('.cal-cell'); if (cell) ouvrirRdv(null, cell.dataset.jour);
 });
+
+// ---- Aperçu d'une échéance superposée (LECTURE SEULE) ----------------------
+const LIB_SOURCE = {
+  jalon: 'Jalon de projet', livrable: 'Livrable attendu',
+  activite: 'Fin d\'activité', etape_marche: 'Étape de marché',
+};
+const LIB_ETAT = {
+  a_venir: 'À venir', atteint: 'Atteint', manque: 'Manqué',
+  a_produire: 'À produire', en_cours: 'En cours', livre: 'Livré',
+  accepte: 'Accepté', refuse: 'Refusé', a_faire: 'À faire',
+  bloquee: 'Bloquée', terminee: 'Terminée', en_attente: 'À faire',
+  termine: 'Terminée', annule: 'Annulée', reporte: 'Reportée',
+};
+
+function ouvrirApercu(ev) {
+  if (!ev) return;
+  document.getElementById('apercu-titre').textContent = ev.titre;
+  document.getElementById('apercu-corps').innerHTML = `
+    <div class="proj-meta" style="margin:0">
+      <span><i class="ti ti-calendar"></i> ${Djigui.dateFr(ev.date)}
+        ${ev.en_retard ? '<span class="badge warn">en retard</span>' : ''}</span>
+      <span><i class="ti ti-tag"></i> ${Djigui.esc(LIB_SOURCE[ev.source] || ev.source)}</span>
+      ${ev.origine ? `<span><i class="ti ti-folder"></i> ${Djigui.esc(ev.origine)}</span>` : ''}
+      <span><i class="ti ti-flag"></i> ${Djigui.esc(LIB_ETAT[ev.statut] || ev.statut)}</span>
+      ${ev.detail ? `<span><i class="ti ti-info-circle"></i> ${Djigui.esc(ev.detail)}</span>` : ''}
+    </div>
+    <p class="muted" style="margin:14px 0 0;font-size:12.5px">
+      Cette échéance vient d'un autre module. Elle <strong>ne se modifie pas depuis
+      l'agenda</strong> : ouvrez sa fiche pour agir dessus.</p>`;
+  document.getElementById('apercu-lien').href = ev.lien;
+  document.getElementById('modal-apercu').hidden = false;
+}
 document.getElementById('corps-liste').addEventListener('click', e => {
   const a = e.target.closest('[data-edit]'); if (!a) return;
   e.preventDefault(); ouvrirRdv(rdvs.find(r => r.id === a.dataset.edit));
 });
+
+document.querySelectorAll('[data-fermer-apercu]').forEach(b =>
+  b.addEventListener('click', () => { document.getElementById('modal-apercu').hidden = true; }));
 
 // ---- Modale ----
 const modal = document.getElementById('modal-rdv');

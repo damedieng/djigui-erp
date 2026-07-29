@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Marchés</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  /* Les tuiles de synthèse utilisent désormais `.synthese` + `.pe-bloc`
+     (styles.css), comme les détails de projet et de marché. */
+  .neg { color:#b91c1c; } .pos { color:#166534; }
+  /* Compteur dans les onglets de filtre. */
+  .tab .cpt { display:inline-block; margin-left:5px; padding:0 6px; border-radius:10px;
+    background:var(--surface-2); color:var(--text-2); font-size:11px; font-weight:700; }
+  .tab.active .cpt { background:var(--brand-tint); color:var(--brand-strong); }
+  /* Barre d'outils en tête du panneau blanc, sous les onglets. */
+  .panneau-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding-bottom:12px; margin-bottom:14px; border-bottom:1px solid var(--border); }
+  .coche-tout { display:flex; align-items:center; gap:7px; font-size:13px;
+    color:var(--text-2); cursor:pointer; }
+  .rech-grille { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; }
+  .rech-grille label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted, #6b7280); }
+  /* Grande modale à deux volets : le marché à gauche, sa procédure à droite. */
+  .modal-large { max-width: 1080px; width: calc(100vw - 64px); }
+  .deux-volets { display:grid; grid-template-columns: 1.15fr 1fr; gap:22px; align-items:start; }
+  @media (max-width: 900px) { .deux-volets { grid-template-columns: 1fr; } }
+  .volet-etapes { border:1px solid var(--border, #e5e7eb); border-radius:10px;
+    padding:12px 14px; background:var(--bg-2, #f9fafb); }
+  .volet-titre { display:flex; align-items:center; justify-content:space-between;
+    gap:10px; font-weight:600; font-size:13px; margin-bottom:10px; }
+  .etapes-liste { display:flex; flex-direction:column; gap:6px;
+    max-height:46vh; overflow-y:auto; }
+  .etape-ligne { display:grid; grid-template-columns: 26px 1fr 148px;
+    gap:8px; align-items:center; background:var(--surface, #fff);
+    border:1px solid var(--border, #e5e7eb); border-radius:8px; padding:6px 8px; }
+  .etape-num { width:22px; height:22px; border-radius:50%; background:#16a34a;
+    color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; }
+  .etape-nom { font-size:13px; }
+  .etape-duree { font-size:11px; color:var(--muted, #6b7280); }
+  .etape-ligne input[type=date] { width:100%; font-size:12px; }
+  /* En-tête des colonnes d'étapes — même grille que les lignes, sinon les
+     libellés ne tomberaient pas en face de leurs champs. */
+  .etape-entete { display:grid; grid-template-columns:26px 1fr 76px 46px 54px 26px;
+    gap:8px; padding:0 8px 4px; font-size:11px; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--muted, #6b7280); }
+  .etape-entete span { text-align:center; }
+  .etape-entete span:nth-child(2) { text-align:left; }
+  .etape-type { grid-template-columns:26px 1fr 76px 46px 54px 26px !important; }
+  .etape-ordre { display:flex; gap:2px; justify-content:center; }
+  .etape-ordre i { cursor:pointer; font-size:15px; color:var(--text-2); }
+  .etape-ordre i:hover { color:var(--brand, #16a34a); }
+  .etape-ordre i.inactif { opacity:.25; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Marchés</div>
+        <div class="topbar-date">Passation et suivi</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <!-- Synthèse : mêmes tuiles à pastille d'icône que le détail d'un projet
+           ou d'un marché (`.pe-bloc`, styles.css). Elles étaient restées à
+           l'ancien aplat blanc, seules de leur espèce dans l'application. -->
+      <div class="synthese" id="tuiles" style="padding:0"></div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div class="rech-grille">
+          <label>Recherche <input type="text" id="f-texte" placeholder="numéro ou objet…"></label>
+          <label>Statut
+            <select id="f-statut" class="select-std">
+              <option value="">Tous</option>
+              <option value="en_cours">En cours</option>
+              <option value="realise">Réalisé</option>
+              <option value="suspendu">Suspendu</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </label>
+          <label>Type <select id="f-type" class="select-std"><option value="">Tous</option></select></label>
+          <label>Lancé à partir du <input type="date" id="f-du"></label>
+          <label>Jusqu'au <input type="date" id="f-au"></label>
+          <label>Affichage
+            <select id="f-retard" class="select-std">
+              <option value="0">Tous les marchés</option>
+              <option value="1">Seulement ceux en retard</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button class="btn btn-primary" id="btn-chercher"><i class="ti ti-search"></i>Chercher</button>
+          <button class="btn" id="btn-vider"><i class="ti ti-filter-off"></i>Tout voir</button>
+          <button class="btn" id="btn-types" style="margin-left:auto"><i class="ti ti-list-details"></i>Types de marché</button>
+          <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-plus"></i>Nouveau marché</button>
+        </div>
+      </div>
+
+      <!-- ⚠️ `.bulk-bar` porte déjà `[hidden]{display:none}` : jamais de display inline. -->
+      <div class="bulk-bar" id="barre-lot" hidden style="flex-wrap:wrap;margin-bottom:12px">
+        <span id="lot-compte" class="bulk-count"></span>
+        <button class="btn" data-lot="en_cours"><i class="ti ti-player-play"></i>Remettre en cours</button>
+        <button class="btn" data-lot="suspendu"><i class="ti ti-player-pause"></i>Suspendre</button>
+        <button class="btn" data-lot="realise"><i class="ti ti-check"></i>Déclarer réalisés</button>
+        <button class="btn btn-danger" id="btn-lot-supprimer"><i class="ti ti-trash"></i>Supprimer</button>
+        <button class="btn" id="btn-tout-decocher"><i class="ti ti-square-off"></i>Tout décocher</button>
+      </div>
+
+      <!-- Onglets de filtre. Le panneau blanc juste en dessous délimite la zone. -->
+      <div class="tabs-folder" id="tabs-statut">
+        <div class="tab active" data-filtre="">Tous <span class="cpt"></span></div>
+        <div class="tab" data-filtre="en_cours">En cours <span class="cpt"></span></div>
+        <div class="tab" data-filtre="retard">En retard <span class="cpt"></span></div>
+        <div class="tab" data-filtre="suspendu">Suspendus <span class="cpt"></span></div>
+        <div class="tab" data-filtre="realise">Réalisés <span class="cpt"></span></div>
+        <div class="tab" data-filtre="annule">Annulés <span class="cpt"></span></div>
+      </div>
+
+      <!-- Panneau BLANC soudé aux onglets : `.tabs-folder + .card` est le motif
+           déjà employé ailleurs dans l'application. C'est lui qui délimite la
+           zone de contenu sous les onglets. -->
+      <div class="card">
+        <div class="panneau-toolbar">
+          <label class="coche-tout">
+            <input type="checkbox" id="coche-tout"> Tout sélectionner</label>
+          <span class="muted" style="font-size:12px" id="compte-affiche"></span>
+          <button class="btn btn-sm" id="btn-export-suivi" style="margin-left:auto"
+                  title="Exporter le suivi des marchés vers Excel, avec les goulots d'étranglement">
+            <i class="ti ti-file-spreadsheet"></i>Exporter le suivi</button>
+        </div>
+
+        <!-- Cartes (mêmes styles que l'écran Projets — voir styles.css). -->
+        <div class="proj-grille" id="grille">
+          <div class="muted">Chargement…</div>
+        </div>
+      </div>
+
+      <div class="aide" style="margin-top:16px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Un <strong>marché</strong> est une commande importante qui ne se règle pas d'un coup : elle passe par des <strong>étapes obligatoires</strong> — publication de l'avis, ouverture des plis, attribution, signature du contrat.</li>
+          <li>Vous choisissez un <strong>type</strong> (Travaux, Fournitures, Services, Prestations intellectuelles) et Djigui <strong>installe la procédure tout seul</strong>, avec les dates prévues calculées d'après la durée de chaque étape.</li>
+          <li>Vous pouvez ensuite <strong>tout modifier</strong> : ajouter une étape, en retirer une, décaler une date. La procédure est un point de départ, pas une contrainte.</li>
+          <li>Chaque <strong>carte</strong> est un marché : cliquez dessus pour l'ouvrir. La couleur du bandeau et la pastille indiquent son statut.</li>
+          <li>Les marchés dont une étape a dépassé sa date prévue portent une pastille <strong>« Retard »</strong> ; passez la souris sur le <strong>« i »</strong> pour savoir ce que cela veut dire. C'est un <strong>signalement, jamais un blocage</strong> : le terrain n'attend pas.</li>
+          <li>La <strong>case en haut à droite d'une carte</strong> sert à en sélectionner plusieurs d'un coup : une barre d'actions apparaît alors pour les <strong>suspendre, remettre en cours, déclarer réalisés ou supprimer</strong> ensemble. Djigui vous dit toujours ce qu'il a fait et ce qu'il a conservé.</li>
+          <li>Une pastille rouge <strong>« points à vérifier »</strong> signale les incohérences du dossier (étape prévue avant le lancement, montant attribué sans attributaire, avenants dépassant 30 %…). Passez la souris dessus pour les lire. <strong>Rien n'est bloqué</strong> pour autant.</li>
+          <li><strong>Modifier</strong> (crayon) change l'objet, les montants, les dates ou le responsable. Cela ne touche <strong>pas aux étapes déjà en cours</strong> : celles-ci se corrigent une par une dans le détail du marché.</li>
+          <li><strong>Supprimer</strong> (corbeille) efface définitivement. Djigui refuse dès que le marché a une histoire — étape franchie, avenant approuvé, réception : dans ce cas on l'<strong>annule avec un motif</strong>, ce qui garde la trace.</li>
+          <li>L'<strong>avancement</strong> est la part des étapes obligatoires déjà terminées.</li>
+          <li>Un marché dont une étape est franchie ne se supprime plus : il fait partie de l'histoire. On l'<strong>annule avec un motif</strong>.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== MODALE MARCHÉ — deux volets ====================
+     À gauche le marché, à droite sa procédure avec les dates MODIFIABLES.
+     On ajuste le calendrier avant de créer, plutôt que de le subir puis de le
+     corriger étape par étape. -->
+<div class="modal-overlay" id="modal-marche" hidden>
+  <div class="modal modal-large">
+    <div class="card-head">
+      <span class="card-title" id="titre-modale">Nouveau marché</span>
+      <i class="ti ti-x" data-fermer="modal-marche" title="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i>
+    </div>
+
+    <div class="deux-volets">
+      <!-- Volet gauche : le marché -->
+      <form class="form-grid" id="form-marche" onsubmit="return false">
+        <div class="field full"><label>Objet du marché</label>
+          <input type="text" id="m-objet" placeholder="ex. Construction d'une salle de classe"></div>
+        <div class="field"><label>Type de marché</label>
+          <select id="m-type" class="select-std"></select></div>
+        <div class="field"><label>Date de lancement</label>
+          <input type="date" id="m-date"></div>
+        <div class="field"><label>Montant estimé</label>
+          <input type="number" id="m-estime" step="1000" placeholder="0"></div>
+        <div class="field"><label>Monnaie</label>
+          <input type="text" id="m-monnaie" value="FCFA"></div>
+        <div class="field"><label>Responsable</label>
+          <select id="m-responsable" class="select-std"><option value="">—</option></select></div>
+        <div class="field"><label>Projet rattaché</label>
+          <select id="m-projet" class="select-std"><option value="">Aucun</option></select></div>
+        <div class="field full"><label>Lieu d'exécution</label>
+          <input type="text" id="m-lieu"></div>
+        <div class="field full"><label>Observations</label>
+          <textarea id="m-observations" rows="2"></textarea></div>
+      </form>
+
+      <!-- Volet droit : la procédure, dates modifiables.
+           ⚠️ MASQUÉ en modification : un marché lancé garde ses étapes, on ne
+           réécrit pas sa procédure depuis ce formulaire. Les étapes se
+           corrigent une par une dans le détail du marché. -->
+      <div class="volet-etapes" id="volet-etapes">
+        <div class="volet-titre">
+          <span><i class="ti ti-list-check"></i> Étapes de la procédure</span>
+          <span class="muted" id="etapes-resume"></span>
+        </div>
+        <div class="etapes-liste" id="etapes-liste"></div>
+        <div class="muted" style="font-size:12px;margin-top:8px">
+          Les dates sont calculées d'après la durée de chaque étape.
+          <strong>Vous pouvez les corriger ici</strong> avant de créer le marché.
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-marche">Annuler</button>
+      <button class="btn btn-primary" id="btn-enregistrer">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE TYPES DE MARCHÉ ====================
+     À gauche les familles existantes, à droite la procédure de celle qu'on
+     modifie. Un type = une famille + la liste ordonnée de ses étapes. -->
+<div class="modal-overlay" id="modal-types" hidden>
+  <div class="modal modal-large">
+    <div class="card-head">
+      <span class="card-title">Types de marché et procédures</span>
+      <i class="ti ti-x" data-fermer="modal-types" title="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i>
+    </div>
+
+    <div class="deux-volets">
+      <!-- Volet gauche : la liste des familles -->
+      <div>
+        <div class="volet-titre">
+          <span><i class="ti ti-folders"></i> Familles</span>
+          <button class="btn btn-sm btn-primary" id="btn-nouveau-type"><i class="ti ti-plus"></i>Nouvelle</button>
+        </div>
+        <div class="etapes-liste" id="liste-types" style="max-height:52vh"></div>
+      </div>
+
+      <!-- Volet droit : la famille en cours d'édition -->
+      <div class="volet-etapes">
+        <div class="volet-titre"><span id="titre-type">Nouvelle famille</span></div>
+        <div class="form-grid" style="margin-bottom:12px">
+          <div class="field"><label>Libellé</label>
+            <input type="text" id="t-libelle" placeholder="ex. Travaux"></div>
+          <div class="field"><label>Code</label>
+            <input type="text" id="t-code" placeholder="ex. TRAVAUX"></div>
+          <div class="field full"><label>Description</label>
+            <input type="text" id="t-description"></div>
+        </div>
+
+        <!-- Garde-fou : une procédure déjà employée par des marchés ne se
+             modifie pas à la légère. On dit combien, et ce qui change ou non. -->
+        <div id="garde-fou-type" class="alert warn" hidden style="margin-bottom:10px"></div>
+
+        <div class="volet-titre">
+          <span><i class="ti ti-list-check"></i> Étapes de la procédure</span>
+          <button class="btn btn-sm" id="btn-ajouter-etape"><i class="ti ti-plus"></i>Étape</button>
+        </div>
+
+        <!-- ⚠️ Sans en-tête, l'utilisateur voit une rangée de champs sans savoir
+             à quoi ils servent. La grille est la MÊME que celle des lignes. -->
+        <div class="etape-entete">
+          <span></span>
+          <span>Nom de l'étape</span>
+          <span title="Durée prévue en jours">Durée (j)</span>
+          <span title="Une étape facultative ne compte pas dans l'avancement">Oblig.</span>
+          <span>Ordre</span>
+          <span></span>
+        </div>
+        <div class="etapes-liste" id="liste-etapes-type" style="max-height:32vh"></div>
+        <div class="muted" style="font-size:12px;margin-top:8px">
+          La <strong>durée</strong> sert à calculer les dates prévues quand on crée un marché
+          de cette famille. Une étape <strong>facultative</strong> ne compte pas dans l'avancement.
+          Les flèches changent l'<strong>ordre</strong> de la procédure.
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="btn-supprimer-type" hidden><i class="ti ti-trash"></i>Supprimer</button>
+      <button class="btn" data-fermer="modal-types">Fermer</button>
+      <button class="btn btn-primary" id="btn-enr-type">Enregistrer la famille</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE MOTIF D'ANNULATION ==================== -->
+<div class="modal-overlay" id="modal-motif" hidden>
+  <div class="modal" style="max-width:480px">
+    <!-- ⚠️ `.modal-head` et `.modal-close` N'EXISTENT PAS dans styles.css :
+         les classes réelles sont `.card-head` / `.card-title` + une croix
+         `<i class="ti ti-x">`. Voir la leçon du 2026-07-27. -->
+    <div class="card-head"><span class="card-title">Annuler le marché</span>
+      <i class="ti ti-x" data-fermer="modal-motif" title="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted">Un marché annulé reste visible : il fait partie de l'histoire.
+         Le motif sera conservé, avec votre nom et la date.</p>
+      <div class="form-grid">
+        <label style="grid-column:1/-1">Motif de l'annulation
+          <textarea id="motif-texte" rows="3"></textarea></label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-motif">Renoncer</button>
+      <button class="btn btn-danger" id="btn-confirmer-annulation">Annuler le marché</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, fmt, esc, dateFr, toast } = Djigui;
+
+  let marches = [], types = [], projets = [], utilisateurs = [], aAnnuler = null,
+      marcheEdite = null, filtreOnglet = '';
+
+  // Couleur ET libellé par statut, comme sur l'écran Projets : c'est le bandeau
+  // de la carte, la pastille et la jauge qui la reprennent.
+  // ⚠️ Les classes de badge sont `.badge.ok` / `.badge.warn` / `.badge.danger` —
+  // « badge-ok » et « badge-warn » n'existent pas dans styles.css.
+  const STATUT_MARCHE = {
+    en_cours: ['#16794f', 'En cours'],
+    realise:  ['#2e9e5b', 'Réalisé'],
+    suspendu: ['#c8860a', 'Suspendu'],
+    annule:   ['#8a94a6', 'Annulé'],
+  };
+  const LIB_STATUT = { en_cours: 'En cours', realise: 'Réalisé', suspendu: 'Suspendu', annule: 'Annulé' };
+
+  document.querySelectorAll('[data-fermer]').forEach(b =>
+    b.addEventListener('click', () => { $('#' + b.dataset.fermer).hidden = true; }));
+
+  function criteres() {
+    const v = id => { const x = $(id).value.trim(); return x === '' ? null : x; };
+    return {
+      texte: v('#f-texte'), statut: v('#f-statut'), type_id: v('#f-type'),
+      du: v('#f-du'), au: v('#f-au'), en_retard: $('#f-retard').value === '1',
+    };
+  }
+
+  function query(c) {
+    const p = new URLSearchParams();
+    for (const [k, val] of Object.entries(c)) {
+      if (val === null || val === undefined || val === '' || val === false) continue;
+      p.set(k, String(val));
+    }
+    const q = p.toString();
+    return q ? '?' + q : '';
+  }
+
+  // Le filtre des onglets s'applique CÔTÉ CLIENT sur le résultat déjà chargé :
+  // ainsi les compteurs de chaque onglet restent justes (« En retard 2 ») sans
+  // interroger le serveur six fois.
+  function filtrer(liste) {
+    if (filtreOnglet === '') return liste;
+    if (filtreOnglet === 'retard') return liste.filter(m => m.retard_jours != null);
+    return liste.filter(m => m.statut === filtreOnglet);
+  }
+
+  function majCompteurs() {
+    const n = { '': marches.length, retard: marches.filter(m => m.retard_jours != null).length };
+    ['en_cours', 'suspendu', 'realise', 'annule'].forEach(s => {
+      n[s] = marches.filter(m => m.statut === s).length;
+    });
+    document.querySelectorAll('#tabs-statut .tab').forEach(t => {
+      t.querySelector('.cpt').textContent = n[t.dataset.filtre] ?? 0;
+    });
+  }
+
+  async function charger() {
+    try { marches = await api('/api/marches' + query(criteres())); }
+    catch (e) { toast('Erreur : ' + e.message, 'danger'); return; }
+    rendre();
+  }
+
+  $('#tabs-statut').addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    document.querySelectorAll('#tabs-statut .tab').forEach(x => x.classList.toggle('active', x === t));
+    filtreOnglet = t.dataset.filtre;
+    // Changer de filtre remet la sélection à zéro : elle porterait sur des
+    // marchés qui ne sont plus à l'écran.
+    document.querySelectorAll('.coche').forEach(c => { c.checked = false; });
+    rendre();
+  });
+
+  $('#btn-export-suivi').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/marches/export-suivi', { method: 'POST', body: {} });
+      toast('Fichier créé : ' + r.chemin, 'ok');
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  function rendre() {
+    // Tuiles de synthèse — calculées sur le résultat affiché.
+    const enCours = marches.filter(m => m.statut === 'en_cours').length;
+    const retard = marches.filter(m => m.retard_jours != null).length;
+    const realises = marches.filter(m => m.statut === 'realise').length;
+    const total = marches.filter(m => m.statut !== 'annule')
+                         .reduce((s, m) => s + (m.montant_attribue ?? m.montant_estime), 0);
+    // Une tuile par chiffre : pastille d'icône + libellé + valeur. L'accent de
+    // couleur ne sert qu'aux chiffres qui appellent une décision — le retard
+    // vire au rouge seulement s'il y en a.
+    $('#tuiles').innerHTML = [
+      ['ti-gavel', 'Marchés affichés', fmt(marches.length), ''],
+      ['ti-player-play', 'En cours', fmt(enCours), 'acc-brand'],
+      ['ti-alert-triangle', 'En retard', fmt(retard), retard ? 'acc-danger fort' : ''],
+      ['ti-check', 'Réalisés', fmt(realises), 'acc-ok'],
+      ['ti-coin', 'Montant engagé',
+        `${fmt(Math.round(total))} <span class="muted" style="font-size:11px">FCFA</span>`,
+        'acc-brand fort'],
+    ].map(([ic, l, v, acc]) => `<div class="pe-bloc ${acc}" title="${l}">
+        <div class="pe-ic"><i class="ti ${ic}"></i></div>
+        <div class="pe-corps"><div class="pe-lbl">${l}</div><div class="pe-val">${v}</div></div>
+      </div>`).join('');
+
+    const nb = filtrer(marches).length;
+    $('#compte-affiche').textContent = nb
+      ? `${nb} marché${nb > 1 ? 's' : ''} affiché${nb > 1 ? 's' : ''}` : '';
+
+    majCompteurs();
+    const affiches = filtrer(marches);
+    const g = $('#grille');
+    if (!affiches.length) {
+      g.innerHTML = `<div class="muted">Aucun marché ne correspond.
+        Cliquez sur « Nouveau marché » pour commencer.</div>`;
+      majBarre();
+      return;
+    }
+
+    g.innerHTML = affiches.map(m => {
+      const [coul, lbl] = STATUT_MARCHE[m.statut] || ['#5c6a61', m.statut];
+      const periode = [m.date_lancement, m.date_cloture_effective || m.date_cloture_prevue]
+        .filter(Boolean).map(dateFr).join(' → ') || 'Dates non définies';
+      // Le montant qui engage : l'attribué s'il existe, l'estimation sinon —
+      // et les avenants approuvés par-dessus.
+      const montant = m.montant_courant ?? m.montant_attribue ?? m.montant_estime;
+      const enRetard = m.retard_jours != null;
+      return `<div class="proj-carte" data-id="${esc(m.id)}">
+        <div class="proj-bandeau" style="background:${coul}"></div>
+        <input type="checkbox" class="proj-coche coche" data-id="${esc(m.id)}"
+               title="Sélectionner pour un traitement par lot">
+        <div class="proj-corps">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div>
+              <div class="muted" style="font-size:11.5px;font-weight:600;letter-spacing:.3px">${esc(m.numero)}</div>
+              <div class="proj-nom">${esc(m.objet)}</div>
+            </div>
+            <span class="badge" style="background:${coul}22;color:${coul};white-space:nowrap;margin-right:24px">${esc(lbl)}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+            ${enRetard ? `<span class="badge warn">Retard ${m.retard_jours} j</span>
+              <i class="retard-info" tabindex="0" data-tip="${esc(detailRetard(m))}">i</i>` : ''}
+            ${/* Les alertes de cohérence remontent jusqu'ici : l'utilisateur ne
+                  doit pas avoir à ouvrir chaque dossier pour les découvrir. */''}
+            ${(m.alertes || []).length ? `<span class="badge danger"
+                 style="cursor:help" tabindex="0"
+                 data-tip="${esc(m.alertes.join('\n• ').replace(/^/, '• '))}">
+                 <i class="ti ti-alert-triangle"></i> ${m.alertes.length} point(s) à vérifier</span>` : ''}
+          </div>
+
+          <div class="proj-meta">
+            <span><i class="ti ti-category"></i> ${esc(m.type_libelle || 'Sans type')}</span>
+            <span><i class="ti ti-building"></i> ${esc(m.attributaire_nom || 'Pas encore attribué')}</span>
+            <span><i class="ti ti-calendar"></i> ${esc(periode)}</span>
+            <span><i class="ti ti-coin"></i> ${fmt(Math.round(montant))} ${esc(m.monnaie || 'FCFA')}${
+              m.montant_avenants ? ` <span class="muted">(dont ${m.montant_avenants > 0 ? '+' : ''}${fmt(m.montant_avenants)} d'avenants)</span>` : ''}</span>
+            ${m.ecart_montant ? `<span class="${m.ecart_montant > 0 ? 'neg' : 'pos'}"><i class="ti ti-arrows-diff"></i> ${m.ecart_montant > 0 ? '+' : ''}${fmt(m.ecart_montant)} / estimé</span>` : ''}
+          </div>
+
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-2);margin-bottom:4px">
+            <span>${m.nb_etapes_terminees}/${m.nb_etapes} étape(s)</span><span>${m.avancement} %</span></div>
+          <div class="barre"><div style="width:${m.avancement}%;background:${coul}"></div></div>
+
+          <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:12px">
+            ${m.reserves_ouvertes ? '<span class="badge warn" style="margin-right:auto">Réserves ouvertes</span>' : ''}
+            ${m.nb_avenants ? `<span class="badge neutral" style="margin-right:auto">${m.nb_avenants} avenant(s)</span>` : ''}
+            <a class="btn btn-sm" href="marche-detail.html?id=${encodeURIComponent(m.id)}"><i class="ti ti-eye"></i>Ouvrir</a>
+            <button class="btn btn-sm" data-modifier="${esc(m.id)}" title="Modifier ce marché"><i class="ti ti-pencil"></i></button>
+            ${m.statut !== 'annule'
+              ? `<button class="btn btn-sm" data-annuler="${esc(m.id)}" title="Annuler ce marché (avec motif)"><i class="ti ti-ban"></i></button>` : ''}
+            <button class="btn btn-sm btn-danger" data-supprimer="${esc(m.id)}" title="Supprimer définitivement"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    majBarre();
+  }
+
+  // Détail du retard, au survol de la pastille « i » — même formulation que le
+  // planning des projets, pour que l'utilisateur reconnaisse le signe.
+  function detailRetard(m) {
+    const j = m.retard_jours;
+    const d = j === 0 ? "l'échéance est aujourd'hui"
+            : j === 1 ? '1 jour de retard' : `${j} jours de retard`;
+    return `Une étape en cours a dépassé sa date : ${d}.\n`
+         + `Rien n'est bloqué — ouvrez le marché pour voir laquelle et, si besoin, décaler les suivantes.`;
+  }
+
+  const selection = () => [...document.querySelectorAll('.coche:checked')].map(c => c.dataset.id);
+
+  function majBarre() {
+    const n = selection().length;
+    $('#barre-lot').hidden = n === 0;
+    $('#lot-compte').textContent = n + (n > 1 ? ' marchés sélectionnés' : ' marché sélectionné');
+    // La carte cochée se distingue : sans repère visuel, on ne sait plus sur
+    // quoi le traitement par lot va porter.
+    document.querySelectorAll('.proj-carte').forEach(c => {
+      const coche = c.querySelector('.coche');
+      c.classList.toggle('choisie', !!coche && coche.checked);
+    });
+    const tout = $('#coche-tout');
+    tout.checked = n > 0 && n === marches.length;
+    tout.indeterminate = n > 0 && n < marches.length;
+  }
+
+  $('#grille').addEventListener('change', e => {
+    if (e.target.classList.contains('coche')) majBarre();
+  });
+  $('#coche-tout').addEventListener('change', e => {
+    document.querySelectorAll('.coche').forEach(c => { c.checked = e.target.checked; });
+    majBarre();
+  });
+  $('#btn-tout-decocher').addEventListener('click', () => {
+    document.querySelectorAll('.coche').forEach(c => { c.checked = false; });
+    majBarre();
+  });
+
+  $('#grille').addEventListener('click', e => {
+    // La case à cocher et les boutons ne doivent PAS ouvrir le marché.
+    if (e.target.closest('.coche')) return;
+
+    const b = e.target.closest('[data-annuler]');
+    if (b) {
+      e.preventDefault();
+      aAnnuler = b.dataset.annuler;
+      $('#motif-texte').value = '';
+      $('#modal-motif').hidden = false;
+      return;
+    }
+
+    const mod = e.target.closest('[data-modifier]');
+    if (mod) {
+      e.preventDefault();
+      ouvrirMarche(marches.find(x => x.id === mod.dataset.modifier));
+      return;
+    }
+
+    const sup = e.target.closest('[data-supprimer]');
+    if (sup) {
+      e.preventDefault();
+      supprimerUn(marches.find(x => x.id === sup.dataset.supprimer));
+      return;
+    }
+    if (e.target.closest('a')) return;   // le lien « Ouvrir » fait son travail
+
+    const carte = e.target.closest('.proj-carte');
+    if (carte) location.href = 'marche-detail.html?id=' + encodeURIComponent(carte.dataset.id);
+  });
+
+  $('#btn-confirmer-annulation').addEventListener('click', async () => {
+    const motif = $('#motif-texte').value.trim();
+    if (!motif) { toast('Le motif est obligatoire.', 'warn'); return; }
+    try {
+      await api('/api/marches/' + aAnnuler + '/annuler', { method: 'POST', body: { motif } });
+      $('#modal-motif').hidden = true;
+      toast('Marché annulé.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Suppression --------------------------------------------------------
+  // Le serveur garde le dernier mot : un marché qui a une histoire (étape
+  // franchie, avenant approuvé, réception) est refusé — on relaie son message
+  // et on rappelle la bonne porte, « annuler avec un motif ».
+  async function supprimerUn(x) {
+    if (!x) return;
+    if (!await Djigui.confirm(`Supprimer définitivement le marché ${x.numero} ?\n\n`
+      + `« ${x.objet} »\n\n`
+      + `Cette suppression est irréversible. Si le marché a déjà une histoire `
+      + `(étape franchie, avenant approuvé, réception), Djigui la refusera : `
+      + `il faudra l'annuler avec un motif.`)) return;
+    try {
+      await api('/api/marches/' + x.id, { method: 'DELETE' });
+      toast(`Marché ${x.numero} supprimé.`, 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  }
+
+  $('#barre-lot').addEventListener('click', async e => {
+    const ids = selection();
+    if (!ids.length) return;
+
+    // Suppression groupée : on rend compte des DEUX cas, supprimés et
+    // conservés. Un simple « c'est fait » masquerait les refus.
+    if (e.target.closest('#btn-lot-supprimer')) {
+      if (!await Djigui.confirm(`Supprimer ${ids.length} marché(s) ?\n\n`
+        + `Ceux qui ont déjà une histoire (étape franchie, avenant approuvé, `
+        + `réception) seront CONSERVÉS et vous seront nommés.`)) return;
+      try {
+        const r = await api('/api/marches/lot/supprimer', { method: 'POST', body: { ids } });
+        if (r.conserves) {
+          toast(`${r.supprimes} supprimé(s). ${r.conserves} conservé(s) car ils ont une histoire : `
+                + r.numeros_conserves.join(', ') + ' — annulez-les avec un motif.', 'warn');
+        } else {
+          toast(`${r.supprimes} marché(s) supprimé(s).`, 'ok');
+        }
+        $('#coche-tout').checked = false;
+        await charger();
+      } catch (err) { toast(err.message, 'danger'); }
+      return;
+    }
+
+    const b = e.target.closest('[data-lot]');
+    if (!b) return;
+    try {
+      const r = await api('/api/marches/lot/statut', { method: 'POST', body: { ids, statut: b.dataset.lot } });
+      toast(`${r.modifies ?? ids.length} marché(s) mis à jour.`, 'ok');
+      $('#coche-tout').checked = false;
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Création ----------------------------------------------------------
+  // Le volet droit : les étapes du type choisi, dates calculées par cumul des
+  // durées depuis la date de lancement — et MODIFIABLES avant enregistrement.
+  function ajouterJours(iso, jours) {
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d)) return iso;
+    d.setDate(d.getDate() + jours);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function construireEtapes() {
+    const t = types.find(x => x.id === $('#m-type').value);
+    const liste = $('#etapes-liste');
+    const resume = $('#etapes-resume');
+    if (!t || !t.etapes || !t.etapes.length) {
+      liste.innerHTML = `<div class="muted" style="font-size:12px;padding:10px 2px">
+        Aucun type choisi : le marché sera créé sans étape. Vous pourrez en ajouter ensuite.</div>`;
+      resume.textContent = '';
+      return;
+    }
+    let curseur = $('#m-date').value || new Date().toISOString().slice(0, 10);
+    resume.textContent = `${t.etapes.length} étapes · ${t.duree_totale_jours} jours`;
+    liste.innerHTML = t.etapes.map((e, i) => {
+      curseur = ajouterJours(curseur, Math.max(0, e.duree_prevue_jours));
+      return `<div class="etape-ligne" data-modele="${esc(e.id)}">
+        <span class="etape-num">${i + 1}</span>
+        <span><span class="etape-nom">${esc(e.libelle)}</span><br>
+          <span class="etape-duree">${e.duree_prevue_jours} jour(s)</span></span>
+        <input type="date" class="etape-date" value="${curseur}"
+               data-libelle="${esc(e.libelle)}" data-obligatoire="${e.obligatoire ? 1 : 0}">
+      </div>`;
+    }).join('');
+  }
+
+  /// Les étapes telles qu'elles seront enregistrées — dates comprises, donc
+  /// avec les corrections faites à la main dans le volet droit.
+  function etapesSaisies() {
+    return [...document.querySelectorAll('#etapes-liste .etape-ligne')].map(l => {
+      const input = l.querySelector('.etape-date');
+      return {
+        libelle: input.dataset.libelle,
+        date_prevue: input.value || null,
+        obligatoire: input.dataset.obligatoire === '1',
+        etape_modele_id: l.dataset.modele || null,
+      };
+    });
+  }
+
+  // Ouvre la modale : `null` = création, un marché = modification.
+  // Une seule modale pour les deux, comme partout ailleurs dans Djigui.
+  function ouvrirMarche(x) {
+    marcheEdite = x ? x.id : null;
+    $('#titre-modale').textContent = x ? 'Modifier le marché ' + x.numero : 'Nouveau marché';
+    $('#m-objet').value = x ? x.objet : '';
+    $('#m-type').value = x && x.type_id ? x.type_id : '';
+    $('#m-estime').value = x ? x.montant_estime : '';
+    $('#m-monnaie').value = x ? (x.monnaie || 'FCFA') : 'FCFA';
+    $('#m-date').value = x ? x.date_lancement : new Date().toISOString().slice(0, 10);
+    $('#m-responsable').value = x && x.responsable_id ? x.responsable_id : '';
+    $('#m-projet').value = x && x.projet_id ? x.projet_id : '';
+    $('#m-lieu').value = x && x.lieu_execution ? x.lieu_execution : '';
+    $('#m-observations').value = x && x.observations ? x.observations : '';
+
+    // En modification, le volet des étapes disparaît : la procédure d'un marché
+    // lancé ne se réécrit pas d'un bloc. Changer le type n'y touche pas non plus.
+    $('#volet-etapes').hidden = !!x;
+    $('#m-type').disabled = !!x;
+    if (!x) construireEtapes();
+
+    $('#btn-enregistrer').textContent = x ? 'Enregistrer les modifications' : 'Enregistrer';
+    $('#modal-marche').hidden = false;
+  }
+
+  $('#btn-nouveau').addEventListener('click', () => ouvrirMarche(null));
+  // Changer le type ou la date de lancement recalcule le calendrier proposé.
+  $('#m-type').addEventListener('change', construireEtapes);
+  $('#m-date').addEventListener('change', construireEtapes);
+
+  $('#btn-enregistrer').addEventListener('click', async () => {
+    const objet = $('#m-objet').value.trim();
+    if (!objet) { toast("L'objet du marché est obligatoire.", 'warn'); return; }
+    const corps = {
+      objet,
+      type_id: $('#m-type').value || null,
+      montant_estime: Number($('#m-estime').value) || 0,
+      monnaie: $('#m-monnaie').value.trim() || 'FCFA',
+      date_lancement: $('#m-date').value || null,
+      responsable_id: $('#m-responsable').value || null,
+      projet_id: $('#m-projet').value || null,
+      lieu_execution: $('#m-lieu').value.trim() || null,
+      observations: $('#m-observations').value.trim() || null,
+      // Les étapes telles que l'utilisateur les a ajustées dans le volet droit.
+      // En modification, on n'en envoie AUCUNE : le marché garde les siennes.
+      etapes: marcheEdite ? [] : etapesSaisies(),
+    };
+    try {
+      if (marcheEdite) {
+        const m = await api('/api/marches/' + marcheEdite, { method: 'PUT', body: corps });
+        $('#modal-marche').hidden = true;
+        toast(`Marché ${m.numero} modifié.`, 'ok');
+        await charger();
+      } else {
+        const m = await api('/api/marches', { method: 'POST', body: corps });
+        $('#modal-marche').hidden = true;
+        toast(`Marché ${m.numero} créé avec ${m.nb_etapes} étape(s).`, 'ok');
+        location.href = 'marche-detail.html?id=' + encodeURIComponent(m.id);
+      }
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-chercher').addEventListener('click', charger);
+  $('#f-texte').addEventListener('keydown', e => { if (e.key === 'Enter') charger(); });
+  $('#btn-vider').addEventListener('click', () => {
+    ['#f-texte', '#f-statut', '#f-type', '#f-du', '#f-au'].forEach(id => { $(id).value = ''; });
+    $('#f-retard').value = '0';
+    charger();
+  });
+
+  // ---- Types de marché ----------------------------------------------------
+  // Un type = une famille + la liste ordonnée de ses étapes. C'est lui qui
+  // porte la procédure : le modifier change ce que les PROCHAINS marchés
+  // installeront, jamais les marchés déjà lancés (leurs libellés sont recopiés).
+  let typeEdite = null;
+
+  function rendreListeTypes() {
+    $('#liste-types').innerHTML = types.length
+      ? types.map(t => `<div class="etape-ligne" data-type="${esc(t.id)}"
+            style="grid-template-columns:1fr auto;cursor:pointer${
+              typeEdite === t.id ? ';border-color:#16a34a' : ''}">
+          <span><span class="etape-nom">${esc(t.libelle)}</span><br>
+            <span class="etape-duree">${esc(t.code)} · ${t.etapes.length} étape(s) · ${t.duree_totale_jours} j
+            ${t.nb_marches ? ` · ${t.nb_marches} marché(s)` : ''}</span></span>
+          <i class="ti ti-chevron-right"></i>
+        </div>`).join('')
+      : `<div class="muted" style="font-size:12px;padding:10px 2px">Aucune famille. Créez-en une.</div>`;
+  }
+
+  function rendreEtapesType(etapes) {
+    $('#liste-etapes-type').innerHTML = etapes.map((e, i) => `<div class="etape-ligne etape-type">
+      <span class="etape-num">${i + 1}</span>
+      <input type="text" class="et-libelle" value="${esc(e.libelle || '')}" placeholder="Nom de l'étape">
+      <input type="number" class="et-duree" min="0" value="${e.duree_prevue_jours ?? 0}">
+      <label class="check" style="justify-content:center">
+        <input type="checkbox" class="et-oblig" ${e.obligatoire !== false ? 'checked' : ''}></label>
+      <span class="etape-ordre">
+        <i class="ti ti-chevron-up et-monter${i === 0 ? ' inactif' : ''}" title="Monter"></i>
+        <i class="ti ti-chevron-down et-descendre${i === etapes.length - 1 ? ' inactif' : ''}" title="Descendre"></i>
+      </span>
+      <i class="ti ti-trash et-suppr" style="cursor:pointer;color:#b91c1c" title="Retirer"></i>
+    </div>`).join('')
+      || `<div class="muted" style="font-size:12px;padding:8px 2px">Aucune étape. Ajoutez-en.</div>`;
+  }
+
+  /// Lit les étapes telles qu'elles sont à l'écran — y compris les saisies en
+  /// cours, sinon les redessiner (réordonner, ajouter) les effacerait.
+  function etapesAffichees() {
+    return [...document.querySelectorAll('#liste-etapes-type .etape-type')].map(l => ({
+      libelle: l.querySelector('.et-libelle').value,
+      duree_prevue_jours: Number(l.querySelector('.et-duree').value) || 0,
+      obligatoire: l.querySelector('.et-oblig').checked,
+    }));
+  }
+
+  function etapesTypeSaisies() {
+    return [...document.querySelectorAll('#liste-etapes-type .etape-type')].map(l => ({
+      libelle: l.querySelector('.et-libelle').value.trim(),
+      duree_prevue_jours: Number(l.querySelector('.et-duree').value) || 0,
+      obligatoire: l.querySelector('.et-oblig').checked,
+    })).filter(e => e.libelle);
+  }
+
+  function ouvrirType(t) {
+    typeEdite = t ? t.id : null;
+    $('#titre-type').textContent = t ? `Famille « ${t.libelle} »` : 'Nouvelle famille';
+    $('#t-libelle').value = t ? t.libelle : '';
+    $('#t-code').value = t ? t.code : '';
+    $('#t-description').value = t && t.description ? t.description : '';
+    $('#btn-supprimer-type').hidden = !t;
+    rendreEtapesType(t ? t.etapes : []);
+
+    // Garde-fou : dire clairement ce que la modification touche, et ce qu'elle
+    // ne touche pas. Sans cette phrase, on croit réécrire l'histoire.
+    const gf = $('#garde-fou-type');
+    if (t && t.nb_marches > 0) {
+      gf.innerHTML = `<strong>${t.nb_marches} marché(s) utilisent déjà cette famille.</strong><br>
+        Vos modifications s'appliqueront aux <strong>prochains marchés</strong> seulement.
+        Les marchés déjà lancés gardent les étapes et les dates qu'ils ont —
+        on ne réécrit jamais un dossier en cours.`;
+      gf.hidden = false;
+    } else {
+      gf.hidden = true;
+    }
+    rendreListeTypes();
+  }
+
+  $('#btn-types').addEventListener('click', () => {
+    ouvrirType(types[0] || null);
+    $('#modal-types').hidden = false;
+  });
+  $('#btn-nouveau-type').addEventListener('click', () => ouvrirType(null));
+  $('#liste-types').addEventListener('click', e => {
+    const l = e.target.closest('[data-type]');
+    if (l) ouvrirType(types.find(t => t.id === l.dataset.type));
+  });
+  $('#btn-ajouter-etape').addEventListener('click', () => {
+    const actuelles = etapesAffichees();
+    actuelles.push({ libelle: '', duree_prevue_jours: 1, obligatoire: true });
+    rendreEtapesType(actuelles);
+    // On amène le curseur dans la nouvelle ligne : l'utilisateur enchaîne.
+    const champs = document.querySelectorAll('#liste-etapes-type .et-libelle');
+    champs[champs.length - 1]?.focus();
+  });
+
+  // Réordonnancement : c'est l'ORDRE qui fait la procédure, il doit se corriger
+  // sans tout ressaisir. On redessine à partir de ce qui est à l'écran, pour ne
+  // perdre aucune saisie en cours.
+  $('#liste-etapes-type').addEventListener('click', e => {
+    const ligne = e.target.closest('.etape-type');
+    if (!ligne) return;
+    const lignes = [...document.querySelectorAll('#liste-etapes-type .etape-type')];
+    const i = lignes.indexOf(ligne);
+    const etapes = etapesAffichees();
+
+    if (e.target.closest('.et-suppr')) {
+      etapes.splice(i, 1);
+    } else if (e.target.closest('.et-monter') && i > 0) {
+      [etapes[i - 1], etapes[i]] = [etapes[i], etapes[i - 1]];
+    } else if (e.target.closest('.et-descendre') && i < etapes.length - 1) {
+      [etapes[i], etapes[i + 1]] = [etapes[i + 1], etapes[i]];
+    } else {
+      return;
+    }
+    rendreEtapesType(etapes);
+  });
+
+  async function rechargerTypes() {
+    types = await api('/api/marche-types');
+    const opts = l => l.map(x => `<option value="${esc(x.id)}">${esc(x.libelle)}</option>`).join('');
+    $('#f-type').innerHTML = `<option value="">Tous</option>` + opts(types);
+    $('#m-type').innerHTML = `<option value="">Aucun type (étapes libres)</option>` + opts(types);
+    rendreListeTypes();
+  }
+
+  $('#btn-enr-type').addEventListener('click', async () => {
+    const libelle = $('#t-libelle').value.trim();
+    if (!libelle) { toast('Le libellé de la famille est obligatoire.', 'warn'); return; }
+    const corps = {
+      libelle,
+      // Sans code saisi, on en dérive un du libellé : le commerçant n'a pas à
+      // inventer un code technique.
+      code: $('#t-code').value.trim().toUpperCase()
+            || libelle.toUpperCase().replace(/[^A-Z0-9]+/g, '_').slice(0, 20),
+      description: $('#t-description').value.trim() || null,
+      actif: true,
+      etapes: etapesTypeSaisies(),
+    };
+    try {
+      if (typeEdite) await api('/api/marche-types/' + typeEdite, { method: 'PUT', body: corps });
+      else await api('/api/marche-types', { method: 'POST', body: corps });
+      await rechargerTypes();
+      const garde = types.find(t => t.libelle === libelle);
+      ouvrirType(garde || null);
+      toast('Famille enregistrée.', 'ok');
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-supprimer-type').addEventListener('click', async () => {
+    const t = types.find(x => x.id === typeEdite);
+    if (!t) return;
+    if (!await Djigui.confirm(`Supprimer la famille « ${t.libelle} » ?\n\n`
+      + (t.nb_marches
+          ? `${t.nb_marches} marché(s) l'utilisent : ils conserveront leurs étapes, `
+            + `ils seront simplement détachés de cette famille.`
+          : `Aucun marché ne l'utilise.`))) return;
+    try {
+      await api('/api/marche-types/' + t.id, { method: 'DELETE' });
+      await rechargerTypes();
+      ouvrirType(types[0] || null);
+      toast('Famille supprimée.', 'ok');
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  async function demarrer() {
+    try {
+      [types, projets, utilisateurs] = await Promise.all([
+        api('/api/marche-types?actifs_seulement=true'),
+        api('/api/projets').catch(() => []),
+        api('/api/utilisateurs').catch(() => []),
+      ]);
+    } catch (e) { toast('Chargement impossible : ' + e.message, 'danger'); }
+
+    const opts = (l, vide) => `<option value="">${vide}</option>` +
+      l.map(x => `<option value="${esc(x.id)}">${esc(x.libelle || x.nom)}</option>`).join('');
+    $('#f-type').innerHTML = opts(types, 'Tous');
+    $('#m-type').innerHTML = opts(types, 'Aucun type (étapes libres)');
+    $('#m-projet').innerHTML = opts(projets, 'Aucun');
+    $('#m-responsable').innerHTML = opts(utilisateurs, '—');
+
+    await charger();
+  }
+
+  demarrer();
+})();
+</script>
+</body>
+</html>

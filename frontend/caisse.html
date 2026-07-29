@@ -6,7 +6,7 @@
 <title>Djigui · Caisse</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
 <div class="app">
@@ -141,7 +141,7 @@
 <!-- Ticket imprimable (masqué à l'écran, visible à l'impression) -->
 <div id="recu-print"><div class="recu-ticket" id="recu-contenu"></div></div>
 
-<script src="assets/app.js?v=9"></script>
+<script src="assets/app.js?v=16"></script>
 <script>
 const elCats = document.getElementById('cats');
 const elTiles = document.getElementById('tiles');
@@ -177,7 +177,7 @@ function majEtatServeur() {
 // ---- Chargement ----
 async function init() {
   [articles, categories, entreprise, taxesActives, moyensPaiement] = await Promise.all([
-    Djigui.api('/api/articles?filtre=tous').catch(()=>[]),
+    Djigui.api('/api/articles?filtre=vendables').catch(()=>[]),
     Djigui.api('/api/categories').catch(()=>[]),
     Djigui.api('/api/parametres').catch(()=>({})),
     Djigui.api('/api/taxes').catch(()=>[]),  // actives uniquement
@@ -556,7 +556,7 @@ document.getElementById('pay-confirmer').addEventListener('click', async () => {
     if (!tickets.length) { tickets.push(nouveauTicket()); }
     actifIdx = Math.max(0, Math.min(actifIdx, tickets.length-1));
     modalPay.hidden = true;
-    articles = await Djigui.api('/api/articles?filtre=tous').catch(()=>articles);
+    articles = await Djigui.api('/api/articles?filtre=vendables').catch(()=>articles);
     rendreTiles(); rendreTabs(); rendrePanier();
     chargerSession();  // met à jour le théorique de la session
   } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }

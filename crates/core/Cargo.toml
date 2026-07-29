@@ -13,3 +13,11 @@ chrono.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 sha2 = "0.10"
+# Sauvegarde chiffrée (migration 0042).
+# AES-256-GCM : chiffre ET authentifie — une archive modifiée est REFUSÉE au
+# lieu d'être restaurée à moitié. Argon2id dérive la clé du mot de passe en
+# rendant les essais en série coûteux.
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+zip = { version = "2", default-features = false, features = ["deflate"] }

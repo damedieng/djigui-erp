@@ -32,6 +32,13 @@ pub struct Tiers {
     /// Client exonéré de TVA : ses factures sont émises sans taxe (§ contrat).
     #[serde(default)]
     pub exonere_tva: bool,
+    /// Taux de **retenue à la source** que ce tiers prélève sur nos factures
+    /// et reverse lui-même au Trésor (mig 0043). `None` = non concerné.
+    ///
+    /// ⚠️ `None` et `Some(0.0)` ne disent PAS la même chose : « pas concerné »
+    /// et « concerné au taux zéro » se justifient différemment dans un dossier.
+    #[serde(default)]
+    pub retenue_source_taux: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -52,6 +59,8 @@ pub struct NouveauTiers {
     pub rccm: Option<String>,
     #[serde(default)]
     pub exonere_tva: bool,
+    #[serde(default)]
+    pub retenue_source_taux: Option<f64>,
 }
 
 fn nature_defaut() -> NatureTiers {
@@ -73,10 +82,10 @@ pub fn creer(conn: &Connection, t: &NouveauTiers) -> Result<Tiers> {
     let cree_le = now();
     conn.execute(
         "INSERT INTO tiers (id, code, type_role, nom, telephone, adresse, ninea, solde, actif, cree_le,
-                            exonere_tva, nature, prenom, cni, rccm)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 1, ?8, ?9, ?10, ?11, ?12, ?13)",
+                            exonere_tva, nature, prenom, cni, rccm, retenue_source_taux)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 1, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![id, t.code, t.type_role, t.nom, t.telephone, t.adresse, t.ninea, cree_le,
-                t.exonere_tva as i64, t.nature, t.prenom, t.cni, t.rccm],
+                t.exonere_tva as i64, t.nature, t.prenom, t.cni, t.rccm, t.retenue_source_taux],
     )?;
     lire(conn, &id)
 }
@@ -84,7 +93,7 @@ pub fn creer(conn: &Connection, t: &NouveauTiers) -> Result<Tiers> {
 pub fn lire(conn: &Connection, id: &str) -> Result<Tiers> {
     conn.query_row(
         "SELECT id, code, type_role, nom, telephone, adresse, ninea, solde, actif, cree_le, exonere_tva,
-                nature, prenom, cni, rccm
+                nature, prenom, cni, rccm, retenue_source_taux
          FROM tiers WHERE id = ?1",
         params![id],
         ligne_vers_tiers,
@@ -104,7 +113,7 @@ pub fn lister(conn: &Connection, filtre: Filtre) -> Result<Vec<Tiers>> {
     };
     let sql = format!(
         "SELECT id, code, type_role, nom, telephone, adresse, ninea, solde, actif, cree_le, exonere_tva,
-                nature, prenom, cni, rccm
+                nature, prenom, cni, rccm, retenue_source_taux
          FROM tiers WHERE {clause} ORDER BY nom"
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -117,9 +126,10 @@ pub fn modifier(conn: &Connection, id: &str, t: &NouveauTiers) -> Result<Tiers> 
     let n = conn.execute(
         "UPDATE tiers SET code = ?2, type_role = ?3, nom = ?4, telephone = ?5,
                           adresse = ?6, ninea = ?7, exonere_tva = ?8,
-                          nature = ?9, prenom = ?10, cni = ?11, rccm = ?12 WHERE id = ?1",
+                          nature = ?9, prenom = ?10, cni = ?11, rccm = ?12,
+                          retenue_source_taux = ?13 WHERE id = ?1",
         params![id, t.code, t.type_role, t.nom, t.telephone, t.adresse, t.ninea,
-                t.exonere_tva as i64, t.nature, t.prenom, t.cni, t.rccm],
+                t.exonere_tva as i64, t.nature, t.prenom, t.cni, t.rccm, t.retenue_source_taux],
     )?;
     if n == 0 {
         return Err(CoreError::NotFound(format!("tiers {id}")));
@@ -185,6 +195,7 @@ fn ligne_vers_tiers(r: &rusqlite::Row) -> rusqlite::Result<Tiers> {
         prenom: r.get(12)?,
         cni: r.get(13)?,
         rccm: r.get(14)?,
+        retenue_source_taux: r.get(15)?,
     })
 }
 
@@ -220,7 +231,7 @@ mod tests {
     fn ajouter(conn: &Connection, code: &str, role: TypeRole) -> String {
         creer(conn, &NouveauTiers {
             code: code.into(), type_role: role, nom: code.into(),
-            telephone: None, adresse: None, ninea: None, exonere_tva: false,
+            telephone: None, adresse: None, ninea: None, exonere_tva: false, retenue_source_taux: None,
             nature: NatureTiers::Particulier, prenom: None, cni: None, rccm: None,
         }).unwrap().id
     }
@@ -232,7 +243,7 @@ mod tests {
         let conn = db::open_in_memory().unwrap();
         let t = creer(&conn, &NouveauTiers {
             code: "ENT".into(), type_role: TypeRole::Client, nom: "Sarl Teranga".into(),
-            telephone: None, adresse: None, ninea: None, exonere_tva: false,
+            telephone: None, adresse: None, ninea: None, exonere_tva: false, retenue_source_taux: None,
             nature: NatureTiers::Entreprise, prenom: None, cni: None, rccm: None,
         }).unwrap();
         assert_eq!(t.nature, NatureTiers::Entreprise);
@@ -241,7 +252,7 @@ mod tests {
         // Un particulier sans CNI n'est pas alerté sur la CNI (jamais exigée).
         let p = creer(&conn, &NouveauTiers {
             code: "PART".into(), type_role: TypeRole::Client, nom: "Diop".into(),
-            telephone: Some("77".into()), adresse: None, ninea: None, exonere_tva: false,
+            telephone: Some("77".into()), adresse: None, ninea: None, exonere_tva: false, retenue_source_taux: None,
             nature: NatureTiers::Particulier, prenom: Some("Awa".into()), cni: None, rccm: None,
         }).unwrap();
         assert_eq!(p.prenom.as_deref(), Some("Awa"));
@@ -269,7 +280,7 @@ mod tests {
 
         let m = modifier(&conn, &a, &NouveauTiers {
             code: "A".into(), type_role: TypeRole::LesDeux, nom: "Aïda".into(),
-            telephone: Some("77".into()), adresse: None, ninea: None, exonere_tva: false,
+            telephone: Some("77".into()), adresse: None, ninea: None, exonere_tva: false, retenue_source_taux: None,
             nature: NatureTiers::Particulier, prenom: None, cni: None, rccm: None,
         }).unwrap();
         assert_eq!(m.nom, "Aïda");

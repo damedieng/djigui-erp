@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Rapports</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  .tuiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:14px; }
+  .tuile { border:1px solid var(--border, #e5e7eb); border-radius:10px; padding:12px 14px; background:var(--card, #fff); }
+  .tuile-lib { font-size:12px; color:var(--muted, #6b7280); }
+  .tuile-val { font-size:20px; font-weight:600; margin-top:4px; }
+  .neg { color:#b91c1c; } .pos { color:#166534; }
+  tr.rupture td { background:#fef2f2; }
+  tr.alerte  td { background:#fffbeb; }
+  tr.annule td { opacity:.55; text-decoration:line-through; }
+  .estime { font-size:11px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Rapports</div>
+        <div class="topbar-date">Ce que disent vos ventes, vos stocks et vos clients</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <!-- Bandeau période partagé : il pilote tous les onglets datés.
+           Placé AU-DESSUS des chiffres, puisque c'est lui qui les commande. -->
+      <div class="periode-bandeau">
+        <div style="font-weight:600;margin-bottom:8px"><i class="ti ti-calendar"></i> Période analysée</div>
+        <div id="chips-periode" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <button class="btn" data-p="semaine">7 derniers jours</button>
+          <button class="btn" data-p="mois">Ce mois</button>
+          <button class="btn" data-p="3mois">3 derniers mois</button>
+          <button class="btn" data-p="annee">Cette année</button>
+          <button class="btn" data-p="tout">Depuis toujours</button>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <label style="font-size:12px">Du <input type="date" id="date-du"></label>
+          <label style="font-size:12px">Au <input type="date" id="date-au"></label>
+          <button class="btn btn-primary" id="btn-appliquer"><i class="ti ti-search"></i>Appliquer</button>
+          <span class="muted" id="libelle-periode"></span>
+        </div>
+      </div>
+
+      <div id="bandeau-estime" class="alert warn" hidden style="margin-bottom:12px"></div>
+
+      <div class="tabs" id="rap-tabs">
+        <span class="tab active" data-tab="ventes">Journal des ventes</span>
+        <span class="tab" data-tab="achats">Journal des achats</span>
+        <span class="tab" data-tab="marges">Marge par article</span>
+        <span class="tab" data-tab="stock">État du stock</span>
+        <span class="tab" data-tab="clients">Encours clients</span>
+        <span class="tab" data-tab="fournisseurs">Encours fournisseurs</span>
+        <span class="tab" data-tab="numerotation">Numérotation</span>
+      </div>
+
+      <!-- ==================== JOURNAL DES VENTES ==================== -->
+      <div class="tab-panel" data-panel="ventes">
+        <div class="tuiles" id="tuiles-ventes"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Date</th><th>Pièce</th><th>Client</th>
+              <th class="right">HT</th><th class="right">TVA</th><th class="right">TTC</th>
+              <th class="right">Réglé</th><th class="right">Reste dû</th>
+            </tr></thead>
+            <tbody id="corps-ventes"><tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire le journal des ventes</div>
+          <ul>
+            <li>Toutes vos factures de vente de la période, dans l'ordre des dates.</li>
+            <li><strong>Réglé</strong> = ce que le client a effectivement payé sur cette facture. <strong>Reste dû</strong> = ce qu'il vous doit encore.</li>
+            <li>Les factures <strong>annulées</strong> apparaissent barrées : elles font partie de votre histoire, mais elles ne comptent pas dans les totaux.</li>
+            <li>Le <strong>HT</strong> est le chiffre d'affaires réel ; le <strong>TTC</strong> comprend la TVA, qui n'est pas à vous — vous la collectez pour l'État.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== JOURNAL DES ACHATS ==================== -->
+      <div class="tab-panel" data-panel="achats" hidden>
+        <div class="tuiles" id="tuiles-achats"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Date</th><th>Pièce</th><th>Fournisseur</th>
+              <th class="right">HT</th><th class="right">TVA</th><th class="right">TTC</th>
+              <th class="right">Payé</th><th class="right">Reste à payer</th>
+            </tr></thead>
+            <tbody id="corps-achats"><tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire le journal des achats</div>
+          <ul>
+            <li>Vos factures fournisseurs de la période, et ce qu'il vous reste à régler.</li>
+            <li>La <strong>TVA</strong> payée à vos fournisseurs se déduit en principe de celle que vous collectez : gardez ces factures.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== MARGE PAR ARTICLE ==================== -->
+      <div class="tab-panel" data-panel="marges" hidden>
+        <div class="tuiles" id="tuiles-marges"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Article</th><th>Catégorie</th>
+              <th class="right">Vendu</th><th class="right">Chiffre d'affaires</th>
+              <th class="right">Coût</th><th class="right">Marge</th><th class="right">%</th>
+            </tr></thead>
+            <tbody id="corps-marges"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire la marge</div>
+          <ul>
+            <li><strong>Marge</strong> = ce que l'article a rapporté, moins ce qu'il vous a coûté à l'achat. C'est le chiffre qui compte, pas le chiffre d'affaires.</li>
+            <li>Le <strong>%</strong> est la part de marge dans le prix de vente. Un pourcentage faible sur un article qui tourne beaucoup peut rapporter plus qu'un gros pourcentage sur un article qui dort.</li>
+            <li>⚠️ La marge n'est juste que si le <strong>prix d'achat</strong> est juste. Les articles marqués <strong>« prix estimé »</strong> ou sans prix d'achat sont signalés : allez les compléter dans <strong><a href="completer-prix.html">Compléter mes prix</a></strong>.</li>
+            <li>Le coût employé est le prix d'achat <strong>d'aujourd'hui</strong>, pas celui du jour de la vente. Si vos prix d'achat bougent beaucoup, la marge passée est approximative.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== ÉTAT DU STOCK ==================== -->
+      <div class="tab-panel" data-panel="stock" hidden>
+        <div class="tuiles" id="tuiles-stock"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Article</th><th>Catégorie</th>
+              <th class="right">En stock</th><th class="right">Seuil</th>
+              <th class="right">Prix d'achat</th><th class="right">Valeur</th><th>État</th>
+            </tr></thead>
+            <tbody id="corps-stock"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire l'état du stock</div>
+          <ul>
+            <li>Les <strong>problèmes d'abord</strong> : ruptures en rouge, puis les articles passés sous leur seuil d'alerte en jaune, puis le reste.</li>
+            <li>Un stock <strong>négatif</strong> n'est pas un bug : Djigui vous laisse vendre même sans stock enregistré, et vous le signale. Faites un inventaire pour remettre les compteurs justes.</li>
+            <li>La <strong>valeur</strong> est le stock multiplié par le prix d'achat. Elle vaut ce que valent vos prix d'achat — d'où l'avertissement si certains sont estimés.</li>
+            <li>Seuls les articles qui <strong>suivent leur stock</strong> apparaissent ici. Un service ou un plat non suivi n'y figure pas.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== ENCOURS CLIENTS ==================== -->
+      <div class="tab-panel" data-panel="clients" hidden>
+        <div class="tuiles" id="tuiles-clients"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Client</th><th>Téléphone</th>
+              <th class="right">Facturé</th><th class="right">Réglé</th>
+              <th class="right">Solde dû</th><th class="right">Pièces ouvertes</th><th>Depuis</th>
+            </tr></thead>
+            <tbody id="corps-clients"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Qui vous doit de l'argent</div>
+          <ul>
+            <li>Les clients ayant au moins une facture non soldée, <strong>du plus gros débiteur au plus petit</strong>.</li>
+            <li>La colonne <strong>Depuis</strong> donne l'âge de la plus vieille facture impayée. C'est le vrai signal : 200 000 F qui traînent depuis 90 jours sont plus inquiétants que 500 000 F d'hier.</li>
+            <li>Le bouton <strong>fiche</strong> de l'écran <em>Tiers</em> permet d'enregistrer un règlement directement.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== ENCOURS FOURNISSEURS ==================== -->
+      <div class="tab-panel" data-panel="fournisseurs" hidden>
+        <div class="tuiles" id="tuiles-fournisseurs"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Fournisseur</th><th>Téléphone</th>
+              <th class="right">Facturé</th><th class="right">Payé</th>
+              <th class="right">Reste à payer</th><th class="right">Pièces ouvertes</th><th>Depuis</th>
+            </tr></thead>
+            <tbody id="corps-fournisseurs"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Ce que vous devez</div>
+          <ul>
+            <li>Vos fournisseurs ayant au moins une facture non réglée, du plus gros montant au plus petit.</li>
+            <li>Utile avant de commander : un fournisseur qu'on n'a pas payé depuis longtemps livre moins volontiers.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== CONTINUITÉ DE LA NUMÉROTATION ====================
+           Mention N1 OHADA. Un contrôle fiscal commence souvent par là : un
+           numéro manquant est le signe le plus simple d'une pièce escamotée.
+           ⚠️ On SIGNALE, on ne BLOQUE pas — un trou a parfois une explication
+           parfaitement légitime (brouillon supprimé, reprise de données). -->
+      <div class="tab-panel" data-panel="numerotation" hidden>
+        <div class="tuiles" id="tuiles-numerotation"></div>
+        <div id="constat-numerotation"></div>
+
+        <div class="card" style="padding:0;overflow:visible;margin-top:12px">
+          <table class="table">
+            <thead><tr>
+              <th>Type de pièce</th><th>Exercice</th>
+              <th class="right">Pièces</th><th>De</th><th>À</th>
+              <th class="right">Numéros tirés</th><th class="right">Manquants</th>
+            </tr></thead>
+            <tbody id="corps-series"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div id="bloc-trous" hidden>
+          <div style="font-weight:600;font-size:13px;margin:18px 0 8px">Numéros manquants</div>
+          <div class="card" style="padding:0;overflow:visible">
+            <table class="table">
+              <thead><tr>
+                <th>Numéro manquant</th><th>Pièce précédente</th><th>Le</th>
+                <th>Pièce suivante</th><th>Le</th>
+              </tr></thead>
+              <tbody id="corps-trous"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Pourquoi ce contrôle ?</div>
+          <ul>
+            <li>Vos factures doivent porter des numéros <strong>qui se suivent, sans trou</strong>. C'est ce qui prouve qu'aucune vente n'a été retirée après coup.</li>
+            <li>Un contrôleur commence souvent par là : un numéro manquant est le signe le plus simple d'une facture escamotée.</li>
+            <li><strong>Un trou n'est pas une faute en soi.</strong> Une facture préparée puis supprimée avant d'être validée en laisse un, et c'est normal. Ce qui compte, c'est de <strong>pouvoir l'expliquer</strong> — d'où cette liste.</li>
+            <li>La colonne <strong>« Numéros tirés »</strong> compte tous les numéros distribués depuis le début, y compris ceux des pièces supprimées. S'il dépasse le dernier numéro existant, c'est que les dernières pièces préparées n'ont pas été conservées.</li>
+            <li>Chaque type de pièce et chaque année ont <strong>leur propre suite de numéros</strong> : les factures ne comblent pas les trous des devis.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, fmt, esc, dateFr, toast } = Djigui;
+
+  let ongletActif = 'ventes';
+  const chargés = new Set();
+
+  // ---- Période partagée ---------------------------------------------------
+  function iso(d) { return d.toISOString().slice(0, 10); }
+
+  function appliquerPlage(nom) {
+    const aujourd = new Date();
+    let debut = null;
+    if (nom === 'semaine') { debut = new Date(aujourd); debut.setDate(debut.getDate() - 6); }
+    else if (nom === 'mois') { debut = new Date(aujourd.getFullYear(), aujourd.getMonth(), 1); }
+    else if (nom === '3mois') { debut = new Date(aujourd); debut.setMonth(debut.getMonth() - 3); }
+    else if (nom === 'annee') { debut = new Date(aujourd.getFullYear(), 0, 1); }
+    $('#date-du').value = debut ? iso(debut) : '';
+    $('#date-au').value = nom === 'tout' ? '' : iso(aujourd);
+    const btn = document.querySelector(`#chips-periode [data-p="${nom}"]`);
+    $('#libelle-periode').textContent = btn ? btn.textContent : '';
+  }
+
+  function queryPeriode() {
+    const p = new URLSearchParams();
+    if ($('#date-du').value) p.set('du', $('#date-du').value);
+    if ($('#date-au').value) p.set('au', $('#date-au').value);
+    const q = p.toString();
+    return q ? '?' + q : '';
+  }
+
+  $('#chips-periode').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]');
+    if (!b) return;
+    appliquerPlage(b.dataset.p);
+    rechargerTout();
+  });
+  $('#btn-appliquer').addEventListener('click', () => {
+    $('#libelle-periode').textContent = 'Période choisie';
+    rechargerTout();
+  });
+
+  // ---- Onglets ------------------------------------------------------------
+  $('#rap-tabs').addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    ongletActif = t.dataset.tab;
+    document.querySelectorAll('#rap-tabs .tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== ongletActif; });
+    charger(ongletActif);
+  });
+
+  const tuile = (lib, val, classe) =>
+    `<div class="tuile"><div class="tuile-lib">${esc(lib)}</div>
+       <div class="tuile-val ${classe || ''}">${val}</div></div>`;
+
+  const signe = n => n < 0 ? 'neg' : 'pos';
+  const vide = (colonnes, texte) =>
+    `<tr><td colspan="${colonnes}" class="muted" style="text-align:center;padding:24px">${esc(texte)}</td></tr>`;
+
+  // ---- Bandeau « prix estimés » ------------------------------------------
+  // Un chiffre inventé sans étiquette est plus dangereux qu'une case vide :
+  // dès qu'une marge repose sur une estimation, on le dit.
+  function avertirEstimations(nb, quoi) {
+    const b = $('#bandeau-estime');
+    if (!nb) { b.hidden = true; return; }
+    b.innerHTML = `<strong>${nb} article(s)</strong> ${esc(quoi)} reposent sur un
+      <strong>prix d'achat estimé</strong> ou absent : les chiffres ci-dessous sont
+      indicatifs. <a href="completer-prix.html">Compléter mes prix</a>.`;
+    b.hidden = false;
+  }
+
+  // ---- Journaux -----------------------------------------------------------
+  async function chargerJournal(sens) {
+    const cible = sens === 'vente' ? 'ventes' : 'achats';
+    const j = await api(`/api/rapports/journal-${cible}${queryPeriode()}`);
+    const libRegle = sens === 'vente' ? 'Réglé' : 'Payé';
+    $('#tuiles-' + cible).innerHTML =
+      tuile('Chiffre d\'affaires HT', fmt(j.total_ht)) +
+      tuile('TVA', fmt(j.total_tva)) +
+      tuile('Total TTC', fmt(j.total_ttc)) +
+      tuile(libRegle, fmt(j.total_regle)) +
+      tuile(sens === 'vente' ? 'Reste dû' : 'Reste à payer', fmt(j.total_reste),
+            j.total_reste > 0 ? 'neg' : '');
+    $('#corps-' + cible).innerHTML = j.lignes.length
+      ? j.lignes.map(l => `<tr class="${l.statut === 'annule' ? 'annule' : ''}">
+          <td>${dateFr(l.date)}</td>
+          <td>${esc(l.numero)}${l.type_document === 'avoir' ? ' <span class="badge">avoir</span>' : ''}</td>
+          <td>${esc(l.tiers_nom || 'Client de passage')}</td>
+          <td class="right">${fmt(l.total_ht)}</td>
+          <td class="right">${fmt(l.total_tva)}</td>
+          <td class="right">${fmt(l.total_ttc)}</td>
+          <td class="right">${fmt(l.regle)}</td>
+          <td class="right ${l.reste > 0 ? 'neg' : ''}">${fmt(l.reste)}</td></tr>`).join('')
+      : vide(8, 'Aucune pièce sur cette période.');
+  }
+
+  // ---- Marges -------------------------------------------------------------
+  async function chargerMarges() {
+    const m = await api('/api/rapports/marges' + queryPeriode());
+    $('#tuiles-marges').innerHTML =
+      tuile('Chiffre d\'affaires HT', fmt(m.total_ca)) +
+      tuile('Coût des articles vendus', fmt(m.total_cout)) +
+      tuile('Marge', fmt(m.total_marge), signe(m.total_marge)) +
+      tuile('Marge moyenne', m.total_ca ? Math.round(m.total_marge / m.total_ca * 100) + ' %' : '—');
+    $('#corps-marges').innerHTML = m.lignes.length
+      ? m.lignes.map(l => `<tr>
+          <td>${esc(l.designation)}${l.cout_incertain
+            ? ' <span class="badge badge-warn estime">prix estimé</span>' : ''}</td>
+          <td>${esc(l.categorie_nom || '')}</td>
+          <td class="right">${fmt(l.quantite_vendue)}</td>
+          <td class="right">${fmt(l.ca_ht)}</td>
+          <td class="right">${fmt(l.cout)}</td>
+          <td class="right ${signe(l.marge)}">${fmt(l.marge)}</td>
+          <td class="right">${l.marge_pct === null ? '—' : l.marge_pct + ' %'}</td></tr>`).join('')
+      : vide(7, 'Aucune vente sur cette période.');
+    avertirEstimations(m.nb_cout_incertain, 'vendus');
+  }
+
+  // ---- Stock --------------------------------------------------------------
+  const LIB_ETAT = { rupture: 'Rupture', alerte: 'Stock bas', ok: 'Correct' };
+
+  async function chargerStock() {
+    const s = await api('/api/rapports/stock');
+    $('#tuiles-stock').innerHTML =
+      tuile('Valeur du stock', fmt(s.valeur_totale)) +
+      tuile('En rupture', fmt(s.nb_ruptures), s.nb_ruptures ? 'neg' : '') +
+      tuile('Sous le seuil', fmt(s.nb_alertes), s.nb_alertes ? 'neg' : '') +
+      tuile('Articles suivis', fmt(s.lignes.length));
+    $('#corps-stock').innerHTML = s.lignes.length
+      ? s.lignes.map(l => `<tr class="${l.etat}">
+          <td>${esc(l.designation)}</td>
+          <td>${esc(l.categorie_nom || '')}</td>
+          <td class="right ${l.stock < 0 ? 'neg' : ''}">${fmt(l.stock)}</td>
+          <td class="right">${l.stock_alerte == null ? '—' : fmt(l.stock_alerte)}</td>
+          <td class="right">${l.prix_achat == null ? '—' : fmt(l.prix_achat)}${
+            l.prix_achat_estime ? ' <span class="badge badge-warn estime">estimé</span>' : ''}</td>
+          <td class="right">${fmt(l.valeur)}</td>
+          <td>${esc(LIB_ETAT[l.etat] || l.etat)}</td></tr>`).join('')
+      : vide(7, 'Aucun article ne suit son stock.');
+    avertirEstimations(s.nb_valeur_incertaine, 'en stock');
+  }
+
+  // ---- Encours ------------------------------------------------------------
+  async function chargerEncours(qui) {
+    const route = qui === 'clients' ? 'encours-clients' : 'encours-fournisseurs';
+    const e = await api('/api/rapports/' + route);
+    const vieux = e.lignes.filter(l => (l.anciennete_jours || 0) > 60).length;
+    $('#tuiles-' + qui).innerHTML =
+      tuile(qui === 'clients' ? 'Total dû par les clients' : 'Total à payer', fmt(e.total),
+            e.total > 0 ? 'neg' : '') +
+      tuile(qui === 'clients' ? 'Clients concernés' : 'Fournisseurs concernés', fmt(e.lignes.length)) +
+      tuile('Dont plus de 60 jours', fmt(vieux), vieux ? 'neg' : '');
+    $('#corps-' + qui).innerHTML = e.lignes.length
+      ? e.lignes.map(l => `<tr class="${(l.anciennete_jours || 0) > 60 ? 'alerte' : ''}">
+          <td>${esc(l.nom)}</td>
+          <td>${esc(l.telephone || '')}</td>
+          <td class="right">${fmt(l.facture)}</td>
+          <td class="right">${fmt(l.regle)}</td>
+          <td class="right ${signe(l.solde)}">${fmt(l.solde)}</td>
+          <td class="right">${fmt(l.nb_pieces_ouvertes)}</td>
+          <td>${l.plus_ancienne ? dateFr(l.plus_ancienne)
+            + (l.anciennete_jours != null ? ` <span class="muted">(${l.anciennete_jours} j)</span>` : '')
+            : ''}</td></tr>`).join('')
+      : vide(7, qui === 'clients'
+          ? 'Personne ne vous doit d\'argent. Tout est réglé.'
+          : 'Vous ne devez rien à vos fournisseurs.');
+  }
+
+  // ---- Continuité de la numérotation (N1 OHADA) ---------------------------
+  // On parle le langage du commerçant : « facture », pas « facture_vente ».
+  const NOM_PIECE = {
+    facture: 'Facture', avoir: 'Avoir', devis: 'Devis', proforma: 'Proforma',
+    commande: 'Commande', livraison: 'Bon de livraison',
+  };
+
+  async function chargerNumerotation() {
+    const r = await api('/api/rapports/numerotation');
+
+    $('#tuiles-numerotation').innerHTML =
+      tuile('Suites de numéros suivies', fmt(r.series.length)) +
+      tuile('Numéros manquants', fmt(r.nb_trous), r.nb_trous ? 'neg' : 'pos') +
+      tuile('Pièces enregistrées',
+            fmt(r.series.reduce((s, x) => s + x.nb_documents, 0)));
+
+    // Le constat prime sur le tableau : c'est lui que l'utilisateur lit.
+    $('#constat-numerotation').innerHTML = r.nb_trous
+      ? `<div class="alert warn" style="margin-bottom:4px"><i class="ti ti-alert-triangle"></i>
+           <span>${esc(r.constat)}</span></div>`
+      : `<div class="alert" style="margin-bottom:4px"><i class="ti ti-circle-check"></i>
+           <span>${esc(r.constat)}</span></div>`;
+
+    $('#corps-series').innerHTML = r.series.length
+      ? r.series.map(s => {
+          // Le compteur dépasse le dernier numéro existant : des pièces
+          // préparées puis supprimées ont consommé des numéros. Ce n'est pas
+          // une anomalie, mais ça explique un écart qui surprendrait sinon.
+          const tires = s.compteur > s.dernier
+            ? `${fmt(s.compteur)} <span class="muted">(${s.compteur - s.dernier} sans pièce)</span>`
+            : fmt(s.compteur);
+          return `<tr class="${s.nb_trous ? 'alerte' : ''}">
+            <td>${esc(NOM_PIECE[s.type_document] || s.type_document)}</td>
+            <td>${esc(String(s.exercice))}</td>
+            <td class="right">${fmt(s.nb_documents)}</td>
+            <td>${esc(s.prefixe)}-${s.exercice}-${String(s.premier).padStart(4, '0')}</td>
+            <td>${esc(s.prefixe)}-${s.exercice}-${String(s.dernier).padStart(4, '0')}</td>
+            <td class="right">${tires}</td>
+            <td class="right ${s.nb_trous ? 'neg' : ''}">${fmt(s.nb_trous)}</td></tr>`;
+        }).join('')
+      : vide(7, 'Aucune pièce enregistrée pour le moment.');
+
+    $('#bloc-trous').hidden = r.nb_trous === 0;
+    $('#corps-trous').innerHTML = r.trous.map(t => `<tr>
+      <td><strong>${esc(t.numero_attendu)}</strong></td>
+      <td>${esc(t.precedent || '—')}</td>
+      <td>${t.date_precedent ? dateFr(t.date_precedent) : ''}</td>
+      <td>${esc(t.suivant || '—')}</td>
+      <td>${t.date_suivant ? dateFr(t.date_suivant) : ''}</td></tr>`).join('');
+  }
+
+  // ---- Aiguillage ---------------------------------------------------------
+  async function charger(onglet) {
+    $('#bandeau-estime').hidden = true;
+    try {
+      if (onglet === 'ventes') await chargerJournal('vente');
+      else if (onglet === 'achats') await chargerJournal('achat');
+      else if (onglet === 'marges') await chargerMarges();
+      else if (onglet === 'stock') await chargerStock();
+      else if (onglet === 'clients') await chargerEncours('clients');
+      else if (onglet === 'fournisseurs') await chargerEncours('fournisseurs');
+      else if (onglet === 'numerotation') await chargerNumerotation();
+      chargés.add(onglet);
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  }
+
+  // On ne recharge que l'onglet visible : inutile d'interroger six rapports
+  // quand l'utilisateur en regarde un seul.
+  function rechargerTout() {
+    chargés.clear();
+    charger(ongletActif);
+  }
+
+  appliquerPlage('mois');
+  charger('ventes');
+})();
+</script>
+</body>
+</html>

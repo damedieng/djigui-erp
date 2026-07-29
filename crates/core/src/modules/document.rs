@@ -34,6 +34,19 @@ pub struct Document {
     pub total_ht: f64,
     pub total_tva: f64,
     pub total_ttc: f64,
+    /// Taux de retenue à la source **figé au moment de l'émission** (mig 0043).
+    /// Corriger le taux d'un tiers ne doit jamais réécrire une pièce déjà émise.
+    #[serde(default)]
+    pub retenue_taux: f64,
+    /// Montant retenu par le client et reversé par lui au Trésor.
+    #[serde(default)]
+    pub montant_retenue: f64,
+    /// **Ce que le client verse réellement** = TTC − retenue.
+    ///
+    /// ⚠️ Dérivé, jamais stocké : deux colonnes qui doivent s'accorder finissent
+    /// toujours par diverger. C'est aussi ce montant — et non le TTC — qui fait
+    /// l'encours du tiers.
+    pub net_a_payer: f64,
     pub note: Option<String>,
     /// Référence de dossier / contrat (§ facturation contrat), affichée sur la facture.
     #[serde(default)]
@@ -42,6 +55,19 @@ pub struct Document {
     #[serde(default)]
     pub objet: Option<String>,
     pub cree_le: String,
+    /// Total TTC **en toutes lettres** — mention obligatoire sur une facture
+    /// (N1 OHADA). C'est elle qui fait foi en cas de litige : un chiffre se
+    /// falsifie d'un trait de stylo, pas une phrase.
+    ///
+    /// ⚠️ **Calculée à la lecture, jamais stockée.** Une mention en base
+    /// pourrait cesser de correspondre au total (recalcul d'une ligne,
+    /// changement de devise) et on imprimerait alors deux montants qui se
+    /// contredisent — exactement ce que la mention est censée empêcher.
+    ///
+    /// ⚠️ Calculée **dans le cœur** et non côté écran : la facture affichée et
+    /// le PDF imprimé partagent ainsi la même phrase, au mot près.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub montant_ttc_lettres: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub lignes: Vec<Ligne>,
 }
@@ -156,6 +182,63 @@ fn taxes_ligne(l: &NouvelleLigne, ht: f64) -> Vec<LigneTaxe> {
 }
 
 // ---------------------------------------------------------------------------
+// Retenue à la source (mig 0043)
+// ---------------------------------------------------------------------------
+//
+// ⚠️ Ce n'est PAS une taxe : elle figure sur la facture mais **se soustrait**
+// de ce que le client verse. Il garde cette part et la reverse lui-même au
+// Trésor au nom du fournisseur. Voir la migration 0043 pour le raisonnement.
+
+/// Taux de retenue applicable à un tiers. `0.0` = aucune retenue.
+fn taux_retenue_tiers(conn: &Connection, tiers_id: &str) -> f64 {
+    conn.query_row(
+        "SELECT retenue_source_taux FROM tiers WHERE id = ?1",
+        params![tiers_id],
+        |r| r.get::<_, Option<f64>>(0),
+    )
+    .ok()
+    .flatten()
+    .unwrap_or(0.0)
+}
+
+/// Calcule le montant retenu.
+///
+/// ⚠️ L'assiette (HT ou TTC) est **paramétrable**, jamais codée en dur : elle
+/// diffère selon la nature de la retenue et selon le pays. Figer « HT » dans le
+/// code obligerait à recompiler pour un client dont l'administration dit autre
+/// chose.
+fn montant_retenue(conn: &Connection, taux: f64, total_ht: f64, total_ttc: f64) -> f64 {
+    if taux == 0.0 {
+        return 0.0;
+    }
+    let base_ttc = conn
+        .query_row(
+            "SELECT valeur FROM parametre_global WHERE cle = 'retenue_base'",
+            [],
+            |r| r.get::<_, String>(0),
+        )
+        .map(|v| v.eq_ignore_ascii_case("ttc"))
+        .unwrap_or(false);
+    let base = if base_ttc { total_ttc } else { total_ht };
+    arrondi(base * taux / 100.0)
+}
+
+/// **Ce que le tiers doit réellement** sur cette pièce : TTC moins la retenue.
+///
+/// ⚠️⚠️ C'est CE montant qui fait l'encours, et non le TTC. Sans cela, une
+/// facture entièrement réglée resterait éternellement « partiellement impayée »
+/// du montant de la retenue, et l'écran de relance réclamerait au client une
+/// somme qu'il n'a jamais eu à verser.
+///
+/// ⚠️ Utilisé par `valider`/`annuler` (fil de l'eau) ET repris à l'identique
+/// dans `paiement::recalculer_soldes` (reconstruction). **Les deux doivent
+/// rester des miroirs exacts** — sinon le recalcul « réparerait » les soldes en
+/// les faussant, ce qui est pire que le bug d'origine.
+pub fn encours_du_document(doc: &Document) -> f64 {
+    arrondi(doc.total_ttc - doc.montant_retenue)
+}
+
+// ---------------------------------------------------------------------------
 // Numérotation (§5.4) — pilotée par la donnée (préfixe + compteur par exercice)
 // ---------------------------------------------------------------------------
 
@@ -215,16 +298,21 @@ pub fn creer(conn: &Connection, d: &NouveauDocument) -> Result<Document> {
     total_tva = arrondi(total_tva);
     let total_ttc = arrondi(total_ht + total_tva);
 
+    // Retenue à la source (mig 0043). Le taux est **recopié** depuis le tiers :
+    // corriger sa fiche plus tard ne doit jamais réécrire une pièce déjà émise.
+    let retenue_taux = taux_retenue_tiers(conn, &d.tiers_id);
+    let retenue = montant_retenue(conn, retenue_taux, total_ht, total_ttc);
+
     conn.execute(
         "INSERT INTO document
             (id, numero, type_document, sens, tiers_id, depot_id, date, statut,
              document_source_id, total_ht, total_tva, total_ttc, note,
-             reference_dossier, objet, cree_le)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,'brouillon',?8,?9,?10,?11,?12,?13,?14,?15)",
+             reference_dossier, objet, cree_le, retenue_taux, montant_retenue)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,'brouillon',?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
         params![
             id, numero, d.type_document, d.sens, d.tiers_id, d.depot_id, date,
             d.document_source_id, total_ht, total_tva, total_ttc, d.note,
-            d.reference_dossier, d.objet, now(),
+            d.reference_dossier, d.objet, now(), retenue_taux, retenue,
         ],
     )?;
 
@@ -266,6 +354,13 @@ pub fn lire(conn: &Connection, id: &str) -> Result<Document> {
             autre => autre.into(),
         })?;
     doc.lignes = lignes_du_document(conn, id)?;
+    // La devise vient des paramètres de l'entreprise : c'est elle qui décide si
+    // l'on écrit « francs CFA » ou « euros », et s'il y a des centimes.
+    let devise = crate::modules::parametres::lire(conn)
+        .map(|p| p.devise)
+        .unwrap_or_else(|_| "FCFA".into());
+    doc.montant_ttc_lettres =
+        Some(crate::modules::lettres::montant_en_lettres(doc.total_ttc, &devise));
     Ok(doc)
 }
 
@@ -284,7 +379,7 @@ pub fn lister(conn: &Connection, f: &FiltreDocuments) -> Result<Vec<Document>> {
 const SELECT_ENTETE: &str = "
     SELECT id, numero, type_document, sens, tiers_id, depot_id, date, statut,
            document_source_id, total_ht, total_tva, total_ttc, note, cree_le,
-           reference_dossier, objet
+           reference_dossier, objet, retenue_taux, montant_retenue
     FROM document";
 
 fn ligne_vers_doc(r: &rusqlite::Row) -> rusqlite::Result<Document> {
@@ -304,10 +399,19 @@ fn ligne_vers_doc(r: &rusqlite::Row) -> rusqlite::Result<Document> {
         total_ht: r.get(9)?,
         total_tva: r.get(10)?,
         total_ttc: r.get(11)?,
+        retenue_taux: r.get(16)?,
+        montant_retenue: r.get(17)?,
+        // Dérivé à la lecture : c'est le seul moyen qu'il ne puisse jamais
+        // contredire les deux colonnes dont il découle.
+        net_a_payer: arrondi(r.get::<_, f64>(11)? - r.get::<_, f64>(17)?),
         note: r.get(12)?,
         cree_le: r.get(13)?,
         reference_dossier: r.get(14)?,
         objet: r.get(15)?,
+        // Renseignée par `lire()` seulement : sur une LISTE de documents, la
+        // phrase n'est pas affichée et la calculer pour 500 lignes serait du
+        // travail pur perte.
+        montant_ttc_lettres: None,
         lignes: Vec::new(),
     })
 }
@@ -416,11 +520,21 @@ pub fn valider(conn: &Connection, id: &str) -> Result<Document> {
         }
     }
 
-    // §6.4 : une facture crée un encours (+ttc), un avoir le réduit (−ttc).
-    // Les autres types (devis, commande, livraison, proforma) n'y touchent pas.
+    // §6.4 : une facture crée un encours, un avoir le réduit. Les autres types
+    // (devis, commande, livraison, proforma) n'y touchent pas.
+    //
+    // ⚠️⚠️ C'est le **NET À PAYER** (TTC − retenue à la source, mig 0043) et non
+    // le TTC : le client ne doit que ce qu'il verse. Compter le TTC laisserait
+    // la facture éternellement « partiellement impayée » du montant de la
+    // retenue, et l'écran de relance réclamerait une somme jamais due.
+    //
+    // ⚠️ `paiement::recalculer_soldes` doit rester le MIROIR EXACT de ces deux
+    // lignes. Si l'un compte le TTC et l'autre le net, le recalcul
+    // « réparerait » les soldes en les faussant.
+    let encours = encours_du_document(&doc);
     match doc.type_document {
-        TypeDocument::Facture => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, doc.total_ttc)?,
-        TypeDocument::Avoir => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, -doc.total_ttc)?,
+        TypeDocument::Facture => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, encours)?,
+        TypeDocument::Avoir => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, -encours)?,
         _ => {}
     }
 
@@ -497,9 +611,12 @@ pub fn annuler(conn: &Connection, id: &str, motif: &str, par: Option<&str>) -> R
     }
 
     // 2. Inverse l'encours du tiers posé par la validation.
+    // ⚠️ Exactement le même montant qu'à la validation — net à payer, pas TTC —
+    // sinon l'annulation laisserait un résidu du montant de la retenue.
+    let encours = encours_du_document(&doc);
     match doc.type_document {
-        TypeDocument::Facture => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, -doc.total_ttc)?,
-        TypeDocument::Avoir => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, doc.total_ttc)?,
+        TypeDocument::Facture => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, -encours)?,
+        TypeDocument::Avoir => crate::modules::paiement::maj_solde_tiers(conn, &doc.tiers_id, encours)?,
         _ => {}
     }
 
@@ -685,7 +802,7 @@ mod tests {
             r#type: TypeArticle::Bien,
             designation: "Riz".into(),
             prix_vente: 650.0, prix_achat: Some(500.0), taux_tva: 18.0,
-            gere_stock: gere, stock_alerte: None, categorie_id: None, image: None, code_barre: None, taxes: None,
+            gere_stock: gere, stock_alerte: None, categorie_id: None, image: None, code_barre: None, taxes: None, nature_comptable: None,
         }).unwrap().id
     }
 
@@ -708,6 +825,25 @@ mod tests {
         assert_eq!(doc.total_tva, 1053.0);
         assert_eq!(doc.total_ttc, 6903.0);
         assert!(doc.numero.starts_with("FA-2026-"));
+
+        // --- Mention obligatoire : le montant en toutes lettres (N1 OHADA) ---
+        // Elle doit correspondre AU CENTIME au total imprimé juste à côté :
+        // deux montants qui se contredisent sur une facture, c'est précisément
+        // ce que cette mention est censée empêcher.
+        let relu = lire(&conn, &doc.id).unwrap();
+        assert_eq!(
+            relu.montant_ttc_lettres.as_deref(),
+            Some("six mille neuf cent trois francs CFA"),
+            "la mention en lettres doit refléter le TTC réel"
+        );
+        // ⚠️ Sur une LISTE, la mention n'est pas calculée : elle n'y est pas
+        // affichée, et la produire pour des centaines de lignes serait du
+        // travail pur perte.
+        let liste = lister(&conn, &FiltreDocuments::default()).unwrap();
+        assert!(
+            liste.iter().all(|d| d.montant_ttc_lettres.is_none()),
+            "la liste ne doit pas payer le coût d'une mention qu'elle n'affiche pas"
+        );
     }
 
     #[test]
@@ -891,5 +1027,171 @@ mod tests {
         }).unwrap();
         valider(&conn, &doc.id).unwrap();
         assert_eq!(stock::stock_article_depot(&conn, &a, &depot).unwrap(), 0.0);
+    }
+
+    // ---- Retenue à la source (mig 0043) ------------------------------------
+
+    /// Pose un taux de retenue sur le tiers d'essai.
+    fn poser_retenue(conn: &rusqlite::Connection, tiers_id: &str, taux: f64) {
+        conn.execute("UPDATE tiers SET retenue_source_taux = ?2 WHERE id = ?1",
+                     params![tiers_id, taux]).unwrap();
+    }
+
+    /// Crée une facture de 100 000 HT sans TVA, pour des chiffres lisibles.
+    fn facture_simple(conn: &rusqlite::Connection, t: &str, a: &str) -> Document {
+        creer(conn, &NouveauDocument {
+            type_document: TypeDocument::Facture, sens: SensDocument::Vente,
+            tiers_id: t.into(), depot_id: None, date: Some("2026-07-20".into()),
+            note: None, document_source_id: None, reference_dossier: None, objet: None,
+            lignes: vec![NouvelleLigne {
+                article_id: a.into(), designation: "Prestation".into(),
+                quantite: 1.0, prix_unitaire: 100_000.0, taux_tva: 0.0, remise: 0.0, taxes: vec![],
+            }],
+        }).unwrap()
+    }
+
+    #[test]
+    fn la_retenue_se_soustrait_du_net_a_payer() {
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, false);
+        poser_retenue(&conn, &t, 5.0);
+
+        let doc = facture_simple(&conn, &t, &a);
+        assert_eq!(doc.total_ttc, 100_000.0);
+        assert_eq!(doc.retenue_taux, 5.0);
+        assert_eq!(doc.montant_retenue, 5_000.0);
+        // ⚠️ Le point de la retenue : elle NE change PAS le total facturé,
+        // seulement ce que le client verse.
+        assert_eq!(doc.net_a_payer, 95_000.0);
+    }
+
+    /// ⚠️⚠️ LE test qui compte : le solde écrit au fil de l'eau et le solde
+    /// reconstruit depuis les journaux doivent tomber **au franc près**.
+    /// C'est la leçon du bug des soldes : deux chemins qui divergent font que
+    /// le « recalcul » fausse les données au lieu de les réparer.
+    #[test]
+    fn le_fil_de_l_eau_et_le_recalcul_donnent_le_meme_solde() {
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, false);
+        poser_retenue(&conn, &t, 5.0);
+
+        let doc = facture_simple(&conn, &t, &a);
+        valider(&conn, &doc.id).unwrap();
+
+        let au_fil = solde_tiers(&conn, &t);
+        assert_eq!(au_fil, 95_000.0, "le client ne doit que le net, pas le TTC");
+
+        crate::modules::paiement::recalculer_soldes(&conn).unwrap();
+        assert_eq!(solde_tiers(&conn, &t), au_fil,
+                   "le recalcul doit être le miroir EXACT du fil de l'eau");
+    }
+
+    /// Une facture avec retenue, réglée de son net, doit être **soldée** —
+    /// et non rester éternellement débitrice du montant de la retenue.
+    #[test]
+    fn regler_le_net_solde_reellement_la_facture() {
+        use crate::domain::{ModePaiement, SensPaiement};
+        use crate::modules::paiement::{self, NouveauPaiement};
+
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, false);
+        poser_retenue(&conn, &t, 5.0);
+        let doc = facture_simple(&conn, &t, &a);
+        valider(&conn, &doc.id).unwrap();
+
+        let caisse = paiement::caisse_defaut(&conn).unwrap();
+        paiement::enregistrer(&conn, &NouveauPaiement {
+            tiers_id: t.clone(), caisse_id: Some(caisse), document_id: Some(doc.id.clone()),
+            sens: SensPaiement::Encaissement, montant: 95_000.0,
+            mode: ModePaiement::Espece, moyen_paiement_id: None,
+        }).unwrap();
+
+        assert_eq!(solde_tiers(&conn, &t), 0.0,
+                   "régler le net doit solder la facture, pas laisser 5 000 dus");
+        crate::modules::paiement::recalculer_soldes(&conn).unwrap();
+        assert_eq!(solde_tiers(&conn, &t), 0.0, "et le recalcul doit dire pareil");
+    }
+
+    /// Annuler doit reprendre EXACTEMENT ce que la validation a posé : sinon
+    /// il resterait un résidu du montant de la retenue.
+    #[test]
+    fn annuler_ne_laisse_aucun_residu() {
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, false);
+        poser_retenue(&conn, &t, 5.0);
+        let doc = facture_simple(&conn, &t, &a);
+        valider(&conn, &doc.id).unwrap();
+        annuler(&conn, &doc.id, "erreur de saisie", None).unwrap();
+
+        assert_eq!(solde_tiers(&conn, &t), 0.0);
+        crate::modules::paiement::recalculer_soldes(&conn).unwrap();
+        assert_eq!(solde_tiers(&conn, &t), 0.0);
+    }
+
+    /// Le taux est RECOPIÉ sur la pièce : corriger la fiche du tiers ne doit
+    /// jamais réécrire une facture déjà émise.
+    #[test]
+    fn le_taux_est_fige_sur_la_piece() {
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, false);
+        poser_retenue(&conn, &t, 5.0);
+        let doc = facture_simple(&conn, &t, &a);
+
+        poser_retenue(&conn, &t, 10.0); // le taux change plus tard
+        let relu = lire(&conn, &doc.id).unwrap();
+        assert_eq!(relu.retenue_taux, 5.0, "la pièce garde le taux de son émission");
+        assert_eq!(relu.montant_retenue, 5_000.0);
+    }
+
+    /// Sans taux sur le tiers — le cas de l'immense majorité des clients — rien
+    /// ne change : c'est la garantie de non-régression du module.
+    #[test]
+    fn sans_retenue_le_comportement_est_inchange() {
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, false);
+        let doc = facture_simple(&conn, &t, &a);
+        assert_eq!(doc.montant_retenue, 0.0);
+        assert_eq!(doc.net_a_payer, doc.total_ttc);
+        valider(&conn, &doc.id).unwrap();
+        assert_eq!(solde_tiers(&conn, &t), 100_000.0);
+    }
+
+    /// L'assiette est paramétrable : HT par défaut, TTC si l'administration du
+    /// pays le demande. Jamais codée en dur.
+    #[test]
+    fn l_assiette_de_la_retenue_est_parametrable() {
+        let conn = db::open_in_memory().unwrap();
+        let t = tiers(&conn);
+        let a = article_bien(&conn, true);
+        poser_retenue(&conn, &t, 5.0);
+
+        // Facture 100 000 HT + 18 % de TVA = 118 000 TTC.
+        let avec_tva = |conn: &rusqlite::Connection| creer(conn, &NouveauDocument {
+            type_document: TypeDocument::Facture, sens: SensDocument::Vente,
+            tiers_id: t.clone(), depot_id: None, date: Some("2026-07-20".into()),
+            note: None, document_source_id: None, reference_dossier: None, objet: None,
+            lignes: vec![NouvelleLigne {
+                article_id: a.clone(), designation: "P".into(), quantite: 1.0,
+                prix_unitaire: 100_000.0, taux_tva: 18.0, remise: 0.0, taxes: vec![],
+            }],
+        }).unwrap();
+
+        let sur_ht = avec_tva(&conn);
+        assert_eq!(sur_ht.total_ttc, 118_000.0);
+        assert_eq!(sur_ht.montant_retenue, 5_000.0, "5 % du HT par défaut");
+
+        crate::modules::parametres::ecrire_global(&conn, "retenue_base", "ttc").unwrap();
+        let sur_ttc = avec_tva(&conn);
+        assert_eq!(sur_ttc.montant_retenue, 5_900.0, "5 % du TTC une fois paramétré");
+    }
+
+    fn solde_tiers(conn: &rusqlite::Connection, id: &str) -> f64 {
+        conn.query_row("SELECT solde FROM tiers WHERE id = ?1", params![id], |r| r.get(0)).unwrap()
     }
 }

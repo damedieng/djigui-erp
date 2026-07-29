@@ -2,8 +2,10 @@
 //! binaire `djigui-server` que par la coquille desktop Tauri (§2.1/§2.2).
 
 pub mod api;
+pub mod dossier_natif;
 pub mod export;
 pub mod export_projet;
+pub mod export_marches;
 pub mod impression;
 pub mod state;
 
@@ -56,4 +58,49 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// Sauvegarde déclenchée **à la fermeture de l'application** (mig 0042).
+///
+/// Appelée par la coquille desktop juste avant que la fenêtre ne se ferme.
+/// Elle ouvre sa **propre connexion** au lieu de passer par l'`AppState` du
+/// serveur : à cet instant le serveur tourne encore dans son thread, et
+/// emprunter son `Mutex` depuis l'extérieur nous ferait dépendre de son état
+/// d'avancement. En mode WAL, une seconde connexion lit sans gêner.
+///
+/// Renvoie `Ok(None)` quand il n'y a simplement rien à faire (sauvegarde
+/// désactivée, poste secondaire, protection par mot de passe) — ce n'est pas
+/// une erreur, et il ne faut surtout pas alerter l'utilisateur pour ça au
+/// moment où il ferme son logiciel.
+pub fn sauvegarder_a_la_fermeture(
+    db_path: &str,
+) -> anyhow::Result<Option<djigui_core::modules::sauvegarde::ResultatSauvegarde>> {
+    use djigui_core::modules::sauvegarde;
+
+    let conn = djigui_core::db::open(db_path)?;
+    let p = sauvegarde::lire_parametres(&conn)?;
+    if !p.activee || !p.a_la_fermeture || !p.cette_machine_est_serveur {
+        return Ok(None);
+    }
+    // ⚠️ En mode mot de passe, personne ne peut le saisir : la fenêtre est en
+    // train de disparaître. On ne bloque pas la fermeture pour autant — on
+    // laisse une trace, et l'écran de sauvegarde signalera le manque.
+    if p.mode_cle == "motdepasse" {
+        tracing::warn!(
+            "sauvegarde de fermeture ignorée : protection par mot de passe, \
+             qui ne peut pas être saisi à la fermeture"
+        );
+        return Ok(None);
+    }
+
+    let base = std::path::Path::new(db_path);
+    let racine = base.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let resultat = sauvegarde::executer(
+        &conn,
+        &racine.join("documents"),
+        &racine.join("travail"),
+        "fermeture",
+        None,
+    )?;
+    Ok(Some(resultat))
 }

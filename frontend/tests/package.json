@@ -3,8 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node smoke-menu.mjs && node smoke-notifications.mjs && node smoke-projet-detail.mjs && node geometrie-fleches.mjs",
+    "test": "node smoke-menu.mjs && node smoke-modules.mjs && node smoke-notifications.mjs && node smoke-projet-detail.mjs && node smoke-production.mjs && node smoke-comptabilite.mjs && node smoke-rapports.mjs && node smoke-marche-detail.mjs && node smoke-marches-cartes.mjs && node smoke-gantt-retard.mjs && node smoke-sauvegarde.mjs && node geometrie-fleches.mjs",
     "test:navigateur": "node navigateur-projet.mjs"
   },
-  "devDependencies": { "jsdom": "^24", "puppeteer-core": "^23" }
+  "devDependencies": {
+    "jsdom": "^24",
+    "puppeteer-core": "^23"
+  }
 }

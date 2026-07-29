@@ -6,7 +6,7 @@
 <title>Djigui · Tiers</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
 <div class="app">
@@ -125,6 +125,15 @@
         <label class="check"><input type="checkbox" name="exonere_tva"> Client exonéré de TVA</label>
         <span class="check-hint muted">Ses factures seront émises sans TVA.</span>
       </div>
+      <!-- Retenue à la source (mig 0043). Laisser VIDE si le tiers n'est pas
+           concerné : « vide » et « 0 » ne disent pas la même chose. -->
+      <div class="field">
+        <label>Retenue à la source <span class="muted">(facultatif)</span></label>
+        <input name="retenue_source_taux" type="number" step="0.01" min="0" max="100"
+               placeholder="Laisser vide si non concerné">
+        <span class="check-hint muted">En %. Ce client retient cette part sur nos
+          factures et la reverse lui-même au Trésor : il ne verse que le reste.</span>
+      </div>
       <div class="field full" style="flex-direction:row;justify-content:flex-end;gap:10px">
         <button type="button" class="btn" id="modal-annuler">Annuler</button>
         <button type="submit" class="btn btn-primary"><i class="ti ti-check"></i>Enregistrer</button>
@@ -195,7 +204,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=9"></script>
+<script src="assets/app.js?v=16"></script>
 <script>
 const corps = document.getElementById('corps');
 const recherche = document.getElementById('recherche');
@@ -365,6 +374,11 @@ function ouvrirEdition(t) {
   form.prenom.value = t.prenom || ''; form.cni.value = t.cni || '';
   form.rccm.value = t.rccm || '';
   form.exonere_tva.checked = !!t.exonere_tva;
+  // ⚠️ `null` doit rester un champ VIDE, pas « 0 » : « non concerné » et
+  // « concerné au taux zéro » ne se justifient pas de la même façon.
+  form.retenue_source_taux.value =
+    (t.retenue_source_taux === null || t.retenue_source_taux === undefined)
+      ? '' : t.retenue_source_taux;
   appliquerNature();
   modal.hidden = false;
 }
@@ -402,6 +416,8 @@ form.addEventListener('submit', async e => {
     cni: f.get('cni').trim() || null,
     rccm: f.get('rccm').trim() || null,
     exonere_tva: form.exonere_tva.checked,
+    retenue_source_taux: form.retenue_source_taux.value.trim() === ''
+      ? null : parseFloat(form.retenue_source_taux.value),
   };
   const [url, method] = editionId ? [`/api/tiers/${editionId}`, 'PUT'] : ['/api/tiers', 'POST'];
   try {

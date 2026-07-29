@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Modules</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  /* Les cartes reprennent `.proj-grille` / `.proj-carte` (styles.css), comme
+     les projets et les marchés : une seule définition pour toute l'application. */
+  .mod-ic { width:42px; height:42px; border-radius:11px; display:flex;
+    align-items:center; justify-content:center; font-size:22px;
+    background:var(--brand-tint); color:var(--brand-strong); flex:none; }
+  .mod-nom { font-weight:700; font-size:15px; }
+  .mod-desc { font-size:12.5px; color:var(--text-2); margin:6px 0 12px; min-height:34px; }
+  /* Un module non souscrit est en VITRINE : visible pour montrer ce que le
+     système sait faire, mais nettement à part. Il n'apparaît jamais dans le
+     menu de travail — voir MENU dans app.js. */
+  .proj-carte.vitrine { opacity:.72; background:var(--surface-2); cursor:default; }
+  .proj-carte.vitrine:hover { transform:none; box-shadow:var(--shadow); }
+  .proj-carte.vitrine .mod-ic { background:var(--surface); color:var(--text-muted); }
+  .mod-pied { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  /* Interrupteur : plus parlant qu'une case à cocher pour « affiché / masqué ». */
+  .bascule { position:relative; width:44px; height:24px; flex:none; }
+  .bascule input { opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+  .bascule span { position:absolute; inset:0; border-radius:999px; background:var(--border-strong);
+    transition:background .15s; pointer-events:none; }
+  .bascule span::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px;
+    border-radius:50%; background:#fff; transition:transform .15s; }
+  .bascule input:checked + span { background:var(--brand); }
+  .bascule input:checked + span::after { transform:translateX(20px); }
+  .fam-titre { font-size:12px; text-transform:uppercase; letter-spacing:.05em;
+    font-weight:700; color:var(--text-2); margin:18px 0 10px; }
+  .fam-titre:first-child { margin-top:0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Modules</div>
+        <div class="topbar-date">Ce que votre Djigui sait faire</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn" id="btn-formule"><i class="ti ti-license"></i>Formule</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="synthese" id="tuiles" style="padding:0"></div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="rech" class="input-std" placeholder="Rechercher un module…"
+                 style="flex:1;min-width:220px">
+          <label class="coche-tout"><input type="checkbox" id="voir-vitrine" checked>
+            Montrer aussi ce que Djigui sait faire d'autre</label>
+        </div>
+      </div>
+
+      <div id="mes-modules"></div>
+      <div id="vitrine"></div>
+
+      <div class="aide" style="margin-top:20px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Djigui est fait de <strong>modules</strong>. Votre <strong>formule</strong> détermine ceux auxquels vous avez droit : ce sont vos modules, ceux que vous payez.</li>
+          <li>Parmi eux, vous pouvez en <strong>masquer</strong> avec l'interrupteur. Un module masqué disparaît simplement du menu : c'est utile pour alléger l'écran d'une fonction que vous n'utilisez pas encore.</li>
+          <li><strong>Masquer n'efface rien et ne change pas votre facture.</strong> Vos données restent en place et reviennent dès que vous réaffichez le module. Djigui vous rappelle ce qu'il contient avant de le masquer.</li>
+          <li>Les modules <strong>grisés</strong> ne font pas partie de votre formule. Ils sont là pour vous montrer ce que le logiciel sait faire d'autre — contactez Djigui si l'un d'eux vous intéresse. <strong>Ils n'encombrent jamais votre menu.</strong></li>
+          <li>Le module <strong>Base</strong> (articles, contacts, paramètres) ne se masque pas : sans lui l'application ne fonctionnerait plus.</li>
+          <li>Certains modules en <strong>demandent d'autres</strong> : les abonnements ont besoin de la facturation. Djigui vous en avertit plutôt que de vous laisser une fonction vide entre les mains.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== MODALE FORMULE (installation) ====================
+     ⚠️ Cet écran pose une DONNÉE DE FACTURATION : ce à quoi le client a droit.
+     Il est réservé à l'installateur, d'où l'accès administrateur. -->
+<div class="modal-overlay" id="modal-formule" hidden>
+  <div class="modal" style="max-width:720px">
+    <div class="card-head"><span class="card-title">Formule souscrite</span>
+      <i class="ti ti-x" data-fermer="modal-formule" title="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted">Choisissez la formule vendue. Elle coche un ensemble de
+        modules que vous pouvez <strong>ajuster</strong> avant de valider —
+        c'est la liste cochée qui fait foi.</p>
+      <div id="liste-formules" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">Modules souscrits</div>
+      <div id="cases-modules" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px"></div>
+      <div class="alert warn" id="avert-formule" style="margin-top:14px" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-formule">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-formule">Enregistrer la formule</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, esc, toast } = Djigui;
+
+  let modules = [], formules = [], formuleInstallee = '', choisis = new Set(),
+      // La formule EN COURS DE CHOIX dans la modale. Distincte de celle
+      // installée : sinon le rendu recocherait l'ancienne à chaque clic.
+      formuleChoisie = '';
+
+  async function charger() {
+    try {
+      const [r, f] = await Promise.all([api('/api/modules'), api('/api/modules/formules')]);
+      modules = r.modules; formuleInstallee = r.formule_installee || ''; formules = f;
+    } catch (e) { toast('Chargement impossible : ' + e.message, 'danger'); return; }
+    rendre();
+  }
+
+  function rendre() {
+    const q = $('#rech').value.trim().toLowerCase();
+    const corr = m => !q || (m.libelle + ' ' + m.description).toLowerCase().includes(q);
+
+    const miens = modules.filter(m => m.souscrit && corr(m));
+    const autres = modules.filter(m => !m.souscrit && corr(m));
+
+    const nbActifs = modules.filter(m => m.souscrit && m.actif).length;
+    const nomFormule = (formules.find(f => f.code === formuleInstallee) || {}).libelle;
+    $('#tuiles').innerHTML = [
+      ['ti-license', 'Formule', esc(nomFormule || 'non définie'), 'acc-brand fort'],
+      ['ti-package', 'Modules souscrits', modules.filter(m => m.souscrit).length, 'acc-ok'],
+      ['ti-eye', 'Affichés dans le menu', nbActifs, ''],
+      ['ti-lock', 'Non souscrits', modules.filter(m => !m.souscrit).length, 'acc-moyen'],
+    ].map(([ic, l, v, acc]) => `<div class="pe-bloc ${acc}" title="${l}">
+        <div class="pe-ic"><i class="ti ${ic}"></i></div>
+        <div class="pe-corps"><div class="pe-lbl">${l}</div><div class="pe-val">${v}</div></div>
+      </div>`).join('');
+
+    const carte = m => `<div class="proj-carte ${m.souscrit ? '' : 'vitrine'}" data-code="${esc(m.code)}">
+      <div class="proj-corps">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div class="mod-ic"><i class="ti ${esc(m.icone)}"></i></div>
+          <div style="flex:1;min-width:0">
+            <div class="mod-nom">${esc(m.libelle)}</div>
+            ${m.socle ? '<span class="badge neutral">toujours présent</span>'
+              : m.souscrit ? `<span class="badge ${m.actif ? 'ok' : 'warn'}">${m.actif ? 'Affiché' : 'Masqué'}</span>`
+              : '<span class="badge neutral"><i class="ti ti-lock"></i> Non souscrit</span>'}
+          </div>
+        </div>
+        <div class="mod-desc">${esc(m.description)}</div>
+        ${m.contenu && m.contenu.length ? `<div class="muted" style="font-size:11.5px;margin-bottom:10px">
+          Contient : ${m.contenu.map(c => `${c.nb} ${esc(c.libelle)}`).join(', ')}</div>` : ''}
+        <div class="mod-pied">
+          ${m.souscrit && !m.socle
+            ? `<span class="muted" style="font-size:12px">${m.actif ? 'Visible dans le menu' : 'Masqué du menu'}</span>
+               <label class="bascule"><input type="checkbox" data-bascule="${esc(m.code)}"
+                 ${m.actif ? 'checked' : ''}><span></span></label>`
+            : m.socle
+              ? '<span class="muted" style="font-size:12px">Ne peut pas être masqué</span>'
+              : '<span class="muted" style="font-size:12px">Contactez Djigui pour l\'ajouter</span>'}
+        </div>
+      </div>
+    </div>`;
+
+    const parFamille = liste => {
+      const fam = [...new Set(liste.map(m => m.famille))];
+      return fam.map(f => `<div class="fam-titre">${esc(f)}</div>
+        <div class="proj-grille">${liste.filter(m => m.famille === f).map(carte).join('')}</div>`).join('');
+    };
+
+    $('#mes-modules').innerHTML = miens.length
+      ? `<div class="fam-titre" style="color:var(--brand-strong)">Mes modules</div>${parFamille(miens)}`
+      : `<div class="muted">Aucun module ne correspond.</div>`;
+
+    // La vitrine : montrer ce que le système sait faire, sans jamais encombrer
+    // le travail quotidien (ces modules n'apparaissent pas dans le menu).
+    $('#vitrine').innerHTML = ($('#voir-vitrine').checked && autres.length)
+      ? `<div class="fam-titre" style="margin-top:26px">Ce que Djigui sait aussi faire</div>
+         <div class="muted" style="font-size:12.5px;margin-bottom:10px">
+           Ces modules ne font pas partie de votre formule. Ils n'apparaissent pas dans votre menu.</div>
+         ${parFamille(autres)}`
+      : '';
+  }
+
+  $('#rech').addEventListener('input', rendre);
+  $('#voir-vitrine').addEventListener('change', rendre);
+
+  // Masquer / afficher un module souscrit.
+  document.addEventListener('change', async e => {
+    const b = e.target.closest('[data-bascule]');
+    if (!b) return;
+    const code = b.dataset.bascule;
+    const m = modules.find(x => x.code === code);
+    const actif = b.checked;
+
+    // ⚠️ Prévenir AVANT de masquer : sans ce message, l'utilisateur croit qu'il
+    // a effacé son travail.
+    if (!actif && m.contenu && m.contenu.length) {
+      const quoi = m.contenu.map(c => `   • ${c.nb} ${c.libelle}`).join('\n');
+      if (!await Djigui.confirm(`Masquer le module « ${m.libelle} » ?\n\n`
+          + `Il contient actuellement :\n${quoi}\n\n`
+          + `Ces données sont CONSERVÉES. Seul le menu disparaît ; tout revient `
+          + `si vous réaffichez le module.`)) {
+        b.checked = true;
+        return;
+      }
+    }
+    try {
+      await api('/api/modules/' + code + '/actif', { method: 'POST', body: { actif } });
+      toast(actif ? `« ${m.libelle} » est de nouveau dans le menu.`
+                  : `« ${m.libelle} » est masqué. Vos données sont conservées.`, 'ok');
+      // Le menu est reconstruit : c'est tout l'intérêt.
+      Djigui.rafraichirMenu && Djigui.rafraichirMenu();
+      await charger();
+    } catch (err) {
+      b.checked = !actif;
+      toast(err.message, 'danger');
+    }
+  });
+
+  // ---- Formule (installation) ---------------------------------------------
+  document.querySelectorAll('[data-fermer]').forEach(b =>
+    b.addEventListener('click', () => { $('#' + b.dataset.fermer).hidden = true; }));
+
+  $('#btn-formule').addEventListener('click', () => {
+    formuleChoisie = formuleInstallee;
+    choisis = new Set(modules.filter(m => m.souscrit && !m.socle).map(m => m.code));
+    rendreFormule();
+    $('#modal-formule').hidden = false;
+  });
+
+  function rendreFormule() {
+    $('#liste-formules').innerHTML = formules.map(f => `
+      <label style="display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);
+                    border-radius:9px;cursor:pointer;${f.code === formuleChoisie ? 'border-color:var(--brand)' : ''}">
+        <input type="radio" name="formule" value="${esc(f.code)}"
+               ${f.code === formuleChoisie ? 'checked' : ''} style="margin-top:3px">
+        <span><strong>${esc(f.libelle)}</strong>
+          <div class="muted" style="font-size:12.5px">${esc(f.description)}</div></span>
+      </label>`).join('');
+
+    $('#cases-modules').innerHTML = modules.filter(m => !m.socle).map(m => `
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer">
+        <input type="checkbox" data-mod="${esc(m.code)}" ${choisis.has(m.code) ? 'checked' : ''}>
+        <i class="ti ${esc(m.icone)}" style="color:var(--text-2)"></i> ${esc(m.libelle)}</label>`).join('');
+    majAvertFormule();
+  }
+
+  // Choisir une formule ne fait que PRÉ-COCHER : la liste reste ajustable.
+  $('#liste-formules').addEventListener('change', e => {
+    const f = formules.find(x => x.code === e.target.value);
+    if (!f) return;
+    formuleChoisie = f.code;
+    choisis = new Set(f.modules);
+    rendreFormule();
+  });
+
+  $('#cases-modules').addEventListener('change', e => {
+    const c = e.target.closest('[data-mod]');
+    if (!c) return;
+    if (c.checked) choisis.add(c.dataset.mod); else choisis.delete(c.dataset.mod);
+    majAvertFormule();
+  });
+
+  // Les dépendances sont annoncées AVANT d'enregistrer : le serveur les ouvre
+  // de toute façon, autant que l'installateur le sache.
+  function majAvertFormule() {
+    const besoins = new Set();
+    choisis.forEach(code => {
+      const m = modules.find(x => x.code === code);
+      (m ? m.requiert || [] : []).forEach(r => {
+        const dep = modules.find(x => x.code === r);
+        if (dep && !dep.socle && !choisis.has(r)) besoins.add(dep.libelle);
+      });
+    });
+    const a = $('#avert-formule');
+    a.hidden = besoins.size === 0;
+    if (besoins.size) {
+      a.innerHTML = `Seront ajoutés automatiquement, car nécessaires :
+        <strong>${[...besoins].map(esc).join(', ')}</strong>.`;
+    }
+  }
+
+  $('#btn-enr-formule').addEventListener('click', async () => {
+    const f = document.querySelector('input[name="formule"]:checked');
+    if (!f) { toast('Choisissez une formule.', 'warn'); return; }
+    formuleChoisie = f.value;
+    try {
+      await api('/api/modules/formule', { method: 'POST',
+        body: { formule: f.value, modules: [...choisis] } });
+      $('#modal-formule').hidden = true;
+      toast('Formule enregistrée.', 'ok');
+      Djigui.rafraichirMenu && Djigui.rafraichirMenu();
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  charger();
+})();
+</script>
+</body>
+</html>

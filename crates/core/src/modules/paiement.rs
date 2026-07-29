@@ -9,8 +9,13 @@
 //! Conventions de signe :
 //! - `caisse.solde` : encaissement `+montant`, décaissement `−montant`.
 //! - `tiers.solde`  : encours dû (créance client / dette fournisseur, positif).
-//!   Valider une **facture** ajoute `+total_ttc` ; un **avoir** retire `−total_ttc` ;
-//!   un **paiement** réduit l'encours de `−montant` (quel que soit le sens).
+//!   Valider une **facture** ajoute `+total_ttc` ; un **avoir** retire `−total_ttc`.
+//!   Un **paiement** qui *solde* réduit l'encours (`−montant`) ; un paiement qui
+//!   *rembourse* l'augmente (`+montant`). ⚠️ Ce n'est PAS le sens du paiement
+//!   seul qui décide : payer un fournisseur et rembourser un client sont tous
+//!   deux des décaissements, et pourtant l'un apure une dette quand l'autre en
+//!   crée une. Voir [`paiement_solde_lencours`] pour la règle complète.
+//!   (Corrigé le 2026-07-27 : le code appliquait `−montant` dans tous les cas.)
 
 use crate::domain::{ModePaiement, SensPaiement};
 use crate::error::{CoreError, Result};
@@ -233,14 +238,57 @@ pub fn enregistrer(conn: &Connection, p: &NouveauPaiement) -> Result<Paiement> {
         params![id, p.tiers_id, caisse_id, p.document_id, p.sens, montant, p.mode, now(), session_id, moyen],
     )?;
 
-    // Solde caisse : encaissement +, décaissement − ; solde tiers : encours réduit.
+    // Solde caisse : encaissement +, décaissement −.
     let signe_caisse = match p.sens {
         SensPaiement::Encaissement => 1.0,
         SensPaiement::Decaissement => -1.0,
     };
     maj_solde_caisse(conn, &caisse_id, signe_caisse * montant)?;
-    maj_solde_tiers(conn, &p.tiers_id, -montant)?;
+
+    // Solde tiers : un paiement qui **solde** réduit l'encours, un paiement qui
+    // **rembourse** l'augmente. Voir `paiement_solde_lencours`.
+    let signe_tiers = if paiement_solde_lencours(conn, p)? { -1.0 } else { 1.0 };
+    maj_solde_tiers(conn, &p.tiers_id, signe_tiers * montant)?;
     lire(conn, &id)
+}
+
+/// Ce paiement **solde-t-il** l'encours, ou le **rembourse-t-il** ?
+///
+/// ⚠️ Corrige le bug relevé par l'utilisateur le 2026-07-27 : le code appliquait
+/// `−montant` **quel que soit le sens**, si bien qu'un remboursement client
+/// creusait son solde au lieu de l'apurer. Diagnostic : sur les quatre cas de
+/// figure, la caisse distinguait bien le sens, l'encours du tiers non.
+///
+/// La règle : ce n'est pas le sens du paiement seul qui décide, mais le sens du
+/// paiement **rapporté à celui de la pièce**. Payer un fournisseur et rembourser
+/// un client sont tous deux des décaissements, et pourtant l'un solde une dette
+/// tandis que l'autre en crée une.
+///
+/// | Pièce  | Encaissement        | Décaissement        |
+/// |--------|---------------------|---------------------|
+/// | Vente  | solde (le client paie) | rembourse (avoir)   |
+/// | Achat  | rembourse (le fournisseur nous rend) | solde (on le paie) |
+///
+/// Sans pièce rattachée, on se rabat sur le **rôle du tiers**. Un tiers
+/// `les_deux` est traité comme un client : c'est le cas de loin le plus
+/// fréquent en boutique, et le commerçant peut toujours corriger.
+fn paiement_solde_lencours(conn: &Connection, p: &NouveauPaiement) -> Result<bool> {
+    let sens_piece: String = match &p.document_id {
+        Some(doc) => conn
+            .query_row("SELECT sens FROM document WHERE id = ?1", params![doc], |r| r.get(0))
+            .unwrap_or_else(|_| "vente".into()),
+        None => {
+            let role: String = conn
+                .query_row("SELECT type_role FROM tiers WHERE id = ?1", params![p.tiers_id], |r| r.get(0))
+                .unwrap_or_else(|_| "client".into());
+            if role == "fournisseur" { "achat".into() } else { "vente".into() }
+        }
+    };
+    Ok(match (sens_piece.as_str(), p.sens) {
+        ("vente", SensPaiement::Encaissement) => true,
+        ("achat", SensPaiement::Decaissement) => true,
+        _ => false,
+    })
 }
 
 pub fn lire(conn: &Connection, id: &str) -> Result<Paiement> {
@@ -313,7 +361,13 @@ pub fn maj_solde_tiers(conn: &Connection, tiers_id: &str, delta: f64) -> Result<
 
 /// Recalcule TOUS les soldes (caisses + tiers) depuis les journaux (§6.4).
 /// - caisse.solde = Σ(encaissements) − Σ(décaissements) de la caisse.
-/// - tiers.solde  = Σ(ttc factures validées) − Σ(ttc avoirs validés) − Σ(paiements du tiers).
+/// - tiers.solde  = Σ(net à payer des factures validées) − Σ(net des avoirs) − Σ(paiements).
+///
+/// ⚠️⚠️ **NET À PAYER = TTC − retenue à la source** (mig 0043), et non le TTC.
+/// Cette expression doit rester le MIROIR EXACT de `document::valider` /
+/// `annuler`, qui écrivent le solde au fil de l'eau via
+/// `document::encours_du_document`. Si les deux divergent, ce « recalcul »
+/// fausserait les soldes au lieu de les réparer.
 /// Retourne le nombre de soldes réparés (caisses + tiers).
 pub fn recalculer_soldes(conn: &Connection) -> Result<usize> {
     // Caisses
@@ -323,15 +377,29 @@ pub fn recalculer_soldes(conn: &Connection) -> Result<usize> {
             FROM paiement WHERE paiement.caisse_id = caisse.id), 0), 2)",
         [],
     )?;
-    // Tiers : encours = factures validées − avoirs validés − paiements.
+    // Tiers : encours = factures validées − avoirs validés − paiements qui SOLDENT.
+    // ⚠️ Un paiement qui **rembourse** augmente l'encours : il compte donc en
+    // négatif dans la part « réglé ». Cette expression doit rester le miroir
+    // exact de `paiement_solde_lencours` — si les deux divergent, le recalcul
+    // « réparerait » les soldes en les faussant, ce qui est pire que le bug.
     conn.execute(
         "UPDATE tiers SET solde = ROUND(
-            COALESCE((SELECT SUM(CASE WHEN d.type_document='avoir' THEN -d.total_ttc ELSE d.total_ttc END)
+            COALESCE((SELECT SUM(CASE WHEN d.type_document='avoir'
+                                      THEN -(d.total_ttc - d.montant_retenue)
+                                      ELSE  (d.total_ttc - d.montant_retenue) END)
                       FROM document d
                       WHERE d.tiers_id = tiers.id
                         AND d.type_document IN ('facture','avoir')
                         AND d.statut IN ('valide','transforme')), 0)
-          - COALESCE((SELECT SUM(montant) FROM paiement WHERE paiement.tiers_id = tiers.id), 0)
+          - COALESCE((SELECT SUM(
+                CASE WHEN COALESCE(
+                            (SELECT d2.sens FROM document d2 WHERE d2.id = p.document_id),
+                            CASE WHEN tiers.type_role = 'fournisseur' THEN 'achat' ELSE 'vente' END
+                          ) = 'vente'
+                     THEN CASE WHEN p.sens = 'encaissement' THEN p.montant ELSE -p.montant END
+                     ELSE CASE WHEN p.sens = 'decaissement' THEN p.montant ELSE -p.montant END
+                END)
+              FROM paiement p WHERE p.tiers_id = tiers.id), 0)
         , 2)",
         [],
     )?;
@@ -392,6 +460,117 @@ mod tests {
         let solde_tiers: f64 = conn.query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0)).unwrap();
         assert_eq!(solde_caisse, 2_500.0);
         assert_eq!(solde_tiers, -2_500.0); // aucun document, juste un encaissement
+    }
+
+    /// Fait signalé par l'utilisateur le 2026-07-27 : « pour n'importe quel sens
+    /// de remboursement les soldes décrémentent ».
+    ///
+    /// Scénario : un client achète 10 000, paie 10 000 (il est à zéro), puis on
+    /// lui fait un avoir de 3 000 et on le **rembourse** en espèces.
+    /// Après remboursement, plus personne ne doit rien : le solde doit revenir
+    /// à **zéro**. S'il descend à −6 000, c'est que le décaissement a été compté
+    /// dans le mauvais sens.
+    #[test]
+    fn un_remboursement_client_ne_creuse_pas_le_solde() {
+        let conn = db::open_in_memory().unwrap();
+        creer_tiers(&conn, "t1");
+
+        // Facture de 10 000 : le client nous doit 10 000.
+        maj_solde_tiers(&conn, "t1", 10_000.0).unwrap();
+        // Il règle : il ne doit plus rien.
+        enregistrer(&conn, &NouveauPaiement {
+            tiers_id: "t1".into(), caisse_id: None, document_id: None,
+            sens: SensPaiement::Encaissement, montant: 10_000.0,
+            mode: ModePaiement::Espece, moyen_paiement_id: None,
+        }).unwrap();
+        let solde: f64 = conn.query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(solde, 0.0, "après règlement complet, le client est à zéro");
+
+        // Avoir de 3 000 : c'est NOUS qui lui devons 3 000.
+        maj_solde_tiers(&conn, "t1", -3_000.0).unwrap();
+        // On le rembourse en espèces : l'argent SORT de la caisse.
+        enregistrer(&conn, &NouveauPaiement {
+            tiers_id: "t1".into(), caisse_id: None, document_id: None,
+            sens: SensPaiement::Decaissement, montant: 3_000.0,
+            mode: ModePaiement::Espece, moyen_paiement_id: None,
+        }).unwrap();
+
+        let solde: f64 = conn.query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(solde, 0.0,
+            "le remboursement solde l'avoir ; un décaissement doit AUGMENTER l'encours, pas le réduire");
+
+        // Et la caisse, elle, doit être revenue à 7 000 (10 000 − 3 000).
+        let caisse: f64 = conn.query_row("SELECT solde FROM caisse LIMIT 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(caisse, 7_000.0);
+    }
+
+    /// Le recalcul depuis les journaux doit tomber sur **exactement** le même
+    /// chiffre que le calcul au fil de l'eau. Sinon l'un des deux ment, et on ne
+    /// sait pas lequel.
+    #[test]
+    fn le_recalcul_confirme_le_calcul_au_fil_de_leau() {
+        let conn = db::open_in_memory().unwrap();
+        creer_tiers(&conn, "t1");
+        maj_solde_tiers(&conn, "t1", 10_000.0).unwrap();
+        enregistrer(&conn, &NouveauPaiement {
+            tiers_id: "t1".into(), caisse_id: None, document_id: None,
+            sens: SensPaiement::Encaissement, montant: 4_000.0,
+            mode: ModePaiement::Espece, moyen_paiement_id: None,
+        }).unwrap();
+        enregistrer(&conn, &NouveauPaiement {
+            tiers_id: "t1".into(), caisse_id: None, document_id: None,
+            sens: SensPaiement::Decaissement, montant: 1_000.0,
+            mode: ModePaiement::Espece, moyen_paiement_id: None,
+        }).unwrap();
+        let avant: f64 = conn.query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0)).unwrap();
+
+        recalculer_soldes(&conn).unwrap();
+        let apres: f64 = conn.query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0)).unwrap();
+        // (Le recalcul repart des documents ; ici il n'y en a pas, donc on ne
+        // compare que la part « paiements » du calcul.)
+        assert_eq!(apres - 0.0, avant - 10_000.0,
+            "le recalcul et le fil de l'eau doivent traiter les décaissements pareil");
+    }
+
+    /// Les quatre cas de figure, et le signe attendu sur l'encours du tiers.
+    /// C'est le test qui aurait attrapé le bug du 2026-07-27 : avant correction,
+    /// les quatre donnaient 900.
+    #[test]
+    fn le_sens_du_paiement_decide_du_signe_de_lencours() {
+        let cas = [
+            // (rôle du tiers, sens du paiement, encours attendu à partir de 1000)
+            ("client", SensPaiement::Encaissement, 900.0),      // il paie → il doit moins
+            ("client", SensPaiement::Decaissement, 1100.0),     // je le rembourse → il doit plus
+            ("fournisseur", SensPaiement::Decaissement, 900.0), // je le paie → je dois moins
+            ("fournisseur", SensPaiement::Encaissement, 1100.0),// il me rembourse → je dois plus
+        ];
+        for (role, sens, attendu) in cas {
+            let conn = db::open_in_memory().unwrap();
+            conn.execute(
+                "INSERT INTO tiers (id, code, type_role, nom, solde, actif, cree_le)
+                 VALUES ('t1','t1',?1,'T',0,1,'2026-01-01')",
+                params![role],
+            )
+            .unwrap();
+            maj_solde_tiers(&conn, "t1", 1000.0).unwrap();
+            enregistrer(&conn, &NouveauPaiement {
+                tiers_id: "t1".into(), caisse_id: None, document_id: None,
+                sens, montant: 100.0, mode: ModePaiement::Espece, moyen_paiement_id: None,
+            })
+            .unwrap();
+            let s: f64 = conn
+                .query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(s, attendu, "rôle {role}, paiement {:?}", sens.as_str());
+
+            // Et le recalcul depuis les journaux doit tomber sur le même chiffre.
+            recalculer_soldes(&conn).unwrap();
+            let apres: f64 = conn
+                .query_row("SELECT solde FROM tiers WHERE id='t1'", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(apres, attendu - 1000.0,
+                "le recalcul doit traiter le paiement comme le fil de l'eau (rôle {role})");
+        }
     }
 
     #[test]

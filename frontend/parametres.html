@@ -6,7 +6,7 @@
 <title>Djigui · Paramètres</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
 <div class="app">
@@ -77,6 +77,36 @@
           <button type="submit" class="btn btn-primary" style="margin-bottom:0"><i class="ti ti-plus"></i>Ajouter</button>
         </form>
         <div id="taxe-liste"></div>
+      </div>
+
+      <!-- Retenue à la source (mig 0043). Le taux se pose CLIENT PAR CLIENT
+           dans sa fiche ; ici on règle seulement l'assiette de calcul, qui
+           dépend de l'administration du pays. -->
+      <div class="card" style="max-width:760px;margin-top:16px">
+        <div class="card-head"><span class="card-title">Retenue à la source</span></div>
+        <p class="muted" style="margin-top:0;font-size:13px">
+          Certains clients (administrations, grandes entreprises) retiennent une part de vos
+          factures et la reversent eux-mêmes au Trésor : vous ne recevez que le reste.
+          <strong>Le taux se règle client par client</strong>, dans sa fiche — ici, vous indiquez
+          seulement <strong>sur quel montant</strong> il se calcule.
+        </p>
+        <div class="field" style="max-width:320px">
+          <label>Calculer la retenue sur</label>
+          <select id="retenue-base">
+            <option value="ht">Le montant HT (hors taxes)</option>
+            <option value="ttc">Le montant TTC (taxes comprises)</option>
+          </select>
+          <span class="check-hint muted">
+            Le HT est l'assiette la plus fréquente en zone UEMOA. Vérifiez auprès de votre
+            comptable : cela dépend de la nature de la retenue et du pays.
+          </span>
+        </div>
+        <div class="alert warn" style="margin-top:12px">
+          <i class="ti ti-alert-triangle"></i>
+          <span>Ce réglage vaut pour les <strong>prochaines factures</strong>. Les factures déjà
+            émises gardent le calcul appliqué le jour de leur émission — on ne réécrit jamais
+            une pièce qui est partie chez un client.</span>
+        </div>
       </div>
       </div>
 
@@ -222,7 +252,7 @@
   </main>
 </div>
 
-<script src="assets/app.js?v=9"></script>
+<script src="assets/app.js?v=16"></script>
 <script>
 const formEnt = document.getElementById('form-ent');
 const logoApercu = document.getElementById('logo-apercu');
@@ -335,6 +365,24 @@ document.getElementById('param-tabs').addEventListener('click', e => {
   document.querySelectorAll('.tab-panel').forEach(p => p.hidden = p.dataset.panel !== t.dataset.tab);
   document.getElementById('btn-enregistrer').style.display = t.dataset.tab === 'societe' ? '' : 'none';
 });
+
+// ---- Retenue à la source : assiette de calcul (mig 0043) ----
+// Le TAUX vit sur la fiche de chaque tiers ; ici on ne règle que la base, qui
+// dépend de l'administration du pays — d'où un paramètre et non une constante.
+const retenueBase = document.getElementById('retenue-base');
+async function chargerRetenue() {
+  try {
+    const cfg = await Djigui.api('/api/config');
+    retenueBase.value = (cfg.retenue_base === 'ttc') ? 'ttc' : 'ht';
+  } catch (e) { /* défaut : HT */ }
+}
+retenueBase.addEventListener('change', async () => {
+  try {
+    await Djigui.api('/api/config/retenue_base', { method:'PUT', body:{ valeur: retenueBase.value } });
+    Djigui.toast('Assiette de la retenue enregistrée', 'ok');
+  } catch (e) { Djigui.toast('Erreur : ' + e.message, 'danger'); }
+});
+chargerRetenue();
 
 // ---- Impression (paramètre global) ----
 const impAuto = document.getElementById('imp-auto');

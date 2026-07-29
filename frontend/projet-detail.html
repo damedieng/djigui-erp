@@ -6,7 +6,7 @@
 <title>Djigui · Détail projet</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=33">
 <style>
 .barre { height: 8px; border-radius: 6px; background: var(--surface-2); overflow: hidden; min-width: 60px; }
 .barre > div { height: 100%; background: var(--brand); border-radius: 6px; }
@@ -51,82 +51,10 @@
 /* Les barres d'outils gardent leur teinte d'origine si elle est posée en ligne. */
 .content .panel-toolbar { background: var(--surface); }
 
-/* Tuiles de synthèse : la couleur porte le sens, pas un trait de bordure.
-   Quatre familles seulement (neutre, argent, temps, alerte) pour rester sobre.
-   Chaque tuile = un aplat très clair + une pastille d'icône plus soutenue. */
-.pe-bloc { --ton: #5c6a61; --fond: #f1f4f2; --pastille: #e2e8e4;
-  display: flex; align-items: center; gap: 11px;
-  background: var(--fond); border: 0; border-radius: 12px; padding: 11px 13px;
-  transition: transform .12s ease, box-shadow .12s ease; }
-.pe-bloc:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(20,40,30,.10); }
-.pe-bloc .pe-ic { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 9px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--pastille); color: var(--ton); font-size: 18px; }
-.pe-bloc .pe-corps { min-width: 0; }
-.pe-bloc .pe-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
-  font-weight: 700; color: var(--ton); opacity: .75; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; }
-.pe-bloc .pe-val { font-weight: 700; font-size: 13.5px; margin-top: 2px; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
-/* Le suffixe FCFA ne doit pas manger la place du montant. */
-.pe-bloc .pe-val .muted { font-size: 9.5px !important; margin-left: 1px; }
-
-/* Argent : le vert de la marque. */
-.pe-bloc.acc-brand  { --ton: #0e5a39; --fond: #e8f3ec; --pastille: #cfe6da; }
-/* Temps : un bleu sourd, jamais vif. */
-.pe-bloc.acc-date   { --ton: #2b5f95; --fond: #eaf1f8; --pastille: #d5e4f2; }
-/* Écart favorable / défavorable. */
-.pe-bloc.acc-ok     { --ton: #0e5a39; --fond: #dfeee6; --pastille: #c2ded0; }
-.pe-bloc.acc-danger { --ton: #a2352a; --fond: #fbebe9; --pastille: #f4d6d1; }
-/* Moyens engagés : un ambre discret. */
-.pe-bloc.acc-moyen  { --ton: #8a6114; --fond: #f8f1e2; --pastille: #ecdcbf; }
-
-/* Les trois chiffres qu'on lit en premier sont plus hauts et plus gros. */
-.pe-bloc.fort .pe-val { font-size: 15px; }
-.pe-bloc.fort .pe-ic { width: 36px; height: 36px; font-size: 19px; }
-/* ---------- En-tête de projet ----------
-   Le bandeau vert et les tuiles cassent l'aplat blanc : on repère
-   immédiatement le nom, l'état, puis les chiffres clés. */
-/* ⚠️ CAUSE RÉELLE DE « l'en-tête disparaît d'un onglet à l'autre ».
-   `.content` est un conteneur flex en colonne. Par défaut un élément flex peut
-   être COMPRIMÉ sous sa taille naturelle : quand l'onglet est long (Liste,
-   Gantt, Ressources, Jalons), le navigateur écrasait l'en-tête jusqu'à une
-   hauteur de 0 px au lieu de laisser défiler. Sur les onglets courts (Par
-   personne, Documents) il n'y avait rien à comprimer, donc il s'affichait.
-   Mesuré dans un vrai navigateur : hauteur = 0 px exactement sur ces 4 onglets.
-   `flex-shrink: 0` interdit cette compression ; la zone défile, comme prévu. */
-.content > * { flex-shrink: 0; }
-
-/* En-tête du projet : bloc SIMPLE et STABLE.
-   Volontairement ni collant ni auto-compacté : ces deux comportements
-   faisaient changer la hauteur du haut de page d'un onglet à l'autre, et le
-   contenu sautait sous les yeux. La hauteur est désormais identique sur
-   Liste, Gantt, Ressources, Jalons et Documents. */
-.projet-hero { border: 0; border-radius: 16px; background: var(--surface);
-  overflow: hidden; box-shadow: 0 2px 10px rgba(20,40,30,.08), 0 1px 2px rgba(20,40,30,.06); }
-.hero-bandeau { display: flex; align-items: center; gap: 14px; padding: 13px 18px;
-  background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--brand) 100%); color: #fff; }
-.hero-titre { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700;
-  flex: 1; min-width: 0; }
-.hero-titre i { font-size: 21px; opacity: .85; flex: 0 0 auto; }
-.hero-titre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hero-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.hero-actions .stat-select { font-size: 13px; padding: 5px 10px; border-radius: var(--radius);
-  background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.35); }
-.hero-actions .stat-select option { color: var(--text); }
-.hero-toggle { color: #fff; opacity: .85; }
-.hero-toggle:hover { opacity: 1; background: rgba(255,255,255,.15); }
-
-/* Les deux jauges, sur fond teinté pour les détacher des tuiles. */
-.hero-jauges { display: grid; grid-template-columns: 1fr 1fr; gap: 22px;
-  padding: 15px 18px; background: linear-gradient(180deg, #f2f8f4 0%, #ffffff 100%); }
-@media (max-width: 760px){ .hero-jauges { grid-template-columns: 1fr; gap: 12px; } }
-
-/* Chaque chiffre dans sa tuile, avec un liseré de couleur à gauche. */
-.synthese { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
-  gap: 10px; padding: 14px 18px; }
-.hero-note { padding: 0 18px 14px; font-size: 13px; color: var(--text-2); font-style: italic; }
-.hero-note:empty { display: none; }
+/* En-tête d'objet (bandeau + tuiles `.pe-bloc` + jauges) et tuiles de
+   synthèse : ces règles sont dans styles.css, l'écran de détail d'un
+   MARCHÉ reprenant exactement la même présentation. Une définition
+   unique, donc les deux écrans ne peuvent plus diverger. */
 #p-collapsible { transition: none; }
 .card.p-compact { padding: 12px 16px; }
 .bandeau-warn { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius);
@@ -148,7 +76,8 @@
 .g-band { position: absolute; top: 0; height: 24px; color: #fff; font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center; padding: 0 8px; text-transform: capitalize;
   border-left: 1px solid rgba(255,255,255,.35); box-sizing: border-box; white-space: nowrap; overflow: hidden; }
-.g-days-head { display: grid; }
+/* `relative` : c'est l'ancre de l'étiquette « aujourd'hui ». */
+.g-days-head { display: grid; position: relative; }
 .g-day-h { height: 34px; display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: var(--text-2); border-left: 1px solid var(--border); background: var(--surface-2); box-sizing: border-box; }
 .g-day-h.we { background: var(--brand-tint); }
@@ -166,6 +95,37 @@
 .g-legende span { display: inline-flex; align-items: center; gap: 6px; }
 .g-legende i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .g-bar.surcharge { outline: 2px solid var(--danger); outline-offset: 0; }
+/* --- RETARD -------------------------------------------------------------
+   Les barres sont colorées PAR NIVEAU : la couleur est donc déjà prise et ne
+   peut pas dire l'état. Le retard se marque autrement — hachures rouges sur la
+   partie dépassée + liseré rouge — pour rester lisible quel que soit le niveau.
+   ⚠️ Signalement uniquement : aucune date n'est recalculée (barrière cascade). */
+.g-bar.en-retard { border-color: var(--danger); box-shadow: 0 0 0 1.5px var(--danger); }
+.g-bar-retard { position: absolute; top: 0; bottom: 0; right: 0; z-index: 0;
+  background: repeating-linear-gradient(135deg,
+    rgba(200,30,30,.85) 0 5px, rgba(255,255,255,.55) 5px 10px); }
+/* La ligne « aujourd'hui » : sans elle on ne juge pas un retard à l'œil. */
+.g-today { position: absolute; top: 0; bottom: 0; width: 0; z-index: 3;
+  border-left: 2px dashed var(--danger); pointer-events: none; }
+.g-today-h { position: absolute; top: 0; bottom: 0; width: 0; z-index: 4;
+  border-left: 2px solid var(--danger); pointer-events: none; }
+.g-today-lbl { position: absolute; top: 1px; left: 3px; font-size: 9.5px; font-weight: 700;
+  color: #fff; background: var(--danger); border-radius: 3px; padding: 1px 4px; white-space: nowrap; }
+/* Un retard dans la liste : une TOUCHE LÉGÈRE, pas un aplat.
+   Le jaune plein transformait la moitié du tableau en panneau d'alerte et
+   noyait l'information. Ici : un voile discret + un filet à gauche qui rend la
+   ligne repérable en balayant l'œil, sans agresser. C'est la pastille « i » qui
+   porte l'explication. */
+.g-left-row.en-retard .g-cell,
+tr.en-retard > td { background: rgba(217, 160, 20, .07); }
+.g-left-row.en-retard .g-cell:first-child,
+tr.en-retard > td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+.retard-info { display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin-left: 6px; border-radius: 50%; flex: none;
+  background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
+  font-style: normal; font-family: Georgia, 'Times New Roman', serif; line-height: 1;
+  cursor: help; opacity: .9; transition: transform .12s ease, opacity .12s ease; }
+.retard-info:hover { transform: scale(1.18); opacity: 1; }
 .assign-chip { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--surface-2);
   border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
 .assign-chip .h { color: var(--text-muted); font-size: 12px; }
@@ -499,6 +459,10 @@
           <li>Le <strong>Budget planifié</strong> du projet = somme des budgets des tâches. Il est comparé au <strong>Budget saisi</strong> ; l'écart s'affiche.</li>
           <li>Si les tâches <strong>dépassent la fin prévue</strong>, un bandeau jaune propose d'<strong>ajuster la fin du projet</strong>.</li>
           <li>La vue <strong>Gantt</strong> montre le planning ; le bouton <strong>Colonnes</strong> permet d'afficher/masquer des colonnes.</li>
+          <li>Un trait rouge vertical marque <strong>aujourd'hui</strong> sur le planning. Tout ce qui est à gauche de ce trait devait déjà être fait.</li>
+          <li>Une activité <strong>en retard</strong> (sa fin est passée et elle n'est pas terminée) apparaît en <strong>jaune</strong> dans la liste, et sa barre du Gantt se couvre de <strong>hachures rouges</strong> sur la partie dépassée. Les couleurs des barres servant à indiquer le niveau, c'est la hachure qui signale le retard.</li>
+          <li>La <strong>pastille rouge « i »</strong> à côté du nom vous dit au survol <strong>ce qui</strong> est en retard et <strong>depuis combien de jours</strong>. Sur une activité parente, elle liste les sous-activités concernées — utile quand la branche est repliée.</li>
+          <li>Un retard est <strong>signalé, jamais corrigé tout seul</strong> : Djigui ne déplace aucune date à votre place.</li>
           <li>Un <strong>jalon</strong> est une <strong>date importante</strong> du projet (ex. « réception des travaux »). Il apparaît en <strong>losange sur le Gantt</strong>. Si la date passe sans que le jalon soit atteint, la ligne devient <strong>jaune</strong> : c'est un simple avertissement, <strong>rien n'est modifié automatiquement</strong>.</li>
           <li>Un <strong>livrable</strong> est <strong>ce que vous devez remettre</strong> (un rapport, une maquette, un bâtiment…). Vous pouvez le relier à une activité et/ou à un jalon.</li>
           <li>Les <strong>documents</strong> sont vos fichiers (plans, contrats, photos). Ils sont <strong>copiés sur cet ordinateur</strong>, à côté de vos données — pas dans un cloud. Cliquez sur la flèche pour <strong>ouvrir</strong> un fichier.</li>
@@ -789,7 +753,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=9"></script>
+<script src="assets/app.js?v=16"></script>
 <script>
 const STATUT_PROJ = { planifie:['#4a72a8','Planifié'], en_cours:['#16794f','En cours'], suspendu:['#9a6a12','Suspendu'], cloture:['#5c6a61','Clôturé'] };
 const STATUT_TACHE = { a_faire:['#5c6a61','À faire'], en_cours:['#4a72a8','En cours'], bloquee:['#b23a2c','Bloquée'], terminee:['#16794f','Terminée'] };
@@ -1017,12 +981,14 @@ function rendreTaches() {
     const indent = (t.niveau - 1) * 20;
     const periode = [t.debut_calcule, t.fin_calcule].filter(Boolean).map(dfr).join(' → ') || '—';
     const opts = Object.entries(STATUT_TACHE).map(([v,[,l]]) => `<option value="${v}" ${v===t.statut?'selected':''}>${l}</option>`).join('');
-    return `<tr data-id="${t.id}">
+    const enRetard = t.retard_jours != null;
+    return `<tr data-id="${t.id}" class="${enRetard?'en-retard':''}">
       <td><input type="checkbox" class="chk-t" value="${t.id}"></td>
       <td><div class="t-nom-cell" style="padding-left:${indent}px">${t.a_enfants
         ? `<i class="ti ti-chevron-${pliees.has(t.id)?'right':'down'}" data-plier="${t.id}" style="cursor:pointer;color:var(--text-2)"></i>`
         : '<i class="ti ti-point puce"></i>'}
-        <span style="font-weight:600;cursor:pointer" data-edit="${t.id}">${Djigui.esc(t.nom)}</span>${quickAssignBtn(t)}</div></td>
+        <span style="font-weight:600;cursor:pointer" data-edit="${t.id}">${Djigui.esc(t.nom)}</span>${
+        enRetard ? `<i class="retard-info" tabindex="0" data-tip="${Djigui.esc(detailRetard(t))}">i</i>` : ''}${quickAssignBtn(t)}</div></td>
       <td class="num" style="font-size:12px;color:var(--text-2)">${Djigui.esc(periode)}</td>
       <td class="right num">${t.nb_jours || '—'}</td>
       <td class="right num">${fmtM(t.budget_calcule)}${t.a_enfants?' <span class="muted" title="calculé depuis les sous-tâches">∑</span>':''}</td>
@@ -1103,7 +1069,7 @@ function friseHead(sp) {
     }
   }
   return `<div class="g-band-row">${bande}</div>
-    <div class="g-days-head" style="grid-template-columns:${sp.gridCols}">${fine}</div>`;
+    <div class="g-days-head" style="grid-template-columns:${sp.gridCols}">${fine}${traitAujourdhui(sp, true)}</div>`;
 }
 function friseCells(sp) {
   let cells='';
@@ -1114,13 +1080,86 @@ function friseCells(sp) {
   }
   return cells;
 }
+// Aujourd'hui, en « AAAA-MM-JJ » : c'est la référence de tous les retards.
+const AUJOURDHUI = new Date().toISOString().slice(0, 10);
+
+// Texte du retard, pour les info-bulles. Une seule formulation partout.
+function texteRetard(t) {
+  if (t.retard_jours == null) return '';
+  const j = t.retard_jours;
+  const d = j === 0 ? "l'échéance est aujourd'hui"
+          : j === 1 ? '1 jour de retard' : `${j} jours de retard`;
+  return t.a_enfants && t.nb_en_retard > 1
+    ? `${t.nb_en_retard} activités en retard — la pire a ${d}`
+    : `En retard : ${d}`;
+}
+
+// Détail affiché au survol de la pastille « i ». Sur une activité parente, on
+// NOMME les activités en retard : savoir qu'il y en a 3 sans savoir lesquelles
+// n'aide personne, surtout quand la branche est repliée.
+function detailRetard(t) {
+  if (t.retard_jours == null) return '';
+  if (!t.a_enfants) {
+    return `${texteRetard(t)}\nFin prévue le ${dfr(t.date_fin_prevue)}.`;
+  }
+  const dedans = descendantsDe(t.id).filter(x => !x.a_enfants && x.retard_jours != null)
+    .sort((a, b) => b.retard_jours - a.retard_jours);
+  const lignes = dedans.slice(0, 6)
+    .map(x => `• ${x.nom} — ${x.retard_jours} j (prévue le ${dfr(x.date_fin_prevue)})`);
+  if (dedans.length > 6) lignes.push(`… et ${dedans.length - 6} autre(s)`);
+  return `${texteRetard(t)} :\n${lignes.join('\n')}`;
+}
+
+// Toute la descendance d'une activité, quel que soit le niveau.
+function descendantsDe(id) {
+  const out = [];
+  const pile = [id];
+  while (pile.length) {
+    const cur = pile.pop();
+    taches.filter(x => x.tache_parente_id === cur).forEach(x => { out.push(x); pile.push(x.id); });
+  }
+  return out;
+}
+
 function barreGantt(sp, t, coul, surc) {
   const c0=sp.xcol(t.debut_calcule), c1=sp.xcol(addDays(t.fin_calcule,1));
   const left=pctCol(c0,sp), w=Math.max(0.6, pctCol(c1-c0,sp)), av=t.avancement_calcule||0;
   const bg = surc ? 'var(--danger)' : coul;   // barre PLEINE (bien visible)
-  return `<div class="g-bar ${surc?'surcharge':''}" data-tache="${t.id}" style="left:${left}%;width:${w}%;background:${bg}" title="${Djigui.esc(t.nom)} — ${av}%">
+  // La couleur de la barre dit le NIVEAU : le retard doit donc se marquer
+  // autrement, par des hachures sur la part dépassée et un liseré rouge.
+  const retard = t.retard_jours != null;
+  // Les hachures couvrent la part ÉCHUE de la barre.
+  // ⚠️ Deux cas, et le second est celui qui compte le plus :
+  //   • la barre chevauche aujourd'hui (typique d'une parente qui porte le
+  //     retard d'un enfant) → on hachure à partir du trait « aujourd'hui » ;
+  //   • la fin est DÉJÀ passée (le cas courant d'une activité en retard) →
+  //     toute la barre est échue, on la hachure entièrement.
+  // La première version calculait toujours depuis aujourd'hui : dans le second
+  // cas le départ tombait à 100 % et les hachures faisaient 0 px de large —
+  // invisibles. Trouvé en mesurant dans Chrome, pas par les tests logiques.
+  let hachures = '';
+  if (retard && !surc) {
+    const ct = sp.xcol(AUJOURDHUI);
+    const depart = (ct >= c1 || c1 <= c0) ? 0
+                 : Math.min(100, Math.max(0, (ct - c0) / (c1 - c0) * 100));
+    hachures = `<div class="g-bar-retard" style="left:${depart}%"></div>`;
+  }
+  const info = retard ? ' — ' + texteRetard(t) : '';
+  return `<div class="g-bar ${surc?'surcharge':''} ${retard?'en-retard':''}" data-tache="${t.id}" style="left:${left}%;width:${w}%;background:${bg}" data-tip="${Djigui.esc(t.nom)} — ${av}%${Djigui.esc(info)}">
     ${(!surc && av<100) ? `<div class="g-bar-reste" style="left:${av}%"></div>` : ''}
+    ${hachures}
     <span class="g-bar-lbl">${Djigui.esc(t.nom)} · ${av}%</span></div>`;
+}
+
+// Le trait « aujourd'hui ». Sans lui, un retard ne se juge pas à l'œil : on voit
+// une barre, sans savoir de quel côté du présent elle se trouve.
+function traitAujourdhui(sp, avecEtiquette) {
+  const c = sp.xcol(AUJOURDHUI);
+  if (c < 0 || c > sp.ncol) return '';   // hors de la frise affichée
+  const left = pctCol(c, sp);
+  return avecEtiquette
+    ? `<div class="g-today-h" style="left:${left}%"><span class="g-today-lbl">aujourd'hui</span></div>`
+    : `<div class="g-today" style="left:${left}%"></div>`;
 }
 
 // Un jalon sur la frise : losange à sa date, couleur selon le statut.
@@ -1161,10 +1200,15 @@ function rendreGantt() {
     <div class="g-th">Activité</div>${colsAff.map(c=>`<div class="g-th" style="justify-content:center;border-left:1px solid rgba(255,255,255,.3)">${c.lbl}</div>`).join('')}</div>`;
   arbre.forEach(t => {
     const indent = (t.niveau-1)*16;
-    left += `<div class="g-left-row" style="grid-template-columns:${gridLeft}">
+    // Une activité en retard : ligne en jaune + pastille rouge « i » qui dit au
+    // survol ce qui est en retard. Le fond seul ne suffit pas quand la branche
+    // est repliée — il faut pouvoir savoir combien et depuis quand.
+    const enRetard = t.retard_jours != null;
+    left += `<div class="g-left-row ${enRetard?'en-retard':''}" style="grid-template-columns:${gridLeft}">
       <div class="g-cell g-cell-nom" style="padding-left:${10+indent}px">${t.a_enfants
         ? `<i class="ti ti-chevron-${pliees.has(t.id)?'right':'down'}" data-plier="${t.id}" style="cursor:pointer;color:var(--text-2);margin-right:2px"></i>`
-        : ''}<span class="g-nom" title="${Djigui.esc(t.nom)}">${Djigui.esc(t.nom)}</span>${actionsGantt(t)}</div>
+        : ''}<span class="g-nom" title="${Djigui.esc(t.nom)}">${Djigui.esc(t.nom)}</span>${
+        enRetard ? `<i class="retard-info" tabindex="0" data-tip="${Djigui.esc(detailRetard(t))}">i</i>` : ''}${actionsGantt(t)}</div>
       ${colsAff.map(c => `<div class="g-cell" style="justify-content:center;border-left:1px solid var(--border)">${celluleCol(c.key,t)}</div>`).join('')}</div>`;
   });
   const head = friseHead(sp), cells = friseCells(sp);
@@ -1174,7 +1218,7 @@ function rendreGantt() {
     // une bande à part : on voit tout de suite à quelle activité ils appartiennent.
     const sesJalons = jalons.filter(j => j.tache_id === t.id && j.date_prevue)
       .map(j => losangeJalon(sp, j)).join('');
-    return `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${bar}${sesJalons}</div>`;
+    return `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${traitAujourdhui(sp,false)}${bar}${sesJalons}</div>`;
   }).join('');
   // Bande de jalons : losanges positionnés sur la frise. Purement visuel —
   // aucun recalcul de dates n'en découle (barrière « retard en cascade »).
@@ -1188,6 +1232,8 @@ function rendreGantt() {
   const legende = `<div class="g-legende">${[1,2,3,4].map(n =>
     `<span><i style="background:${coulNiveau(n)}"></i>Niveau ${n}</span>`).join('')}
     <span><i style="background:#2e9e5b;transform:rotate(45deg)"></i>Jalon</span>
+    <span><i style="background:repeating-linear-gradient(135deg,rgba(200,30,30,.85) 0 4px,rgba(255,255,255,.55) 4px 8px);border:1px solid var(--danger)"></i>En retard</span>
+    <span><i style="width:0;border-left:2px solid var(--danger);border-radius:0"></i>Aujourd'hui</span>
     <span style="margin-left:auto;color:var(--text-muted)">Partie pleine = avancement · échelle : ${sp.unit}</span></div>`;
   // Légende AU-DESSUS du planning : on lit le code couleur avant le tableau,
   // pas après l'avoir parcouru.
@@ -2343,7 +2389,7 @@ function rendrePersGantt() {
         <div class="g-cell"><span class="badge" style="background:${c}22;color:${c}">${l}</span></div></div>`; }).join('');
   const head = friseHead(sp), cells = friseCells(sp);
   const body = ord.map(t =>
-    `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${barreGantt(sp, t, coulNiveau(t.niveau), surcharge.has(t.id))}</div>`).join('');
+    `<div class="g-row" style="grid-template-columns:${sp.gridCols}">${cells}${traitAujourdhui(sp,false)}${barreGantt(sp, t, coulNiveau(t.niveau), surcharge.has(t.id))}</div>`).join('');
   const nbSurc = surcharge.size;
   const alerte = nbSurc ? `<div class="bandeau-warn" style="margin-top:10px"><i class="ti ti-alert-triangle" style="font-size:20px"></i>
     <span><strong>${nbSurc} tâche(s)</strong> se chevauchent pour cette personne (surcharge). Décalez des dates ou réassignez.</span></div>` : '';

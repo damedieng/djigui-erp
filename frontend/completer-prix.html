@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Compléter mes prix</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  .saisie-prix { width:120px; text-align:right; }
+  tr.modifiee td { background:#f0fdf4; }
+  .estime { font-size:11px; }
+  .neg { color:#b91c1c; } .pos { color:#166534; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Compléter mes prix</div>
+        <div class="topbar-date">Sans prix d'achat, votre marge est fausse</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <div id="resume" class="alert" hidden style="margin-bottom:12px"></div>
+
+      <div class="page-head">
+        <div style="font-weight:600;font-size:15px">Articles à compléter</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="btn-proposer"><i class="ti ti-wand"></i>Proposer des prix</button>
+          <button class="btn" id="btn-effacer"><i class="ti ti-eraser"></i>Effacer les prix proposés</button>
+          <button class="btn btn-primary" id="btn-enregistrer" disabled><i class="ti ti-device-floppy"></i>Enregistrer mes prix</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:visible">
+        <table class="table">
+          <thead><tr>
+            <th>Article</th><th>Catégorie</th>
+            <th class="right">Déjà vendu</th><th class="right">Prix de vente</th>
+            <th class="right">Prix d'achat</th><th class="right">Marge</th>
+          </tr></thead>
+          <tbody id="corps"><tr><td colspan="6" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="aide" style="margin-top:16px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> Pourquoi cet écran ?</div>
+        <ul>
+          <li>Djigui connaît vos <strong>prix de vente</strong>, puisque vous vendez avec. Mais tant qu'il ne connaît pas vos <strong>prix d'achat</strong>, il ne peut pas calculer votre <strong>marge</strong> : il croit que tout ce que vous encaissez est du bénéfice, ce qui est faux.</li>
+          <li>Les articles sont classés <strong>du plus vendu au moins vendu</strong> : commencez par le haut, c'est là que l'erreur coûte le plus cher.</li>
+          <li>Tapez simplement le prix auquel <strong>vous</strong> achetez l'article, puis <strong>Enregistrer mes prix</strong>. La marge se calcule sous vos yeux pendant que vous tapez.</li>
+          <li>Le bouton <strong>« Proposer des prix »</strong> remplit les cases vides avec des <strong>estimations</strong> : soit un prix de marché courant, soit un pourcentage du prix de vente. C'est utile pour une démonstration, mais <strong>ce ne sont pas vos vrais chiffres</strong> — ils portent le badge <em>estimé</em> partout dans l'application, et le bouton <strong>« Effacer les prix proposés »</strong> les enlève tous.</li>
+          <li>Dès que vous saisissez un prix vous-même, le badge disparaît : c'est devenu votre chiffre.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, fmt, esc, toast } = Djigui;
+
+  let articles = [];
+  const modifies = new Map();   // article_id → prix saisi
+
+  function margePct(prixVente, prixAchat) {
+    if (!prixVente || prixAchat === null || prixAchat === undefined || prixAchat === '') return null;
+    return Math.round((prixVente - Number(prixAchat)) / prixVente * 100);
+  }
+
+  function rendre() {
+    const corps = $('#corps');
+    if (!articles.length) {
+      corps.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">
+        <i class="ti ti-mood-check" style="font-size:22px"></i><br>
+        Tous vos articles ont un prix d'achat que vous avez saisi. Vos marges sont justes.</td></tr>`;
+      majResume();
+      return;
+    }
+    corps.innerHTML = articles.map(a => {
+      const valeur = modifies.has(a.id) ? modifies.get(a.id)
+                   : (a.prix_achat != null ? a.prix_achat : '');
+      const m = margePct(a.prix_vente, valeur);
+      return `<tr data-id="${esc(a.id)}" class="${modifies.has(a.id) ? 'modifiee' : ''}">
+        <td>${esc(a.designation)}${a.estime
+          ? ' <span class="badge badge-warn estime">prix estimé</span>'
+          : (a.prix_achat == null ? ' <span class="badge estime">sans prix</span>' : '')}</td>
+        <td>${esc(a.categorie_nom || '')}</td>
+        <td class="right">${fmt(a.quantite_vendue)}</td>
+        <td class="right">${fmt(a.prix_vente)}</td>
+        <td class="right">
+          <input type="number" class="saisie-prix" min="0" step="5"
+                 data-id="${esc(a.id)}" value="${valeur}" placeholder="—"></td>
+        <td class="right marge ${m === null ? '' : (m < 0 ? 'neg' : 'pos')}">${m === null ? '—' : m + ' %'}</td>
+      </tr>`;
+    }).join('');
+    majResume();
+  }
+
+  function majResume() {
+    const r = $('#resume');
+    const estimes = articles.filter(a => a.estime).length;
+    const sansPrix = articles.filter(a => a.prix_achat == null).length;
+    if (!articles.length) {
+      r.className = 'alert ok';
+      r.textContent = 'Rien à compléter : tous vos prix d\'achat sont renseignés.';
+      r.hidden = false;
+      return;
+    }
+    const bouts = [];
+    if (sansPrix) bouts.push(`<strong>${sansPrix} article(s) sans prix d'achat</strong> — leur marge est comptée comme du bénéfice total, ce qui est faux.`);
+    if (estimes) bouts.push(`<strong>${estimes} article(s) avec un prix estimé</strong> par Djigui — utile pour une démonstration, mais ce ne sont pas vos chiffres.`);
+    r.className = 'alert warn';
+    r.innerHTML = bouts.join('<br>');
+    r.hidden = false;
+  }
+
+  $('#corps').addEventListener('input', e => {
+    const input = e.target.closest('.saisie-prix');
+    if (!input) return;
+    const ligne = input.closest('tr');
+    const a = articles.find(x => x.id === input.dataset.id);
+    if (input.value.trim() === '') modifies.delete(a.id);
+    else modifies.set(a.id, Number(input.value));
+    ligne.classList.toggle('modifiee', modifies.has(a.id));
+    // La marge se recalcule pendant la frappe : le commerçant voit tout de
+    // suite si son chiffre est plausible.
+    const m = margePct(a.prix_vente, input.value.trim() === '' ? null : input.value);
+    const cell = ligne.querySelector('.marge');
+    cell.textContent = m === null ? '—' : m + ' %';
+    cell.className = 'right marge ' + (m === null ? '' : (m < 0 ? 'neg' : 'pos'));
+    $('#btn-enregistrer').disabled = modifies.size === 0;
+  });
+
+  async function charger() {
+    try { articles = await api('/api/prix/a-completer'); }
+    catch (e) { toast('Erreur : ' + e.message, 'danger'); return; }
+    modifies.clear();
+    $('#btn-enregistrer').disabled = true;
+    rendre();
+  }
+
+  $('#btn-enregistrer').addEventListener('click', async () => {
+    const prix = [...modifies.entries()].map(([article_id, prix_achat]) => ({ article_id, prix_achat }));
+    if (!prix.length) return;
+    try {
+      await api('/api/prix/reels', { method: 'POST', body: { prix } });
+      toast(`${prix.length} prix enregistré(s). Vos marges sont à jour.`, 'ok');
+      await charger();
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  });
+
+  $('#btn-proposer').addEventListener('click', async () => {
+    if (!await Djigui.confirm(
+      `Proposer des prix d'achat pour les articles qui n'en ont pas ?\n\n`
+      + `Djigui va estimer un prix, soit d'après un prix de marché courant, soit `
+      + `en pourcentage du prix de vente.\n\n`
+      + `⚠️ Ce ne sont PAS vos vrais chiffres. Ils porteront le badge « prix estimé » `
+      + `partout dans l'application, et vous pourrez les effacer d'un clic.\n\n`
+      + `Vos prix déjà saisis ne seront pas touchés.`)) return;
+    try {
+      const r = await api('/api/prix/estimer', { method: 'POST', body: {} });
+      toast(r.ignores
+        ? `${r.estimes} prix proposés. ${r.ignores} article(s) sans prix de vente n'ont pas pu être estimés.`
+        : `${r.estimes} prix proposés.`, 'ok');
+      await charger();
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  });
+
+  $('#btn-effacer').addEventListener('click', async () => {
+    if (!await Djigui.confirm(
+      `Effacer tous les prix d'achat estimés par Djigui ?\n\n`
+      + `Les prix que VOUS avez saisis ne sont pas concernés.`)) return;
+    try {
+      const r = await api('/api/prix/effacer-estimations', { method: 'POST', body: {} });
+      toast(`${r.effaces} estimation(s) effacée(s).`, 'ok');
+      await charger();
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  });
+
+  charger();
+})();
+</script>
+</body>
+</html>

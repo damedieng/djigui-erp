@@ -78,6 +78,18 @@ h1,h2,h3 { font-weight: 600; margin: 0; }
 
 .nav-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
   color: var(--sidebar-muted); padding: 14px 10px 6px; }
+/* Groupes repliables de la barre latérale (2026-07-27).
+   Dépliés par défaut : seul un repli explicite est mémorisé. */
+.nav-groupe { display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none; border-radius: 6px; }
+.nav-groupe:hover { color: var(--sidebar-fg, #fff); }
+.nav-groupe:focus-visible { outline: 2px solid var(--brand, #16a34a); outline-offset: 2px; }
+.nav-groupe-fleche { font-size: 14px; transition: transform .15s ease; }
+.nav-groupe.replie .nav-groupe-fleche { transform: rotate(-90deg); }
+/* ⚠️ Indispensable : une règle d'auteur `display` sur un conteneur écrase le
+   display:none du navigateur et l'attribut `hidden` ne masquerait plus rien.
+   Le piège a déjà coûté deux bugs au projet. */
+.nav-groupe-corps[hidden] { display: none; }
 .nav-item {
   display: flex; align-items: center; gap: 11px;
   padding: 9px 11px; border-radius: 8px;
@@ -164,6 +176,12 @@ h1,h2,h3 { font-weight: 600; margin: 0; }
   border-radius: var(--radius); border: 1px solid var(--border-strong);
   background: var(--surface); color: var(--text); cursor: pointer; }
 .btn:hover { background: var(--surface-2); }
+/* ⚠️ 6ᵉ occurrence du même piège dans ce projet : `display: inline-flex`
+   ci-dessus ÉCRASE le `display: none` que le navigateur applique à [hidden].
+   Sans cette ligne, tout bouton masqué par `hidden` reste visible et cliquable
+   (constaté sur « Parcourir… » de l'écran Sauvegarde, qui n'a de sens que dans
+   la fenêtre Djigui). Voir aussi `.modal-overlay[hidden]`, `.field[hidden]`. */
+.btn[hidden] { display: none; }
 .btn i { font-size: 17px; }
 .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
 .btn-primary:hover { background: var(--brand-strong); }
@@ -328,6 +346,36 @@ h1,h2,h3 { font-weight: 600; margin: 0; }
   border-radius: var(--radius); background: var(--surface); color: var(--text); width: 100%; }
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+/* ⚠️ DÉFAUT TROUVÉ PAR L'UTILISATEUR SUR CAPTURE (écran Sauvegarde, réglages) :
+   la règle `width: 100%` ci-dessus s'appliquait AUSSI aux cases à cocher. La
+   case s'étirait alors sur toute la largeur, son dessin se retrouvait centré au
+   milieu du formulaire et le texte du libellé était rejeté tout à droite —
+   illisible. Les règles équivalentes existaient déjà pour `.rech-grille` et
+   `.form-grid > label` ; elles MANQUAIENT pour `.field`. 8 écrans étaient
+   concernés (agenda, articles, magasins, paramètres, production, projet-detail,
+   tiers, sauvegarde), d'où la correction ici plutôt que page par page.
+   `flex: none` est nécessaire : dans un libellé en `display:flex`, la case se
+   laisserait encore comprimer ou étirer par le conteneur. */
+.field input[type="checkbox"], .field input[type="radio"] {
+  width: 18px; height: 18px; padding: 0; flex: none; margin: 0; }
+/* Un libellé qui porte une case à cocher se lit « [case] texte » : la case
+   d'abord, le texte à côté, et le texte occupe le reste de la ligne. */
+.field label.coche { display: flex; flex-direction: row; align-items: center;
+  gap: 9px; cursor: pointer; color: var(--text); }
+.field label.coche > span { flex: 1; min-width: 0; }
+/* Piège n° 2 : ce `display:flex` battrait le `display:none` de [hidden]. */
+.field label.coche[hidden] { display: none; }
+/* L'explication passe SOUS le texte, alignée avec lui et non avec la case :
+   décalée de la largeur de la case (18 px) plus l'écart (9 px). */
+.field .coche-aide { margin-left: 27px; }
+/* Bloc de réglages titré. Défini ICI et non dans une page : il sert désormais à
+   l'écran Sauvegarde, aux Paramètres de paie et aux Salariés. Recopié dans
+   chaque page, il aurait fini par diverger — c'est déjà arrivé sur ce projet
+   avec les cartes de projets et de marchés. */
+.reglage-bloc + .reglage-bloc { margin-top: 18px; padding-top: 18px;
+  border-top: 1px solid var(--border); }
+.reglage-titre { font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+  font-weight: 700; color: var(--text-2); margin-bottom: 12px; }
 .logo-drop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
   padding: 24px; text-align: center; color: var(--text-muted); background: var(--surface-2); }
 
@@ -409,6 +457,130 @@ h1,h2,h3 { font-weight: 600; margin: 0; }
 .toast.ok { background: var(--brand); }
 .toast.warn { background: var(--warning); }
 .toast.danger { background: var(--danger); }
+
+/* --- En-tête d'objet (détail projet, détail marché) ----------------------
+   Déplacé depuis `projet-detail.html` : l'écran de détail d'un marché
+   reprend la même présentation. Les noms sont conservés (`.projet-hero`,
+   `.hero-*`, `.pe-bloc`) pour ne rien casser dans les pages existantes. */
+/* Tuiles de synthèse : la couleur porte le sens, pas un trait de bordure.
+   Quatre familles seulement (neutre, argent, temps, alerte) pour rester sobre.
+   Chaque tuile = un aplat très clair + une pastille d'icône plus soutenue. */
+.pe-bloc { --ton: #5c6a61; --fond: #f1f4f2; --pastille: #e2e8e4;
+  display: flex; align-items: center; gap: 11px;
+  background: var(--fond); border: 0; border-radius: 12px; padding: 11px 13px;
+  transition: transform .12s ease, box-shadow .12s ease; }
+.pe-bloc:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(20,40,30,.10); }
+.pe-bloc .pe-ic { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--pastille); color: var(--ton); font-size: 18px; }
+.pe-bloc .pe-corps { min-width: 0; }
+.pe-bloc .pe-lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  font-weight: 700; color: var(--ton); opacity: .75; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.pe-bloc .pe-val { font-weight: 700; font-size: 13.5px; margin-top: 2px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
+/* Le suffixe FCFA ne doit pas manger la place du montant. */
+.pe-bloc .pe-val .muted { font-size: 9.5px !important; margin-left: 1px; }
+
+/* Argent : le vert de la marque. */
+.pe-bloc.acc-brand  { --ton: #0e5a39; --fond: #e8f3ec; --pastille: #cfe6da; }
+/* Temps : un bleu sourd, jamais vif. */
+.pe-bloc.acc-date   { --ton: #2b5f95; --fond: #eaf1f8; --pastille: #d5e4f2; }
+/* Écart favorable / défavorable. */
+.pe-bloc.acc-ok     { --ton: #0e5a39; --fond: #dfeee6; --pastille: #c2ded0; }
+.pe-bloc.acc-danger { --ton: #a2352a; --fond: #fbebe9; --pastille: #f4d6d1; }
+/* Moyens engagés : un ambre discret. */
+.pe-bloc.acc-moyen  { --ton: #8a6114; --fond: #f8f1e2; --pastille: #ecdcbf; }
+
+/* Les trois chiffres qu'on lit en premier sont plus hauts et plus gros. */
+.pe-bloc.fort .pe-val { font-size: 15px; }
+.pe-bloc.fort .pe-ic { width: 36px; height: 36px; font-size: 19px; }
+/* ---------- En-tête de projet ----------
+   Le bandeau vert et les tuiles cassent l'aplat blanc : on repère
+   immédiatement le nom, l'état, puis les chiffres clés. */
+/* ⚠️ CAUSE RÉELLE DE « l'en-tête disparaît d'un onglet à l'autre ».
+   `.content` est un conteneur flex en colonne. Par défaut un élément flex peut
+   être COMPRIMÉ sous sa taille naturelle : quand l'onglet est long (Liste,
+   Gantt, Ressources, Jalons), le navigateur écrasait l'en-tête jusqu'à une
+   hauteur de 0 px au lieu de laisser défiler. Sur les onglets courts (Par
+   personne, Documents) il n'y avait rien à comprimer, donc il s'affichait.
+   Mesuré dans un vrai navigateur : hauteur = 0 px exactement sur ces 4 onglets.
+   `flex-shrink: 0` interdit cette compression ; la zone défile, comme prévu. */
+.content > * { flex-shrink: 0; }
+
+/* En-tête du projet : bloc SIMPLE et STABLE.
+   Volontairement ni collant ni auto-compacté : ces deux comportements
+   faisaient changer la hauteur du haut de page d'un onglet à l'autre, et le
+   contenu sautait sous les yeux. La hauteur est désormais identique sur
+   Liste, Gantt, Ressources, Jalons et Documents. */
+.projet-hero { border: 0; border-radius: 16px; background: var(--surface);
+  overflow: hidden; box-shadow: 0 2px 10px rgba(20,40,30,.08), 0 1px 2px rgba(20,40,30,.06); }
+.hero-bandeau { display: flex; align-items: center; gap: 14px; padding: 13px 18px;
+  background: linear-gradient(135deg, var(--sidebar-bg) 0%, var(--brand) 100%); color: #fff; }
+.hero-titre { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700;
+  flex: 1; min-width: 0; }
+.hero-titre i { font-size: 21px; opacity: .85; flex: 0 0 auto; }
+.hero-titre span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.hero-actions .stat-select { font-size: 13px; padding: 5px 10px; border-radius: var(--radius);
+  background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.hero-actions .stat-select option { color: var(--text); }
+.hero-toggle { color: #fff; opacity: .85; }
+.hero-toggle:hover { opacity: 1; background: rgba(255,255,255,.15); }
+
+/* Les deux jauges, sur fond teinté pour les détacher des tuiles. */
+.hero-jauges { display: grid; grid-template-columns: 1fr 1fr; gap: 22px;
+  padding: 15px 18px; background: linear-gradient(180deg, #f2f8f4 0%, #ffffff 100%); }
+@media (max-width: 760px){ .hero-jauges { grid-template-columns: 1fr; gap: 12px; } }
+
+/* Chaque chiffre dans sa tuile, avec un liseré de couleur à gauche. */
+.synthese { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr));
+  gap: 10px; padding: 14px 18px; }
+.hero-note { padding: 0 18px 14px; font-size: 13px; color: var(--text-2); font-style: italic; }
+.hero-note:empty { display: none; }
+
+/* --- Cartes d'objet (projets, marchés…) ---------------------------------
+   Ces règles vivaient en local dans `projets.html`. Elles sont ici parce que
+   l'écran des marchés reprend la même présentation : une seule définition, donc
+   les deux écrans ne peuvent plus diverger. Les noms `.proj-*` sont conservés
+   pour ne rien casser dans les pages qui les utilisent déjà. */
+.proj-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+/* ⚠️ PIÈGE N° 2 DU PROJET, 5e occurrence : une règle d'auteur `display` bat le
+   `display:none` que le navigateur applique à `[hidden]`. Sans cette ligne, la
+   grille de cartes restait VISIBLE derrière le tableau de suivi. Mesuré dans
+   Chrome, invisible en jsdom. */
+.proj-grille[hidden] { display: none; }
+.proj-carte { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow); padding: 0; overflow: hidden; cursor: pointer;
+  transition: box-shadow .15s, transform .1s; position: relative; }
+.proj-carte:hover { box-shadow: 0 4px 14px rgba(20,40,30,.1); transform: translateY(-1px); }
+.proj-bandeau { height: 6px; background: var(--brand); }
+.proj-corps { padding: 16px 18px; }
+.proj-nom { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+.proj-meta { font-size: 12.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 3px; margin: 8px 0 12px; }
+/* Chaque ligne de méta tient sur UNE ligne : icône alignée, texte tronqué s'il
+   dépasse. Sans cela un montant long passait sous son icône, restée seule. */
+.proj-meta > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.proj-meta > span > :last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-meta i { width: 16px; flex: 0 0 auto; color: var(--text-muted); }
+.barre { height: 8px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.barre > div { height: 100%; background: var(--brand); border-radius: 6px; }
+/* Une carte sélectionnée pour un traitement par lot : elle doit se distinguer
+   d'un simple survol, sinon on ne sait plus sur quoi l'action va porter. */
+.proj-carte.choisie { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint); }
+/* La case à cocher se pose SUR la carte ; elle ne doit pas déclencher
+   l'ouverture du détail (le script arrête la propagation). */
+.proj-coche { position: absolute; top: 12px; right: 12px; z-index: 2; }
+
+/* Info-bulle maison (voir `installerInfobulles` dans app.js). `pre-line`
+   conserve les sauts de ligne : ces bulles servent à lire une explication,
+   souvent une liste, pas à afficher une étiquette d'un mot. */
+.dj-tip { position: fixed; z-index: 999; max-width: 320px; padding: 9px 12px;
+  background: #1d2b24; color: #fff; border-radius: 8px; font-size: 12.5px;
+  line-height: 1.5; white-space: pre-line; box-shadow: 0 6px 20px rgba(10,25,18,.28);
+  pointer-events: none; opacity: 0; transform: translateY(3px);
+  transition: opacity .14s ease, transform .14s ease; }
+.dj-tip.show { opacity: 1; transform: translateY(0); }
 
 /* ---------- Section d'aide (explication d'écran, langage simple) ---------- */
 .aide { background: var(--brand-tint); border: 1px solid var(--border);
@@ -538,6 +710,59 @@ h1,h2,h3 { font-weight: 600; margin: 0; }
   max-height: 90vh; overflow: auto; }
 .modal .form-grid { margin-top: 4px; }
 
+/* En-tête, corps et pied de modale (2026-07-27).
+   ⚠️ Ces classes MANQUAIENT : plusieurs écrans les employaient déjà et
+   s'affichaient donc sans style — une classe CSS inexistante ne provoque
+   aucune erreur, elle produit juste un écran laid. */
+.modal-head { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; font-weight: 600; font-size: 16px; }
+.modal-close { background: none; border: 0; padding: 0 4px; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--text-2); }
+.modal-close:hover { color: var(--text); }
+.modal-body { max-height: 68vh; overflow-y: auto; overflow-x: hidden; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+/* Un libellé placé DIRECTEMENT dans la grille empile son texte puis son champ.
+   Le sélecteur `>` est délibéré : les écrans qui utilisent la structure
+   `.field > label` ne doivent pas être touchés. */
+.form-grid > label { display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: var(--text-2); }
+/* ⚠️ PIÈGE N° 2 DU PROJET : une règle d'auteur `display:flex` bat le
+   `display:none` que le navigateur applique à `[hidden]`. Sans cette ligne, un
+   champ masqué par `elt.hidden = true` reste VISIBLE — bug déjà rencontré sur
+   le panneau de notifications et sur `#barre-lot`. Mesuré dans Chrome, jamais
+   vu par jsdom. Même remède que `.modal-overlay[hidden]` et `.bulk-bar[hidden]`. */
+.form-grid > label[hidden] { display: none; }
+.field[hidden] { display: none; }
+/* ⚠️ Le projet n'habillait les champs QUE dans `.field` (grille de formulaire)
+   et via `.select-std` pour les listes isolées. Un `<input>` posé ailleurs
+   restait donc au style brut du navigateur : bordure fine, hauteur différente
+   de celle des listes voisines — visible sur la barre de recherche des écrans
+   Marchés, Comptabilité et Rapports. On aligne tout sur le même habillage. */
+.input-std,
+.rech-grille input, .rech-grille select,
+.form-grid > label input, .form-grid > label select, .form-grid > label textarea {
+  font: inherit; width: 100%; padding: 9px 11px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface); color: var(--text);
+}
+.input-std:focus,
+.rech-grille input:focus, .rech-grille select:focus,
+.form-grid > label input:focus, .form-grid > label select:focus,
+.form-grid > label textarea:focus {
+  outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint);
+}
+/* ⚠️ Chrome ajoute son icône de calendrier À L'INTÉRIEUR d'un `input[type=date]`,
+   ce qui le rend 2 px plus haut que ses voisins. Deux pixels ne se voient pas
+   isolément, mais sur une ligne de six champs le décalage saute aux yeux.
+   On impose donc la même hauteur à tout le monde (jamais aux textarea). */
+.rech-grille input:not([type="checkbox"]), .rech-grille select,
+.form-grid > label input:not([type="checkbox"]), .form-grid > label select {
+  height: 38px; box-sizing: border-box; }
+/* Les cases à cocher ne doivent surtout pas hériter de cette taille. */
+.rech-grille input[type="checkbox"], .form-grid > label input[type="checkbox"] {
+  width: 18px; height: 18px; padding: 0; }
+
 /* ---------- Ticket de caisse (impression) ---------- */
 #recu-print { display: none; }
 .recu-ticket { width: 280px; font-family: "Consolas", "Courier New", monospace; color: #000;
@@ -572,6 +797,15 @@ h1,h2,h3 { font-weight: 600; margin: 0; }
 .doc-meta { display: flex; justify-content: space-between; gap: 24px; margin: 22px 0; font-size: 13px; }
 .doc-foot { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--border);
   font-size: 12px; color: var(--text-muted); text-align: center; }
+/* Montant arrêté en toutes lettres — mention obligatoire (N1 OHADA).
+   Encadrée et non noyée dans le pied de page : c'est elle qui fait foi en cas
+   de litige, elle doit se trouver du premier coup d'œil. */
+.doc-lettres { margin-top: 18px; padding: 12px 14px; border-radius: var(--radius);
+  background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; }
+.doc-lettres-lbl { color: var(--text-2); }
+.doc-lettres-txt { font-weight: 600; color: var(--text); }
+/* Piège n° 2 : sans display explicite le bloc resterait visible s'il est vide. */
+.doc-lettres[hidden] { display: none; }
 
 /* ---------- Cloche de notifications (barre du haut, toutes pages) ---------- */
 .notif-wrap { position: relative; }

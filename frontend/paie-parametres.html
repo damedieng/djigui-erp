@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Paramètres de paie</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  .pp-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .pp-tbl th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--text-2); padding:7px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .pp-tbl td { padding:5px 8px; border-bottom:1px solid var(--border); }
+  .pp-tbl input, .pp-tbl select { width:100%; font:inherit; padding:6px 8px;
+    border:1px solid var(--border-strong); border-radius:8px;
+    background:var(--surface); color:var(--text); }
+  .pp-tbl input:focus, .pp-tbl select:focus { outline:none; border-color:var(--brand);
+    box-shadow:0 0 0 3px var(--brand-tint); }
+  .pp-tbl .num input { text-align:right; }
+  .pp-tbl td.act { width:38px; text-align:center; }
+  .pp-suppr { cursor:pointer; color:var(--text-muted); font-size:17px; }
+  .pp-suppr:hover { color:var(--danger); }
+  /* Bandeau de période : c'est LUI qui rappelle qu'on ne modifie pas un taux,
+     on ouvre une nouvelle période. */
+  .pp-periode { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:11px 13px; border-radius:var(--radius); background:var(--surface-2);
+    border:1px solid var(--border); margin-bottom:14px; font-size:13px; }
+  .pp-note { font-size:12px; color:var(--text-2); margin:0 0 12px; }
+  .pp-avert { font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Paramètres de paie</div>
+        <div class="topbar-date">Les taux et barèmes qui servent à calculer les salaires</div>
+      </div>
+      <div class="topbar-right">
+        <label style="font-size:12.5px;color:var(--text-2)">Valeurs applicables au</label>
+        <input type="date" id="a-la-date" class="input-std" style="width:160px">
+      </div>
+    </header>
+
+    <section class="content">
+      <div id="alertes"></div>
+
+      <!-- ⚠️ Le bandeau qui compte : tant que des valeurs portent la marque
+           « à vérifier », personne ne doit croire qu'elles sont certifiées. -->
+      <div class="alert warn" id="bandeau-verif" hidden style="margin-bottom:12px">
+        <i class="ti ti-alert-triangle"></i>
+        <span id="txt-verif"></span>
+      </div>
+
+      <div class="tabs-folder">
+        <button class="tab active" data-vue="irpp">Impôt sur le revenu</button>
+        <button class="tab" data-vue="cotisations">Cotisations</button>
+        <button class="tab" data-vue="famille">Charges de famille</button>
+        <button class="tab" data-vue="trimf">TRIMF</button>
+        <button class="tab" data-vue="abattement">Abattement</button>
+        <button class="tab" data-vue="primes">Primes & avantages</button>
+        <button class="tab" data-vue="employeur">Mon entreprise</button>
+      </div>
+
+      <div class="card">
+        <!-- ===================== IMPÔT SUR LE REVENU ===================== -->
+        <div class="tab-panel" data-panneau="irpp">
+          <div class="card-head"><span class="card-title">Barème de l'impôt sur le revenu</span></div>
+          <p class="pp-note">
+            Les montants sont <strong>annuels</strong> : Djigui multiplie le salaire imposable par 12,
+            applique le barème tranche par tranche, puis ramène l'impôt au mois.
+            La <strong>dernière tranche ne doit pas avoir de plafond</strong>, sinon les hauts revenus
+            échapperaient à l'impôt.
+          </p>
+          <div id="periode-irpp"></div>
+          <table class="pp-tbl"><thead><tr>
+            <th>De (annuel)</th><th>À (annuel)</th><th style="width:110px">Taux %</th><th></th>
+          </tr></thead><tbody id="corps-irpp"></tbody></table>
+          <button class="btn" data-ajout="irpp" style="margin-top:10px"><i class="ti ti-plus"></i>Ajouter une tranche</button>
+        </div>
+
+        <!-- ===================== COTISATIONS ===================== -->
+        <div class="tab-panel" data-panneau="cotisations" hidden>
+          <div class="card-head"><span class="card-title">Cotisations sociales</span></div>
+          <p class="pp-note">
+            Retraite (IPRES), prestations familiales et accident du travail (CSS), maladie (IPM).
+            Le <strong>plafond</strong> limite la part du salaire soumise à la cotisation ;
+            laissez vide s'il n'y en a pas. La <strong>retraite complémentaire</strong> ne concerne
+            que les cadres, et seulement sur la part du salaire au-dessus du plafond du régime général.
+          </p>
+          <div id="periode-cotisations"></div>
+          <table class="pp-tbl"><thead><tr>
+            <th style="width:190px">Organisme</th><th>Nom affiché</th>
+            <th style="width:100px">Part salarié %</th><th style="width:110px">Part employeur %</th>
+            <th style="width:130px">Plafond / mois</th><th style="width:70px">Cadres</th><th></th>
+          </tr></thead><tbody id="corps-cotisations"></tbody></table>
+          <button class="btn" data-ajout="cotisations" style="margin-top:10px"><i class="ti ti-plus"></i>Ajouter une cotisation</button>
+        </div>
+
+        <!-- ===================== CHARGES DE FAMILLE ===================== -->
+        <div class="tab-panel" data-panneau="famille" hidden>
+          <div class="card-head"><span class="card-title">Réduction pour charge de famille</span></div>
+          <p class="pp-note">
+            ⚠️ Au Sénégal, l'impôt se calcule sur le revenu <strong>entier</strong> ; on
+            <strong>retranche ensuite</strong> une réduction selon le nombre de parts.
+            Ce n'est pas le système français où l'on divise le revenu par les parts.
+            La réduction est un pourcentage de l'impôt, <strong>encadré par un minimum et un maximum
+            annuels</strong>.
+          </p>
+          <div id="periode-famille"></div>
+          <table class="pp-tbl"><thead><tr>
+            <th style="width:110px">Parts</th><th style="width:110px">Taux %</th>
+            <th>Minimum / an</th><th>Maximum / an</th><th></th>
+          </tr></thead><tbody id="corps-famille"></tbody></table>
+          <button class="btn" data-ajout="famille" style="margin-top:10px"><i class="ti ti-plus"></i>Ajouter une ligne</button>
+        </div>
+
+        <!-- ===================== TRIMF ===================== -->
+        <div class="tab-panel" data-panneau="trimf" hidden>
+          <div class="card-head"><span class="card-title">TRIMF</span></div>
+          <p class="pp-note">
+            Taxe forfaitaire selon le niveau de rémunération, multipliée par le nombre de parts
+            (le salarié, plus ses épouses non salariées).
+            <strong>Indiquez bien si le barème est mensuel ou annuel</strong> : les sources publiques
+            divergent sur ce point, et se tromper fausse le bulletin de tous les salariés.
+          </p>
+          <div id="periode-trimf"></div>
+          <table class="pp-tbl"><thead><tr>
+            <th>De</th><th>À</th><th style="width:130px">Montant</th>
+            <th style="width:130px">Périodicité</th><th></th>
+          </tr></thead><tbody id="corps-trimf"></tbody></table>
+          <button class="btn" data-ajout="trimf" style="margin-top:10px"><i class="ti ti-plus"></i>Ajouter une tranche</button>
+        </div>
+
+        <!-- ===================== ABATTEMENT ===================== -->
+        <div class="tab-panel" data-panneau="abattement" hidden>
+          <div class="card-head"><span class="card-title">Abattement pour frais professionnels</span></div>
+          <p class="pp-note">
+            Part du salaire retirée avant de calculer l'impôt, au titre des frais liés au travail.
+            Elle est généralement <strong>plafonnée</strong>.
+          </p>
+          <div id="periode-abattement"></div>
+          <table class="pp-tbl"><thead><tr>
+            <th style="width:130px">Taux %</th><th>Plafond annuel</th><th></th>
+          </tr></thead><tbody id="corps-abattement"></tbody></table>
+          <div class="alert warn" style="margin-top:16px">
+            <i class="ti ti-help-circle"></i>
+            <span class="pp-avert">
+              <strong>Question à poser à votre comptable.</strong> Selon la lecture du texte,
+              l'abattement peut se cumuler ou non avec la déduction des cotisations retraite.
+              Ce choix <strong>change le salaire net de tous vos salariés</strong> — Djigui ne le
+              tranche pas à votre place.
+            </span>
+          </div>
+          <label class="check" style="margin-top:12px;display:flex;gap:9px;align-items:center;cursor:pointer">
+            <input type="checkbox" id="ab-cumul" style="width:18px;height:18px;flex:none">
+            <span>Cumuler l'abattement avec la déduction des cotisations retraite</span>
+          </label>
+        </div>
+
+        <!-- ===================== PRIMES & AVANTAGES ===================== -->
+        <div class="tab-panel" data-panneau="primes" hidden>
+          <div class="card-head"><span class="card-title">Primes et avantages en nature</span></div>
+          <p class="pp-note">
+            Deux choses ici : les primes <strong>exonérées jusqu'à un plafond</strong> (transport…)
+            et les avantages en nature (logement, véhicule, nourriture), qui sont
+            <strong>évalués puis ajoutés</strong> au salaire brut.
+          </p>
+          <div id="periode-primes"></div>
+          <table class="pp-tbl"><thead><tr>
+            <th style="width:140px">Code</th><th>Nom affiché</th>
+            <th style="width:130px">Nature</th><th style="width:140px">Plafond exonéré</th>
+            <th style="width:130px">Évaluation</th><th style="width:120px">Valeur</th><th></th>
+          </tr></thead><tbody id="corps-primes"></tbody></table>
+          <button class="btn" data-ajout="primes" style="margin-top:10px"><i class="ti ti-plus"></i>Ajouter une ligne</button>
+        </div>
+
+        <!-- ===================== MON ENTREPRISE ===================== -->
+        <div class="tab-panel" data-panneau="employeur" hidden>
+          <div class="card-head"><span class="card-title">Mon entreprise</span></div>
+          <p class="pp-note">
+            Ces valeurs vous sont propres : elles ne viennent d'aucun barème national.
+          </p>
+
+          <div class="reglage-bloc">
+            <div class="reglage-titre">Accident du travail</div>
+            <div class="form-grid">
+              <div class="field">
+                <label>Secteur de risque</label>
+                <input id="e-secteur" class="input-std" placeholder="Commerce, BTP, industrie…">
+              </div>
+              <div class="field">
+                <label>Taux applicable (%)</label>
+                <input id="e-taux-at" type="number" step="0.01" min="0" max="100" class="input-std">
+                <span class="check-hint muted">Entre 1 % et 5 % selon votre activité.
+                  Il figure sur votre notification de la CSS.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="reglage-bloc">
+            <div class="reglage-titre">Numéros employeur</div>
+            <div class="form-grid">
+              <div class="field"><label>N° IPRES</label><input id="e-ipres" class="input-std"></div>
+              <div class="field"><label>N° CSS</label><input id="e-css" class="input-std"></div>
+              <div class="field"><label>IPM de rattachement</label><input id="e-ipm-nom" class="input-std"></div>
+              <div class="field"><label>N° IPM</label><input id="e-ipm-num" class="input-std"></div>
+            </div>
+          </div>
+
+          <div class="reglage-bloc">
+            <div class="reglage-titre">Temps de travail et majorations</div>
+            <div class="form-grid">
+              <div class="field">
+                <label>Jours ouvrables par mois</label>
+                <input id="e-jours" type="number" min="1" max="31" class="input-std">
+                <span class="check-hint muted">Sert à calculer une retenue d'absence.
+                  26 est l'usage courant ; vérifiez votre règlement intérieur.</span>
+              </div>
+              <div class="field">
+                <label>Contribution employeur CFCE (%)</label>
+                <input id="e-cfce" type="number" step="0.01" min="0" max="100" class="input-std">
+              </div>
+              <div class="field"><label>Heures sup. — 1<sup>er</sup> palier (%)</label>
+                <input id="e-hs1" type="number" step="0.01" class="input-std"></div>
+              <div class="field"><label>Heures sup. — 2<sup>e</sup> palier (%)</label>
+                <input id="e-hs2" type="number" step="0.01" class="input-std"></div>
+              <div class="field"><label>Heures de nuit (%)</label>
+                <input id="e-nuit" type="number" step="0.01" class="input-std"></div>
+              <div class="field"><label>Jours fériés (%)</label>
+                <input id="e-ferie" type="number" step="0.01" class="input-std"></div>
+            </div>
+          </div>
+
+          <div class="modal-actions" style="justify-content:flex-start;padding-left:0">
+            <button class="btn btn-primary" id="btn-enr-employeur">Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="aide" style="margin-top:20px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Djigui <strong>ne connaît aucun taux par cœur</strong>. Tous les chiffres qui servent
+            à calculer un salaire sont ici, et vous pouvez les changer <strong>sans mettre à jour
+            le logiciel</strong> — c'est ce qui permet de suivre les lois de finances.</li>
+          <li><strong>On ne modifie jamais un taux : on ouvre une nouvelle période.</strong>
+            L'ancien reste enregistré. Sans cela, un bulletin de janvier réimprimé en juin serait
+            recalculé avec les taux de juin, donc faux.</li>
+          <li>Le champ <strong>« Valeurs applicables au »</strong>, en haut à droite, sert à revoir
+            les taux d'une date passée — utile pour comprendre un ancien bulletin.</li>
+          <li>Un bandeau jaune signale les valeurs <strong>« à vérifier »</strong> : ce sont celles
+            installées d'origine. Elles viennent de sources publiques <strong>qui se
+            contredisent</strong>. Confrontez-les au texte en vigueur, puis confirmez-les.</li>
+          <li>Les alertes en haut d'écran <strong>signalent sans bloquer</strong> : vous pouvez
+            enregistrer un paramétrage incomplet en cours de saisie, mais un barème troué donnerait
+            un impôt faux sans que rien ne le dise.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, esc, toast } = Djigui;
+
+  // Nom logique côté serveur pour chaque onglet éditable.
+  const TABLE = { irpp:'bareme_irpp', cotisations:'cotisations', famille:'reductions_famille',
+                  trimf:'trimf', abattement:'abattement', primes:'primes' };
+  const ORGANISMES = [
+    ['ipres_rg',  'Retraite (IPRES) — tous'],
+    ['ipres_rcc', 'Retraite complémentaire — cadres'],
+    ['css_pf',    'Prestations familiales (CSS)'],
+    ['css_at',    'Accident du travail (CSS)'],
+    ['ipm',       'Maladie (IPM)'],
+  ];
+
+  let jeu = null;
+  // Lignes en cours d'édition, par onglet. On travaille sur une COPIE : rien
+  // ne part au serveur tant que l'utilisateur n'a pas validé sa période.
+  let brouillon = {};
+
+  const nb = v => (v === null || v === undefined || v === '') ? '' : v;
+
+  function dateChoisie() {
+    return $('#a-la-date').value || new Date().toISOString().slice(0, 10);
+  }
+
+  async function charger() {
+    try {
+      jeu = await api('/api/paie/parametres?date=' + encodeURIComponent(dateChoisie()));
+    } catch (e) { toast('Chargement impossible : ' + e.message, 'danger'); return; }
+    brouillon = {
+      irpp: jeu.bareme_irpp.map(x => ({ ...x })),
+      cotisations: jeu.cotisations.map(x => ({ ...x })),
+      famille: jeu.reductions_famille.map(x => ({ ...x })),
+      trimf: jeu.trimf.map(x => ({ ...x })),
+      primes: jeu.primes.map(x => ({ ...x })),
+      abattement: jeu.abattement ? [{ ...jeu.abattement }] : [],
+    };
+    rendre();
+  }
+
+  function rendre() {
+    rendreAlertes();
+    rendreIrpp(); rendreCotisations(); rendreFamille();
+    rendreTrimf(); rendreAbattement(); rendrePrimes();
+    rendreEmployeur();
+  }
+
+  function rendreAlertes() {
+    $('#alertes').innerHTML = jeu.alertes.map(a =>
+      `<div class="alert warn" style="margin-bottom:10px"><i class="ti ti-alert-circle"></i>
+         <span>${esc(a)}</span></div>`).join('');
+
+    // Le bandeau des valeurs non certifiées. Sans lui, l'utilisateur croirait
+    // que Djigui connaît la loi — alors qu'il a repris des chiffres divergents.
+    const n = jeu.nb_a_verifier;
+    $('#bandeau-verif').hidden = n === 0;
+    $('#txt-verif').innerHTML = n === 0 ? '' :
+      `<strong>${n} valeur(s) n'ont pas encore été vérifiées.</strong> Ce sont les chiffres
+       installés d'origine : ils viennent de sources publiques qui se contredisent
+       (plafond de la retraite, plafond de l'abattement, périodicité de la TRIMF…).
+       <strong>Confrontez-les au texte en vigueur et au simulateur de la DGID</strong>,
+       corrigez-les si besoin, puis confirmez-les onglet par onglet.`;
+  }
+
+  // Bandeau de période, commun à tous les onglets éditables. C'est lui qui
+  // porte le geste « nouvelle période » — le seul geste sûr.
+  function bandeauPeriode(vue) {
+    const lignes = brouillon[vue] || [];
+    const debut = lignes.length ? lignes[0].date_debut : null;
+    const fin = lignes.length ? lignes[0].date_fin : null;
+    const aVerifier = lignes.some(l => l.a_verifier);
+    return `<div class="pp-periode">
+      <i class="ti ti-calendar-stats" style="font-size:18px;color:var(--brand-strong)"></i>
+      <span>${debut
+        ? `Valeurs en vigueur depuis le <strong>${esc(debut)}</strong>${fin ? ` jusqu'au <strong>${esc(fin)}</strong>` : ''}`
+        : 'Aucune valeur pour cette date'}</span>
+      ${aVerifier ? '<span class="badge warn">à vérifier</span>' : '<span class="badge ok">vérifié</span>'}
+      <div style="flex:1"></div>
+      ${aVerifier ? `<button class="btn btn-sm" data-verifie="${vue}">
+          <i class="ti ti-check"></i>Ces valeurs sont conformes</button>` : ''}
+      <button class="btn btn-sm" data-corriger="${vue}"
+        data-tip="À n'utiliser que tant qu'aucun bulletin n'a été calculé.">
+        <i class="ti ti-pencil"></i>Corriger sur place</button>
+      <button class="btn btn-sm btn-primary" data-periode="${vue}">
+        <i class="ti ti-calendar-plus"></i>Nouvelle période</button>
+    </div>`;
+  }
+
+  const ligneSuppr = vue => `<td class="act"><i class="ti ti-trash pp-suppr"
+    data-suppr="${vue}" data-tip="Retirer cette ligne"></i></td>`;
+
+  function champ(vue, i, cle, type, attrs) {
+    const v = brouillon[vue][i][cle];
+    return `<input data-vue="${vue}" data-i="${i}" data-cle="${cle}" type="${type}"
+      value="${v === null || v === undefined ? '' : esc(String(v))}" ${attrs || ''}>`;
+  }
+
+  function rendreIrpp() {
+    $('#periode-irpp').innerHTML = bandeauPeriode('irpp');
+    $('#corps-irpp').innerHTML = brouillon.irpp.map((t, i) => `<tr>
+      <td class="num">${champ('irpp', i, 'borne_inf', 'number')}</td>
+      <td class="num">${champ('irpp', i, 'borne_sup', 'number', 'placeholder="sans limite"')}</td>
+      <td class="num">${champ('irpp', i, 'taux', 'number', 'step="0.01"')}</td>
+      ${ligneSuppr('irpp')}</tr>`).join('');
+  }
+
+  function rendreCotisations() {
+    $('#periode-cotisations').innerHTML = bandeauPeriode('cotisations');
+    $('#corps-cotisations').innerHTML = brouillon.cotisations.map((c, i) => `<tr>
+      <td><select data-vue="cotisations" data-i="${i}" data-cle="organisme">
+        ${ORGANISMES.map(([v, l]) =>
+          `<option value="${v}" ${c.organisme === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+      </select></td>
+      <td>${champ('cotisations', i, 'libelle', 'text')}</td>
+      <td class="num">${champ('cotisations', i, 'taux_salarial', 'number', 'step="0.01"')}</td>
+      <td class="num">${champ('cotisations', i, 'taux_patronal', 'number', 'step="0.01"')}</td>
+      <td class="num">${champ('cotisations', i, 'plafond_mensuel', 'number', 'placeholder="aucun"')}</td>
+      <td style="text-align:center"><input type="checkbox" data-vue="cotisations" data-i="${i}"
+        data-cle="reserve_cadre" ${c.reserve_cadre ? 'checked' : ''}
+        style="width:18px;height:18px"></td>
+      ${ligneSuppr('cotisations')}</tr>`).join('');
+  }
+
+  function rendreFamille() {
+    $('#periode-famille').innerHTML = bandeauPeriode('famille');
+    $('#corps-famille').innerHTML = brouillon.famille.map((f, i) => `<tr>
+      <td class="num">${champ('famille', i, 'nb_parts', 'number', 'step="0.5"')}</td>
+      <td class="num">${champ('famille', i, 'taux_reduction', 'number', 'step="0.01"')}</td>
+      <td class="num">${champ('famille', i, 'reduction_min', 'number')}</td>
+      <td class="num">${champ('famille', i, 'reduction_max', 'number')}</td>
+      ${ligneSuppr('famille')}</tr>`).join('');
+  }
+
+  function rendreTrimf() {
+    $('#periode-trimf').innerHTML = bandeauPeriode('trimf');
+    $('#corps-trimf').innerHTML = brouillon.trimf.map((t, i) => `<tr>
+      <td class="num">${champ('trimf', i, 'borne_inf', 'number')}</td>
+      <td class="num">${champ('trimf', i, 'borne_sup', 'number', 'placeholder="sans limite"')}</td>
+      <td class="num">${champ('trimf', i, 'montant', 'number')}</td>
+      <td><select data-vue="trimf" data-i="${i}" data-cle="periodicite">
+        <option value="annuel" ${t.periodicite === 'annuel' ? 'selected' : ''}>Par an</option>
+        <option value="mensuel" ${t.periodicite === 'mensuel' ? 'selected' : ''}>Par mois</option>
+      </select></td>
+      ${ligneSuppr('trimf')}</tr>`).join('');
+  }
+
+  function rendreAbattement() {
+    $('#periode-abattement').innerHTML = bandeauPeriode('abattement');
+    $('#corps-abattement').innerHTML = brouillon.abattement.map((a, i) => `<tr>
+      <td class="num">${champ('abattement', i, 'taux', 'number', 'step="0.01"')}</td>
+      <td class="num">${champ('abattement', i, 'plafond_annuel', 'number', 'placeholder="aucun"')}</td>
+      ${ligneSuppr('abattement')}</tr>`).join('');
+    $('#ab-cumul').checked = !!(brouillon.abattement[0] || {}).cumul_avec_ipres;
+  }
+
+  function rendrePrimes() {
+    $('#periode-primes').innerHTML = bandeauPeriode('primes');
+    $('#corps-primes').innerHTML = brouillon.primes.map((p, i) => `<tr>
+      <td>${champ('primes', i, 'code', 'text')}</td>
+      <td>${champ('primes', i, 'libelle', 'text')}</td>
+      <td><select data-vue="primes" data-i="${i}" data-cle="usage_prime">
+        <option value="exoneration" ${p.usage_prime === 'exoneration' ? 'selected' : ''}>Prime exonérée</option>
+        <option value="avantage" ${p.usage_prime === 'avantage' ? 'selected' : ''}>Avantage en nature</option>
+      </select></td>
+      <td class="num">${champ('primes', i, 'plafond_exoneration', 'number', 'placeholder="aucun"')}</td>
+      <td><select data-vue="primes" data-i="${i}" data-cle="mode_evaluation">
+        <option value="forfait" ${p.mode_evaluation === 'forfait' ? 'selected' : ''}>Montant fixe</option>
+        <option value="pourcentage" ${p.mode_evaluation === 'pourcentage' ? 'selected' : ''}>% du brut</option>
+      </select></td>
+      <td class="num">${champ('primes', i, 'valeur', 'number', 'step="0.01"')}</td>
+      ${ligneSuppr('primes')}</tr>`).join('');
+  }
+
+  function rendreEmployeur() {
+    const e = jeu.employeur;
+    $('#e-secteur').value = e.secteur_risque_at || '';
+    $('#e-taux-at').value = nb(e.taux_at_retenu);
+    $('#e-ipres').value = e.numero_ipres || '';
+    $('#e-css').value = e.numero_css || '';
+    $('#e-ipm-nom').value = e.ipm_nom || '';
+    $('#e-ipm-num').value = e.numero_ipm || '';
+    $('#e-jours').value = nb(e.jours_ouvrables_mois);
+    $('#e-cfce').value = nb(e.taux_cfce);
+    $('#e-hs1').value = nb(e.majoration_hs1);
+    $('#e-hs2').value = nb(e.majoration_hs2);
+    $('#e-nuit').value = nb(e.majoration_nuit);
+    $('#e-ferie').value = nb(e.majoration_ferie);
+  }
+
+  // ---- Saisie dans les tableaux -------------------------------------------
+  document.addEventListener('input', e => {
+    const el = e.target.closest('[data-vue][data-i][data-cle]');
+    if (!el) return;
+    const { vue, i, cle } = el.dataset;
+    const l = brouillon[vue][+i];
+    if (el.type === 'checkbox') l[cle] = el.checked;
+    else if (el.type === 'number') l[cle] = el.value === '' ? null : parseFloat(el.value);
+    else l[cle] = el.value;
+  });
+  document.addEventListener('change', e => {
+    const el = e.target.closest('select[data-vue][data-i][data-cle]');
+    if (el) brouillon[el.dataset.vue][+el.dataset.i][el.dataset.cle] = el.value;
+    if (e.target.id === 'ab-cumul' && brouillon.abattement[0])
+      brouillon.abattement[0].cumul_avec_ipres = e.target.checked;
+  });
+
+  document.addEventListener('click', async e => {
+    const ajout = e.target.closest('[data-ajout]');
+    if (ajout) {
+      const v = ajout.dataset.ajout;
+      const modeles = {
+        irpp: { borne_inf: 0, borne_sup: null, taux: 0 },
+        cotisations: { organisme: 'ipres_rg', libelle: '', taux_salarial: 0,
+                       taux_patronal: 0, plafond_mensuel: null, reserve_cadre: false },
+        famille: { nb_parts: 1, taux_reduction: 0, reduction_min: 0, reduction_max: 0 },
+        trimf: { borne_inf: 0, borne_sup: null, montant: 0, periodicite: 'annuel' },
+        primes: { code: '', libelle: '', usage_prime: 'exoneration',
+                  plafond_exoneration: null, mode_evaluation: 'forfait', valeur: 0 },
+      };
+      brouillon[v].push({ ...modeles[v] });
+      rendre();
+      return;
+    }
+
+    const sup = e.target.closest('[data-suppr]');
+    if (sup) {
+      const v = sup.dataset.suppr;
+      const ligne = sup.closest('tr');
+      const i = [...ligne.parentNode.children].indexOf(ligne);
+      brouillon[v].splice(i, 1);
+      rendre();
+      return;
+    }
+
+    const per = e.target.closest('[data-periode]');
+    if (per) { await ouvrirPeriode(per.dataset.periode); return; }
+
+    const cor = e.target.closest('[data-corriger]');
+    if (cor) { await corriger(cor.dataset.corriger); return; }
+
+    const ver = e.target.closest('[data-verifie]');
+    if (ver) { await confirmerVerifie(ver.dataset.verifie); return; }
+  });
+
+  // ---- Nouvelle période : LE geste sûr ------------------------------------
+  async function ouvrirPeriode(vue) {
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    const date = prompt(
+      "À partir de quelle date ces nouvelles valeurs s'appliquent-elles ?\n\n"
+      + "Les valeurs actuelles seront conservées pour les bulletins antérieurs : "
+      + "un bulletin déjà calculé ne changera pas.\n\nFormat : AAAA-MM-JJ",
+      aujourdhui);
+    if (!date) return;
+    try {
+      const r = await api('/api/paie/parametres/periode', { method: 'POST', body: {
+        table: TABLE[vue], date_debut: date, lignes: brouillon[vue],
+      }});
+      toast(`Nouvelle période au ${date} : ${r.lignes_posees} valeur(s) enregistrée(s).`, 'ok');
+      $('#a-la-date').value = date;
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  }
+
+  // ---- Correction sur place : réservée aux valeurs jamais utilisées -------
+  async function corriger(vue) {
+    const lignes = brouillon[vue];
+    if (!lignes.length) { toast('Aucune valeur à enregistrer.', 'warn'); return; }
+    if (!await Djigui.confirm(
+      "Corriger les valeurs de la période EN COURS ?\n\n"
+      + "À n'utiliser que si aucun bulletin n'a encore été calculé — c'est le cas des "
+      + "valeurs installées d'origine, qu'il serait absurde de « fermer » alors qu'elles "
+      + "n'ont jamais servi.\n\n"
+      + "Dès qu'un bulletin existe, Djigui refusera et vous demandera d'ouvrir une "
+      + "nouvelle période.")) return;
+    try {
+      const r = await api('/api/paie/parametres/corriger', { method: 'POST', body: {
+        table: TABLE[vue], date_debut: lignes[0].date_debut, lignes,
+      }});
+      toast(`${r.lignes_posees} valeur(s) corrigée(s).`, 'ok');
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  }
+
+  async function confirmerVerifie(vue) {
+    const lignes = brouillon[vue];
+    if (!lignes.length) return;
+    if (!await Djigui.confirm(
+      "Confirmer que ces valeurs sont conformes au texte en vigueur ?\n\n"
+      + "Vous attestez les avoir confrontées au Code général des impôts et aux barèmes "
+      + "des organismes sociaux. L'avertissement disparaîtra pour cet onglet.\n\n"
+      + "Cette confirmation est enregistrée dans le journal d'audit, à votre nom.")) return;
+    try {
+      await api('/api/paie/parametres/verifie', { method: 'POST', body: {
+        table: TABLE[vue], date_debut: lignes[0].date_debut,
+      }});
+      toast('Valeurs confirmées conformes.', 'ok');
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  }
+
+  $('#btn-enr-employeur').addEventListener('click', async () => {
+    const n = id => { const v = $(id).value; return v === '' ? 0 : parseFloat(v); };
+    const t = id => $(id).value.trim() || null;
+    try {
+      await api('/api/paie/employeur', { method: 'PUT', body: {
+        secteur_risque_at: t('#e-secteur'), taux_at_retenu: n('#e-taux-at'),
+        numero_ipres: t('#e-ipres'), numero_css: t('#e-css'),
+        ipm_nom: t('#e-ipm-nom'), numero_ipm: t('#e-ipm-num'),
+        jours_ouvrables_mois: parseInt($('#e-jours').value, 10) || 0,
+        majoration_hs1: n('#e-hs1'), majoration_hs2: n('#e-hs2'),
+        majoration_nuit: n('#e-nuit'), majoration_ferie: n('#e-ferie'),
+        taux_cfce: n('#e-cfce'),
+      }});
+      toast('Paramètres de votre entreprise enregistrés.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Onglets -------------------------------------------------------------
+  document.querySelectorAll('.tab[data-vue]').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab[data-vue]').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('[data-panneau]').forEach(p =>
+      p.hidden = p.dataset.panneau !== t.dataset.vue);
+  }));
+
+  $('#a-la-date').value = new Date().toISOString().slice(0, 10);
+  $('#a-la-date').addEventListener('change', charger);
+
+  charger();
+})();
+</script>
+</body>
+</html>

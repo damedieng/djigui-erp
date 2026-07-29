@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Comptabilité</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  /* Grille de la recherche multicritère : c'est elle qui rend le travail
+     rapide (demande explicite de l'utilisateur). Les champs se replient tout
+     seuls sur un écran étroit. */
+  .rech-grille { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px; }
+  .rech-grille label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted, #6b7280); }
+  .compte-pastille { font-family:ui-monospace, monospace; font-weight:600; }
+  .roles-lg { display:flex; flex-wrap:wrap; gap:6px; }
+  .role-chip { border:1px solid var(--border, #e5e7eb); border-radius:999px; padding:2px 10px; font-size:12px; }
+  tr.ligne-attente td { background:#fffbeb; }
+  .solde-neg { color:#b91c1c; }
+  .solde-pos { color:#166534; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Comptabilité</div>
+        <div class="topbar-date">Écran réservé au comptable</div>
+      </div>
+      <div class="topbar-right"></div>
+    </header>
+
+    <section class="content">
+      <div class="tabs" id="cpt-tabs">
+        <span class="tab active" data-tab="ranger">À ranger <span id="pastille-ranger" class="bulk-count" hidden></span></span>
+        <span class="tab" data-tab="regles">Mes règles</span>
+        <span class="tab" data-tab="comptes">Mes comptes</span>
+        <span class="tab" data-tab="livre">Grand livre</span>
+        <span class="tab" data-tab="balance">Balance</span>
+      </div>
+
+      <!-- ==================== À RANGER (la corbeille) ==================== -->
+      <div class="tab-panel" data-panel="ranger">
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-weight:600;margin-bottom:10px"><i class="ti ti-search"></i> Rechercher les opérations</div>
+          <div class="rech-grille">
+            <label>À partir du <input type="date" id="r-du"></label>
+            <label>Jusqu'au <input type="date" id="r-au"></label>
+            <label>Nature de l'opération
+              <select id="r-domaine" class="select-std">
+                <option value="">Toutes</option>
+                <option value="vente">Ventes</option>
+                <option value="achat">Achats</option>
+                <option value="encaissement">Encaissements</option>
+                <option value="decaissement">Décaissements</option>
+              </select>
+            </label>
+            <label>Client / fournisseur <select id="r-tiers" class="select-std"><option value="">Tous</option></select></label>
+            <label>Catégorie d'article <select id="r-categorie" class="select-std"><option value="">Toutes</option></select></label>
+            <label>Nature comptable
+              <select id="r-nature" class="select-std">
+                <option value="">Toutes</option>
+                <option value="marchandise">Marchandises</option>
+                <option value="matiere_premiere">Matières premières</option>
+                <option value="produit_fini">Produits fabriqués</option>
+                <option value="service">Services</option>
+              </select>
+            </label>
+            <label>Caisse <select id="r-caisse" class="select-std"><option value="">Toutes</option></select></label>
+            <label>Moyen de paiement <select id="r-moyen" class="select-std"><option value="">Tous</option></select></label>
+            <label>Montant minimum <input type="number" id="r-min" placeholder="ex. 10000"></label>
+            <label>Montant maximum <input type="number" id="r-max" placeholder="ex. 500000"></label>
+            <label>Recherche libre <input type="text" id="r-texte" placeholder="n° de pièce, nom…"></label>
+            <label>Afficher
+              <select id="r-etat" class="select-std">
+                <option value="1">Ce qui reste à ranger</option>
+                <option value="0">Tout, rangé ou non</option>
+              </select>
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn btn-primary" id="btn-chercher"><i class="ti ti-search"></i>Chercher</button>
+            <button class="btn" id="btn-vider"><i class="ti ti-filter-off"></i>Vider les critères</button>
+            <button class="btn" id="btn-ranger-tout"><i class="ti ti-wand"></i>Ranger tout le résultat</button>
+            <button class="btn" id="btn-rejouer"><i class="ti ti-refresh"></i>Rejouer ce qui est en attente</button>
+          </div>
+        </div>
+
+        <div id="bandeau-alertes" class="alert warn" hidden style="margin-bottom:12px"></div>
+
+        <!-- ⚠️ `.bulk-bar` porte déjà `[hidden]{display:none}` : ne JAMAIS
+             ajouter un display en style inline, il écraserait le hidden. -->
+        <div class="bulk-bar" id="barre-lot" hidden style="flex-wrap:wrap;margin-bottom:12px">
+          <span id="lot-compte" class="bulk-count"></span>
+          <button class="btn btn-primary" id="lot-ranger"><i class="ti ti-check"></i>Ranger la sélection</button>
+          <button class="btn" id="lot-regle"><i class="ti ti-plus"></i>Faire une règle de cette recherche</button>
+        </div>
+
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="coche-tout" title="Tout cocher"></th>
+              <th>Date</th><th>Nature</th><th>Opération</th>
+              <th class="right">Montant</th><th>État</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-ranger"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Comment ranger l'historique ?</div>
+          <ul>
+            <li>Djigui enregistre les <strong>faits</strong> : une vente, un encaissement, un achat. Il ne décide <strong>jamais</strong> de comptabilité à votre place.</li>
+            <li>Vous commencez par créer <strong>vos comptes</strong> (onglet « Mes comptes »), puis vous écrivez <strong>vos règles</strong> : « les ventes de la catégorie Boissons vont au 701 ». Vous les écrivez <strong>une seule fois</strong>.</li>
+            <li>Vous cliquez ensuite sur <strong>Ranger</strong> : les règles s'appliquent à <strong>tout l'historique déjà enregistré</strong>, y compris les pièces d'il y a six mois. Et tout ce qui sera vendu demain se rangera tout seul.</li>
+            <li>Cette page ne montre que ce qui <strong>reste à ranger</strong>. Quand elle est vide, tout est classé.</li>
+            <li>Ce qu'aucune règle ne couvre part au <strong>compte d'attente 471</strong> avec un avertissement : <strong>rien n'est jamais perdu</strong>. Écrivez la règle qui manquait puis cliquez sur <strong>Rejouer</strong>.</li>
+            <li>La recherche du haut sert à <strong>isoler</strong> ce que vous voulez traiter : une période, un client, une catégorie, un moyen de paiement… Vous cochez, vous rangez, ou vous transformez la recherche en <strong>règle permanente</strong>.</li>
+            <li>En cas de doute, <strong>c'est vous qui tranchez</strong> : vous pouvez toujours affecter un compte à la main depuis le détail d'une écriture.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== MES RÈGLES ==================== -->
+      <div class="tab-panel" data-panel="regles" hidden>
+        <div class="page-head">
+          <div style="font-weight:600;font-size:15px">Règles de rattachement</div>
+          <button class="btn btn-primary" id="btn-nouvelle-regle"><i class="ti ti-plus"></i>Nouvelle règle</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Règle</th><th>S'applique à</th><th>Critères</th>
+              <th>Compte</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-regles"><tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert une règle ?</div>
+          <ul>
+            <li>Une règle dit une seule chose : <strong>« dans cette situation, prends ce compte »</strong>.</li>
+            <li>Le <strong>rôle</strong> indique la place que le compte occupe. Pour une vente : le <em>produit</em> (ce que la vente rapporte, 701), le <em>tiers</em> (le client, 411), la <em>taxe</em> (la TVA, 4431). Pour un règlement : la <em>trésorerie</em> (caisse 571 ou banque 521).</li>
+            <li>Djigui connaît déjà tous les <strong>montants</strong> et sait qui va au débit et qui va au crédit. Votre règle ne fait que <strong>nommer les comptes</strong>.</li>
+            <li>Les critères sont <strong>facultatifs</strong> : un critère laissé vide veut dire « peu importe ». Une règle sans aucun critère est votre <strong>règle par défaut</strong>.</li>
+            <li>Vous n'avez <strong>pas à réfléchir à l'ordre</strong> : la règle la plus <strong>précise</strong> l'emporte toujours. Écrivez un défaut large, puis vos exceptions.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== MES COMPTES ==================== -->
+      <div class="tab-panel" data-panel="comptes" hidden>
+        <div class="page-head">
+          <div style="font-weight:600;font-size:15px">Plan comptable</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="btn-plan-ohada"><i class="ti ti-download"></i>Installer le plan OHADA de base</button>
+            <button class="btn btn-primary" id="btn-nouveau-compte"><i class="ti ti-plus"></i>Nouveau compte</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>N°</th><th>Libellé</th><th>Classe</th><th>Sens habituel</th>
+              <th class="right">Mouvements</th><th class="right">Solde</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-comptes"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Vos comptes, pas les nôtres</div>
+          <ul>
+            <li>Un <strong>compte</strong> est une boîte numérotée où l'on range les opérations de même nature : 571 pour la caisse, 411 pour ce que les clients doivent, 701 pour les ventes.</li>
+            <li>Djigui <strong>n'impose aucun plan</strong>. Créez les comptes dont vous avez l'habitude. Si vous préférez partir d'une base, le bouton <strong>« Installer le plan OHADA »</strong> vous en propose une trentaine — vos comptes existants ne sont pas touchés.</li>
+            <li>Le <strong>sens habituel</strong> sert seulement à repérer une anomalie dans la balance (un compte client qui deviendrait créditeur, par exemple). Il ne bloque jamais rien.</li>
+            <li>Un compte qui porte des écritures ne se supprime plus : <strong>désactivez-le</strong>. L'historique doit rester lisible.</li>
+            <li>Le compte <strong>471</strong> est le compte d'attente. Djigui y range ce qu'il ne sait pas classer, plutôt que de perdre l'opération. Il n'est pas supprimable.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== GRAND LIVRE ==================== -->
+      <div class="tab-panel" data-panel="livre" hidden>
+        <div class="page-head">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <select id="gl-compte" class="select-std" style="min-width:280px"></select>
+            <input type="date" id="gl-du" title="À partir du">
+            <input type="date" id="gl-au" title="Jusqu'au">
+            <button class="btn btn-primary" id="btn-gl"><i class="ti ti-search"></i>Afficher</button>
+          </div>
+          <div id="gl-resume" class="muted"></div>
+        </div>
+        <div class="bulk-bar" id="barre-lettrage" hidden style="flex-wrap:wrap;margin-bottom:12px">
+          <span id="lettrage-compte" class="bulk-count"></span>
+          <button class="btn" id="btn-lettrer"><i class="ti ti-link"></i>Rapprocher (lettrer)</button>
+          <button class="btn" id="btn-delettrer"><i class="ti ti-unlink"></i>Défaire le rapprochement</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px"><input type="checkbox" id="gl-coche-tout" title="Tout cocher"></th>
+              <th>Date</th><th>Journal</th><th>Libellé</th><th>Rapproché</th>
+              <th class="right">Débit</th><th class="right">Crédit</th><th class="right">Solde</th>
+            </tr></thead>
+            <tbody id="corps-gl"><tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Choisissez un compte.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire le grand livre</div>
+          <ul>
+            <li>Le grand livre montre <strong>tout ce qui est passé par un compte</strong>, dans l'ordre du temps, avec le <strong>solde qui se met à jour ligne après ligne</strong>.</li>
+            <li>C'est différent des historiques du reste de Djigui : ceux-ci sont classés par objet (ce stock, cette caisse), celui-ci est classé <strong>par compte</strong>.</li>
+            <li><strong>Rapprocher (lettrer)</strong>, c'est dire « ce règlement paie cette facture ». Cochez les lignes concernées puis cliquez : elles reçoivent la même lettre. Ce qui n'a pas de lettre est ce qui <strong>reste dû</strong>.</li>
+            <li>Un rapprochement <strong>partiel</strong> est normal : un acompte, un paiement en plusieurs fois.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== BALANCE ==================== -->
+      <div class="tab-panel" data-panel="balance" hidden>
+        <div class="page-head">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <input type="date" id="ba-du" title="À partir du">
+            <input type="date" id="ba-au" title="Jusqu'au">
+            <button class="btn btn-primary" id="btn-balance"><i class="ti ti-search"></i>Afficher</button>
+          </div>
+        </div>
+        <div id="ba-etat" style="margin-bottom:12px"></div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>N°</th><th>Compte</th>
+              <th class="right">Débit</th><th class="right">Crédit</th><th class="right">Solde</th>
+            </tr></thead>
+            <tbody id="corps-balance"><tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire la balance</div>
+          <ul>
+            <li>La balance donne, compte par compte, ce qui est entré (<strong>débit</strong>), ce qui est sorti (<strong>crédit</strong>) et ce qui reste (<strong>solde</strong>).</li>
+            <li>Le total du débit doit être <strong>exactement égal</strong> au total du crédit. C'est la vérification de base : si ce n'est pas le cas, la page l'affiche en rouge et il faut chercher pourquoi.</li>
+            <li>Un solde marqué <strong>« inhabituel »</strong> n'est pas forcément une erreur — un client qui a payé d'avance, par exemple. C'est un signal, pas un verdict.</li>
+            <li>S'il reste des opérations au <strong>compte 471</strong>, c'est qu'une règle manque. La balance vous le rappelle.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== MODALE COMPTE ==================== -->
+<div class="modal-overlay" id="modal-compte" hidden>
+  <div class="modal" style="max-width:520px">
+    <div class="card-head"><span class="card-title" id="titre-compte">Nouveau compte</span>
+      <i class="ti ti-x" data-fermer="modal-compte" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>Numéro <input type="text" id="c-numero" placeholder="ex. 701"></label>
+        <label>Libellé <input type="text" id="c-libelle" placeholder="ex. Ventes de marchandises"></label>
+        <label>Sens habituel du solde
+          <select id="c-sens" class="select-std">
+            <option value="">Non précisé</option>
+            <option value="debit">Débiteur (ce que l'on possède ou dépense)</option>
+            <option value="credit">Créditeur (ce que l'on doit ou gagne)</option>
+          </select>
+        </label>
+        <label style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="c-lettrable"> Compte de tiers (on peut y rapprocher factures et règlements)
+        </label>
+        <label style="flex-direction:row;align-items:center;gap:8px">
+          <input type="checkbox" id="c-actif" checked> Compte actif
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-compte">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-compte">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE RÈGLE ==================== -->
+<div class="modal-overlay" id="modal-regle" hidden>
+  <div class="modal" style="max-width:720px">
+    <div class="card-head"><span class="card-title" id="titre-regle">Nouvelle règle</span>
+      <i class="ti ti-x" data-fermer="modal-regle" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>Nom de la règle <input type="text" id="g-nom" placeholder="ex. Ventes de boissons"></label>
+        <label>Rôle du compte
+          <select id="g-role" class="select-std">
+            <option value="produit">Produit — ce que la vente rapporte</option>
+            <option value="charge">Charge — ce que l'achat coûte</option>
+            <option value="tiers">Tiers — le client ou le fournisseur</option>
+            <option value="taxe">Taxe — la TVA</option>
+            <option value="tresorerie">Trésorerie — la caisse ou la banque</option>
+            <option value="stock">Stock — la valeur du stock</option>
+          </select>
+        </label>
+        <label>Compte à employer <select id="g-compte" class="select-std"></select></label>
+      </div>
+      <div style="margin:14px 0 8px;font-weight:600">Dans quelle situation ?
+        <span class="muted" style="font-weight:400">— laissez vide ce qui n'a pas d'importance</span></div>
+      <div class="rech-grille">
+        <label>Nature de l'opération
+          <select id="g-domaine" class="select-std">
+            <option value="">Toutes</option>
+            <option value="vente">Ventes</option>
+            <option value="achat">Achats</option>
+            <option value="encaissement">Encaissements</option>
+            <option value="decaissement">Décaissements</option>
+          </select>
+        </label>
+        <label>Catégorie d'article <select id="g-categorie" class="select-std"><option value="">Toutes</option></select></label>
+        <label>Nature comptable
+          <select id="g-nature" class="select-std">
+            <option value="">Toutes</option>
+            <option value="marchandise">Marchandises</option>
+            <option value="matiere_premiere">Matières premières</option>
+            <option value="produit_fini">Produits fabriqués</option>
+            <option value="service">Services</option>
+          </select>
+        </label>
+        <label>Client / fournisseur <select id="g-tiers" class="select-std"><option value="">Tous</option></select></label>
+        <label>Caisse <select id="g-caisse" class="select-std"><option value="">Toutes</option></select></label>
+        <label>Moyen de paiement <select id="g-moyen" class="select-std"><option value="">Tous</option></select></label>
+        <label>Famille de règlement
+          <select id="g-famille" class="select-std">
+            <option value="">Toutes</option>
+            <option value="espece">Espèces</option>
+            <option value="mobile_money">Mobile Money</option>
+            <option value="virement">Virement</option>
+            <option value="cheque">Chèque</option>
+          </select>
+        </label>
+        <label>Taux de taxe (%) <input type="number" id="g-taux" step="0.01" placeholder="ex. 18"></label>
+        <label>Montant minimum <input type="number" id="g-min"></label>
+        <label>Montant maximum <input type="number" id="g-max"></label>
+      </div>
+      <div id="g-alerte" class="alert warn" hidden style="margin-top:12px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-regle">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-regle">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE DÉTAIL D'ÉCRITURE ==================== -->
+<div class="modal-overlay" id="modal-ecriture" hidden>
+  <div class="modal" style="max-width:820px">
+    <div class="card-head"><span class="card-title" id="titre-ecriture">Écriture</span>
+      <i class="ti ti-x" data-fermer="modal-ecriture" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div id="ecriture-entete" class="muted" style="margin-bottom:10px"></div>
+      <table class="table">
+        <thead><tr><th>Compte</th><th>Libellé</th><th class="right">Débit</th><th class="right">Crédit</th></tr></thead>
+        <tbody id="corps-ecriture"></tbody>
+      </table>
+      <div id="ecriture-aide" class="aide" style="margin-top:12px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> Lire une écriture</div>
+        <ul>
+          <li>Une écriture raconte la même opération en langage comptable. Le total de la colonne <strong>Débit</strong> est toujours égal à celui de la colonne <strong>Crédit</strong>.</li>
+          <li>Une ligne au compte <strong>471</strong> signifie qu'une règle manquait. Choisissez le bon compte dans la liste : l'écriture redevient complète.</li>
+          <li>Une écriture juste ne se modifie pas : on la <strong>contre-passe</strong> (on écrit l'inverse). L'historique reste intact.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="btn-contrepasser"><i class="ti ti-arrow-back-up"></i>Contre-passer</button>
+      <button class="btn" data-fermer="modal-ecriture">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, fmt, esc, dateFr, toast } = Djigui;
+
+  // Référentiels chargés une fois : ils remplissent aussi bien les filtres de
+  // recherche que les critères d'une règle (mêmes listes, mêmes valeurs).
+  let tiers = [], categories = [], caisses = [], moyens = [], comptes = [], regles = [];
+  let operations = [], glCourant = null, editionRegle = null, editionCompte = null;
+
+  const LIB_ROLE = { produit: 'Produit', charge: 'Charge', tiers: 'Client / fournisseur',
+                     taxe: 'Taxe', tresorerie: 'Trésorerie', stock: 'Stock' };
+  const LIB_DOMAINE = { vente: 'Ventes', achat: 'Achats',
+                        encaissement: 'Encaissements', decaissement: 'Décaissements' };
+  const LIB_NATURE = { marchandise: 'Marchandises', matiere_premiere: 'Matières premières',
+                       produit_fini: 'Produits fabriqués', service: 'Services' };
+
+  // ---- Onglets -----------------------------------------------------------
+  $('#cpt-tabs').addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    document.querySelectorAll('#cpt-tabs .tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== t.dataset.tab; });
+    if (t.dataset.tab === 'balance') chargerBalance();
+    if (t.dataset.tab === 'regles') rendreRegles();
+    if (t.dataset.tab === 'comptes') rendreComptes();
+  });
+
+  document.querySelectorAll('[data-fermer]').forEach(b =>
+    b.addEventListener('click', () => { $('#' + b.dataset.fermer).hidden = true; }));
+
+  const optionsDe = (liste, valeur, libelle) =>
+    liste.map(x => `<option value="${esc(x[valeur])}">${esc(x[libelle])}</option>`).join('');
+
+  function remplirSelect(id, liste, valeur, libelle, premier) {
+    const el = $(id);
+    if (!el) return;
+    el.innerHTML = `<option value="">${premier}</option>` + optionsDe(liste, valeur, libelle);
+  }
+
+  // ---- Chargement initial ------------------------------------------------
+  async function demarrer() {
+    try {
+      [tiers, categories, caisses, moyens, comptes, regles] = await Promise.all([
+        api('/api/tiers'), api('/api/categories'), api('/api/caisses'),
+        api('/api/moyens-paiement'), api('/api/comptes'), api('/api/regles-comptables'),
+      ]);
+    } catch (e) { toast('Chargement impossible : ' + e.message, 'danger'); return; }
+
+    for (const [id, premier] of [['#r-tiers', 'Tous'], ['#g-tiers', 'Tous']])
+      remplirSelect(id, tiers, 'id', 'nom', premier);
+    for (const [id, premier] of [['#r-categorie', 'Toutes'], ['#g-categorie', 'Toutes']])
+      remplirSelect(id, categories, 'id', 'nom', premier);
+    for (const [id, premier] of [['#r-caisse', 'Toutes'], ['#g-caisse', 'Toutes']])
+      remplirSelect(id, caisses, 'id', 'nom', premier);
+    for (const [id, premier] of [['#r-moyen', 'Tous'], ['#g-moyen', 'Tous']])
+      remplirSelect(id, moyens, 'id', 'nom', premier);
+
+    rendreComptes();
+    rendreRegles();
+    await chercher();
+  }
+
+  // ---- Corbeille « À ranger » -------------------------------------------
+  function criteresRecherche() {
+    const v = id => { const x = $(id).value.trim(); return x === '' ? null : x; };
+    const n = id => { const x = $(id).value.trim(); return x === '' ? null : Number(x); };
+    return {
+      du: v('#r-du'), au: v('#r-au'), domaine: v('#r-domaine'), tiers_id: v('#r-tiers'),
+      categorie_id: v('#r-categorie'), nature_comptable: v('#r-nature'),
+      caisse_id: v('#r-caisse'), moyen_paiement_id: v('#r-moyen'),
+      montant_min: n('#r-min'), montant_max: n('#r-max'), texte: v('#r-texte'),
+      a_ranger_seulement: $('#r-etat').value === '1',
+    };
+  }
+
+  function versQuery(c) {
+    const p = new URLSearchParams();
+    for (const [k, val] of Object.entries(c)) {
+      if (val === null || val === undefined || val === '') continue;
+      p.set(k, String(val));
+    }
+    return p.toString();
+  }
+
+  async function chercher() {
+    const corps = $('#corps-ranger');
+    corps.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Recherche…</td></tr>`;
+    try {
+      operations = await api('/api/comptabilite/operations?' + versQuery(criteresRecherche()));
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); return; }
+    rendreOperations();
+  }
+
+  function rendreOperations() {
+    const corps = $('#corps-ranger');
+    const pastille = $('#pastille-ranger');
+    const restant = operations.filter(o => !o.rattachee).length;
+    pastille.textContent = restant;
+    pastille.hidden = restant === 0;
+
+    if (!operations.length) {
+      corps.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
+        <i class="ti ti-mood-check" style="font-size:22px"></i><br>
+        Rien à ranger : tout l'historique correspondant est classé.</td></tr>`;
+      majBarreLot();
+      return;
+    }
+    corps.innerHTML = operations.map(o => {
+      const etat = o.rattachee
+        ? (o.incomplete
+            ? `<span class="badge badge-warn">En attente d'un compte</span>`
+            : `<span class="badge badge-ok">Rangé</span>`)
+        : `<span class="badge">À ranger</span>`;
+      const actions = o.ecriture_id
+        ? `<button class="btn btn-sm" data-voir="${esc(o.ecriture_id)}"><i class="ti ti-eye"></i>Voir l'écriture</button>`
+        : '';
+      return `<tr class="${o.incomplete ? 'ligne-attente' : ''}">
+        <td>${o.rattachee ? '' : `<input type="checkbox" class="coche-op" data-type="${esc(o.origine_type)}" data-id="${esc(o.id)}">`}</td>
+        <td>${dateFr(o.date)}</td>
+        <td>${esc(LIB_DOMAINE[o.domaine] || o.domaine)}</td>
+        <td>${esc(o.libelle)}</td>
+        <td class="right">${fmt(o.montant)}</td>
+        <td>${etat}</td>
+        <td class="right">${actions}</td>
+      </tr>`;
+    }).join('');
+    majBarreLot();
+  }
+
+  function selection() {
+    return [...document.querySelectorAll('.coche-op:checked')]
+      .map(c => ({ origine_type: c.dataset.type, id: c.dataset.id }));
+  }
+
+  function majBarreLot() {
+    const n = selection().length;
+    $('#barre-lot').hidden = n === 0;
+    $('#lot-compte').textContent = n + (n > 1 ? ' opérations sélectionnées' : ' opération sélectionnée');
+  }
+
+  $('#corps-ranger').addEventListener('change', e => {
+    if (e.target.classList.contains('coche-op')) majBarreLot();
+  });
+  $('#coche-tout').addEventListener('change', e => {
+    document.querySelectorAll('.coche-op').forEach(c => { c.checked = e.target.checked; });
+    majBarreLot();
+  });
+  $('#corps-ranger').addEventListener('click', e => {
+    const b = e.target.closest('[data-voir]');
+    if (b) ouvrirEcriture(b.dataset.voir);
+  });
+
+  function afficherRapport(r) {
+    const bandeau = $('#bandeau-alertes');
+    const bouts = [];
+    if (r.creees) bouts.push(`${r.creees} écriture(s) créée(s).`);
+    if (r.deja_rattachees) bouts.push(`${r.deja_rattachees} déjà rangée(s), ignorée(s).`);
+    if (r.incompletes) bouts.push(`${r.incompletes} en attente d'un compte.`);
+    toast(bouts.join(' ') || 'Rien à ranger.', r.incompletes ? 'warn' : 'ok');
+    if (r.alertes && r.alertes.length) {
+      bandeau.innerHTML = `<strong>Il manque des règles :</strong><ul style="margin:6px 0 0 18px">`
+        + r.alertes.map(a => `<li>${esc(a)}</li>`).join('')
+        + `</ul><div style="margin-top:8px">Écrivez la règle qui manque dans l'onglet
+           « Mes règles », puis cliquez sur <strong>Rejouer ce qui est en attente</strong>.</div>`;
+      bandeau.hidden = false;
+    } else {
+      bandeau.hidden = true;
+    }
+  }
+
+  async function ranger(operationsChoisies) {
+    try {
+      const r = await api('/api/comptabilite/rattacher',
+        { method: 'POST', body: { operations: operationsChoisies } });
+      afficherRapport(r);
+      await chercher();
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  }
+
+  $('#lot-ranger').addEventListener('click', () => {
+    const s = selection();
+    if (!s.length) return;
+    ranger(s);
+  });
+
+  $('#btn-ranger-tout').addEventListener('click', async () => {
+    const c = criteresRecherche();
+    const combien = operations.filter(o => !o.rattachee).length;
+    if (!combien) { toast('Rien à ranger dans ce résultat.', 'warn'); return; }
+    if (!await Djigui.confirm(`Ranger les ${combien} opérations de ce résultat ?\n\n`
+      + `Vos règles vont être appliquées. Ce qui n'est couvert par aucune règle ira `
+      + `au compte d'attente 471, avec un avertissement — rien ne sera perdu.`)) return;
+    try {
+      const r = await api('/api/comptabilite/rattacher-tout', { method: 'POST', body: c });
+      afficherRapport(r);
+      await chercher();
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  });
+
+  $('#btn-rejouer').addEventListener('click', async () => {
+    if (!await Djigui.confirm(`Rejouer les opérations restées en compte d'attente ?\n\n`
+      + `À faire après avoir ajouté la règle qui manquait. Les écritures déjà `
+      + `complètes ne sont pas touchées.`)) return;
+    try {
+      const r = await api('/api/comptabilite/rejouer-incompletes', { method: 'POST', body: {} });
+      afficherRapport(r);
+      await chercher();
+    } catch (e) { toast('Erreur : ' + e.message, 'danger'); }
+  });
+
+  $('#btn-chercher').addEventListener('click', chercher);
+  $('#r-texte').addEventListener('keydown', e => { if (e.key === 'Enter') chercher(); });
+  $('#btn-vider').addEventListener('click', () => {
+    ['#r-du', '#r-au', '#r-domaine', '#r-tiers', '#r-categorie', '#r-nature',
+     '#r-caisse', '#r-moyen', '#r-min', '#r-max', '#r-texte'].forEach(id => { $(id).value = ''; });
+    $('#r-etat').value = '1';
+    chercher();
+  });
+
+  // Transformer la recherche en règle : le geste qui fait gagner le temps.
+  $('#lot-regle').addEventListener('click', () => {
+    const c = criteresRecherche();
+    ouvrirRegle(null, {
+      domaine: c.domaine, categorie_id: c.categorie_id, nature_comptable: c.nature_comptable,
+      tiers_id: c.tiers_id, caisse_id: c.caisse_id, moyen_paiement_id: c.moyen_paiement_id,
+      montant_min: c.montant_min, montant_max: c.montant_max,
+    });
+  });
+
+  // ---- Comptes -----------------------------------------------------------
+  function rendreComptes() {
+    const corps = $('#corps-comptes');
+    if (!comptes.length) {
+      corps.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
+        Aucun compte pour l'instant. Créez les vôtres, ou installez le plan OHADA de base.</td></tr>`;
+    } else {
+      corps.innerHTML = comptes.map(c => `<tr>
+        <td class="compte-pastille">${esc(c.numero)}</td>
+        <td>${esc(c.libelle)}${c.actif ? '' : ' <span class="badge">inactif</span>'}</td>
+        <td>${c.classe ?? ''}</td>
+        <td>${c.sens_normal === 'debit' ? 'Débiteur' : c.sens_normal === 'credit' ? 'Créditeur' : ''}</td>
+        <td class="right">${fmt(c.nb_lignes)}</td>
+        <td class="right ${c.solde < 0 ? 'solde-neg' : 'solde-pos'}">${fmt(c.solde)}</td>
+        <td class="right">
+          <button class="btn btn-sm" data-mod-compte="${esc(c.numero)}"><i class="ti ti-pencil"></i></button>
+          <button class="btn btn-sm btn-danger" data-sup-compte="${esc(c.numero)}"><i class="ti ti-trash"></i></button>
+        </td></tr>`).join('');
+    }
+    // Les listes de comptes des autres écrans suivent.
+    remplirSelect('#g-compte', comptes.filter(c => c.actif),
+                  'numero', 'libelle', 'Choisir un compte');
+    $('#g-compte').innerHTML = `<option value="">Choisir un compte</option>` +
+      comptes.filter(c => c.actif).map(c =>
+        `<option value="${esc(c.numero)}">${esc(c.numero)} — ${esc(c.libelle)}</option>`).join('');
+    const gl = $('#gl-compte');
+    const garde = gl.value;
+    gl.innerHTML = `<option value="">Choisir un compte…</option>` + comptes.map(c =>
+      `<option value="${esc(c.numero)}">${esc(c.numero)} — ${esc(c.libelle)}</option>`).join('');
+    if (garde) gl.value = garde;
+  }
+
+  async function rechargerComptes() {
+    comptes = await api('/api/comptes');
+    rendreComptes();
+  }
+
+  function ouvrirCompte(numero) {
+    editionCompte = numero || null;
+    const c = numero ? comptes.find(x => x.numero === numero) : null;
+    $('#titre-compte').textContent = c ? `Compte ${c.numero}` : 'Nouveau compte';
+    $('#c-numero').value = c ? c.numero : '';
+    $('#c-numero').disabled = !!c;   // le numéro est la clé : il ne change plus
+    $('#c-libelle').value = c ? c.libelle : '';
+    $('#c-sens').value = c ? (c.sens_normal || '') : '';
+    $('#c-lettrable').checked = c ? c.lettrable : false;
+    $('#c-actif').checked = c ? c.actif : true;
+    $('#modal-compte').hidden = false;
+  }
+
+  $('#btn-nouveau-compte').addEventListener('click', () => ouvrirCompte(null));
+  $('#corps-comptes').addEventListener('click', async e => {
+    const mod = e.target.closest('[data-mod-compte]');
+    if (mod) return ouvrirCompte(mod.dataset.modCompte);
+    const sup = e.target.closest('[data-sup-compte]');
+    if (!sup) return;
+    const num = sup.dataset.supCompte;
+    if (!await Djigui.confirm(`Supprimer le compte ${num} ?`)) return;
+    try {
+      await api('/api/comptes/' + encodeURIComponent(num), { method: 'DELETE' });
+      toast('Compte supprimé.', 'ok');
+      await rechargerComptes();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-enr-compte').addEventListener('click', async () => {
+    const corps = {
+      numero: $('#c-numero').value.trim(),
+      libelle: $('#c-libelle').value.trim(),
+      sens_normal: $('#c-sens').value || null,
+      lettrable: $('#c-lettrable').checked,
+      actif: $('#c-actif').checked,
+    };
+    if (!corps.numero || !corps.libelle) { toast('Numéro et libellé sont obligatoires.', 'warn'); return; }
+    try {
+      if (editionCompte) {
+        await api('/api/comptes/' + encodeURIComponent(editionCompte), { method: 'PUT', body: corps });
+      } else {
+        await api('/api/comptes', { method: 'POST', body: corps });
+      }
+      $('#modal-compte').hidden = true;
+      toast('Compte enregistré.', 'ok');
+      await rechargerComptes();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-plan-ohada').addEventListener('click', async () => {
+    if (!await Djigui.confirm(`Installer le plan comptable OHADA de base ?\n\n`
+      + `Une trentaine de comptes usuels seront ajoutés. Vos comptes existants `
+      + `ne seront pas modifiés.`)) return;
+    try {
+      const r = await api('/api/comptes/plan-ohada', { method: 'POST' });
+      toast(r.ajoutes ? `${r.ajoutes} comptes ajoutés.` : 'Ces comptes existaient déjà.', 'ok');
+      await rechargerComptes();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Règles ------------------------------------------------------------
+  function resumeCriteres(r) {
+    const bouts = [];
+    if (r.domaine) bouts.push(LIB_DOMAINE[r.domaine] || r.domaine);
+    if (r.categorie_id) bouts.push('catégorie ' + (categories.find(c => c.id === r.categorie_id)?.nom || '?'));
+    if (r.nature_comptable) bouts.push(LIB_NATURE[r.nature_comptable] || r.nature_comptable);
+    if (r.tiers_id) bouts.push(tiers.find(t => t.id === r.tiers_id)?.nom || '?');
+    if (r.caisse_id) bouts.push('caisse ' + (caisses.find(c => c.id === r.caisse_id)?.nom || '?'));
+    if (r.moyen_paiement_id) bouts.push(moyens.find(m => m.id === r.moyen_paiement_id)?.nom || '?');
+    if (r.famille_paiement) bouts.push(r.famille_paiement.replace('_', ' '));
+    if (r.taux_taxe != null) bouts.push('taxe ' + r.taux_taxe + ' %');
+    if (r.montant_min != null) bouts.push('≥ ' + fmt(r.montant_min));
+    if (r.montant_max != null) bouts.push('≤ ' + fmt(r.montant_max));
+    return bouts.length
+      ? bouts.map(b => `<span class="role-chip">${esc(b)}</span>`).join(' ')
+      : `<span class="muted">Toutes les situations (règle par défaut)</span>`;
+  }
+
+  function rendreRegles() {
+    const corps = $('#corps-regles');
+    if (!regles.length) {
+      corps.innerHTML = `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">
+        Aucune règle. Créez-en une : Djigui saura alors où ranger vos opérations.</td></tr>`;
+      return;
+    }
+    corps.innerHTML = regles.map(r => `<tr>
+      <td>${esc(r.nom)}${r.actif ? '' : ' <span class="badge">inactive</span>'}</td>
+      <td>${esc(LIB_ROLE[r.role] || r.role)}</td>
+      <td><div class="roles-lg">${resumeCriteres(r)}</div></td>
+      <td class="compte-pastille">${esc(r.compte_numero)} — ${esc(r.compte_libelle)}</td>
+      <td class="right">
+        <button class="btn btn-sm" data-mod-regle="${esc(r.id)}"><i class="ti ti-pencil"></i></button>
+        <button class="btn btn-sm btn-danger" data-sup-regle="${esc(r.id)}"><i class="ti ti-trash"></i></button>
+      </td></tr>`).join('');
+  }
+
+  function ouvrirRegle(id, prefill) {
+    editionRegle = id || null;
+    const r = id ? regles.find(x => x.id === id) : (prefill || {});
+    $('#titre-regle').textContent = id ? 'Modifier la règle' : 'Nouvelle règle';
+    $('#g-nom').value = r.nom || '';
+    $('#g-role').value = r.role || 'produit';
+    $('#g-compte').value = r.compte_numero || '';
+    $('#g-domaine').value = r.domaine || '';
+    $('#g-categorie').value = r.categorie_id || '';
+    $('#g-nature').value = r.nature_comptable || '';
+    $('#g-tiers').value = r.tiers_id || '';
+    $('#g-caisse').value = r.caisse_id || '';
+    $('#g-moyen').value = r.moyen_paiement_id || '';
+    $('#g-famille').value = r.famille_paiement || '';
+    $('#g-taux').value = r.taux_taxe ?? '';
+    $('#g-min').value = r.montant_min ?? '';
+    $('#g-max').value = r.montant_max ?? '';
+    $('#g-alerte').hidden = true;
+    if (!comptes.length) {
+      $('#g-alerte').textContent = "Créez d'abord au moins un compte (onglet « Mes comptes »).";
+      $('#g-alerte').hidden = false;
+    }
+    $('#modal-regle').hidden = false;
+  }
+
+  $('#btn-nouvelle-regle').addEventListener('click', () => ouvrirRegle(null));
+  $('#corps-regles').addEventListener('click', async e => {
+    const mod = e.target.closest('[data-mod-regle]');
+    if (mod) return ouvrirRegle(mod.dataset.modRegle);
+    const sup = e.target.closest('[data-sup-regle]');
+    if (!sup) return;
+    if (!await Djigui.confirm(`Supprimer cette règle ?\n\n`
+      + `Les écritures déjà produites ne bougent pas : elles sont votre historique.`)) return;
+    try {
+      await api('/api/regles-comptables/' + sup.dataset.supRegle, { method: 'DELETE' });
+      regles = await api('/api/regles-comptables');
+      rendreRegles();
+      toast('Règle supprimée.', 'ok');
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-enr-regle').addEventListener('click', async () => {
+    const v = id => { const x = $(id).value.trim(); return x === '' ? null : x; };
+    const n = id => { const x = $(id).value.trim(); return x === '' ? null : Number(x); };
+    const corps = {
+      nom: $('#g-nom').value.trim(), role: $('#g-role').value,
+      compte_numero: $('#g-compte').value,
+      domaine: v('#g-domaine'), categorie_id: v('#g-categorie'),
+      nature_comptable: v('#g-nature'), tiers_id: v('#g-tiers'),
+      caisse_id: v('#g-caisse'), moyen_paiement_id: v('#g-moyen'),
+      famille_paiement: v('#g-famille'), taux_taxe: n('#g-taux'),
+      montant_min: n('#g-min'), montant_max: n('#g-max'),
+      actif: true,
+    };
+    if (!corps.nom) { toast('Donnez un nom à la règle.', 'warn'); return; }
+    if (!corps.compte_numero) { toast('Choisissez le compte à employer.', 'warn'); return; }
+    try {
+      if (editionRegle) await api('/api/regles-comptables/' + editionRegle, { method: 'PUT', body: corps });
+      else await api('/api/regles-comptables', { method: 'POST', body: corps });
+      $('#modal-regle').hidden = true;
+      regles = await api('/api/regles-comptables');
+      rendreRegles();
+      toast('Règle enregistrée. Pensez à « Ranger » ou « Rejouer ».', 'ok');
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Détail d'une écriture --------------------------------------------
+  let ecritureCourante = null;
+
+  async function ouvrirEcriture(id) {
+    try { ecritureCourante = await api('/api/comptabilite/ecritures/' + id); }
+    catch (e) { toast(e.message, 'danger'); return; }
+    const e = ecritureCourante;
+    $('#titre-ecriture').textContent = e.libelle;
+    $('#ecriture-entete').textContent =
+      `${dateFr(e.date)} · journal ${e.journal_code} · exercice ${e.exercice}`
+      + (e.complete ? '' : ' · en attente d\'un compte');
+    const options = comptes.filter(c => c.actif).map(c =>
+      `<option value="${esc(c.numero)}">${esc(c.numero)} — ${esc(c.libelle)}</option>`).join('');
+    $('#corps-ecriture').innerHTML = e.lignes.map(l => {
+      const enAttente = l.compte_numero === '471';
+      const cellule = enAttente
+        ? `<select class="select-std chg-compte" data-ligne="${esc(l.id)}">
+             <option value="">Choisir le bon compte…</option>${options}</select>`
+        : `<span class="compte-pastille">${esc(l.compte_numero)}</span> ${esc(l.compte_libelle)}`;
+      return `<tr class="${enAttente ? 'ligne-attente' : ''}">
+        <td>${cellule}</td>
+        <td>${esc(l.libelle || '')}</td>
+        <td class="right">${l.debit ? fmt(l.debit) : ''}</td>
+        <td class="right">${l.credit ? fmt(l.credit) : ''}</td></tr>`;
+    }).join('') + `<tr style="font-weight:600">
+        <td colspan="2">Total</td>
+        <td class="right">${fmt(e.total_debit)}</td>
+        <td class="right">${fmt(e.total_credit)}</td></tr>`;
+    $('#modal-ecriture').hidden = false;
+  }
+
+  $('#corps-ecriture').addEventListener('change', async ev => {
+    const sel = ev.target.closest('.chg-compte');
+    if (!sel || !sel.value) return;
+    try {
+      await api('/api/comptabilite/lignes/' + sel.dataset.ligne + '/compte',
+        { method: 'POST', body: { compte_numero: sel.value } });
+      toast('Compte affecté.', 'ok');
+      await ouvrirEcriture(ecritureCourante.id);
+      await chercher();
+      await rechargerComptes();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-contrepasser').addEventListener('click', async () => {
+    if (!ecritureCourante) return;
+    if (!await Djigui.confirm(`Contre-passer cette écriture ?\n\n`
+      + `L'écriture d'origine n'est pas effacée : Djigui en écrit une seconde, `
+      + `à l'envers, qui l'annule. C'est la façon correcte de corriger.`)) return;
+    try {
+      await api('/api/comptabilite/ecritures/' + ecritureCourante.id + '/contrepasser',
+        { method: 'POST', body: { motif: 'correction' } });
+      $('#modal-ecriture').hidden = true;
+      toast('Écriture contre-passée.', 'ok');
+      await chercher();
+      await rechargerComptes();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Grand livre -------------------------------------------------------
+  async function chargerGrandLivre() {
+    const numero = $('#gl-compte').value;
+    if (!numero) { toast('Choisissez un compte.', 'warn'); return; }
+    const p = new URLSearchParams();
+    if ($('#gl-du').value) p.set('du', $('#gl-du').value);
+    if ($('#gl-au').value) p.set('au', $('#gl-au').value);
+    try { glCourant = await api('/api/comptabilite/grand-livre/' + encodeURIComponent(numero) + '?' + p); }
+    catch (e) { toast(e.message, 'danger'); return; }
+    const g = glCourant;
+    $('#gl-resume').textContent =
+      `Débit ${fmt(g.total_debit)} · Crédit ${fmt(g.total_credit)} · Solde ${fmt(g.solde_final)}`;
+    $('#corps-gl').innerHTML = g.mouvements.length
+      ? g.mouvements.map(m => `<tr>
+          <td><input type="checkbox" class="coche-gl" data-ligne="${esc(m.ligne_id)}"></td>
+          <td>${dateFr(m.date)}</td>
+          <td>${esc(m.journal_code)}</td>
+          <td>${esc(m.libelle)}${m.tiers_nom ? ' — ' + esc(m.tiers_nom) : ''}</td>
+          <td>${m.lettrage ? `<span class="badge badge-ok">${esc(m.lettrage)}</span>` : ''}</td>
+          <td class="right">${m.debit ? fmt(m.debit) : ''}</td>
+          <td class="right">${m.credit ? fmt(m.credit) : ''}</td>
+          <td class="right">${fmt(m.solde)}</td></tr>`).join('')
+      : `<tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Aucun mouvement sur ce compte.</td></tr>`;
+    majBarreLettrage();
+  }
+
+  function majBarreLettrage() {
+    const n = document.querySelectorAll('.coche-gl:checked').length;
+    $('#barre-lettrage').hidden = n === 0;
+    $('#lettrage-compte').textContent = n + (n > 1 ? ' lignes sélectionnées' : ' ligne sélectionnée');
+  }
+
+  $('#btn-gl').addEventListener('click', chargerGrandLivre);
+  $('#gl-compte').addEventListener('change', chargerGrandLivre);
+  $('#corps-gl').addEventListener('change', e => {
+    if (e.target.classList.contains('coche-gl')) majBarreLettrage();
+  });
+  $('#gl-coche-tout').addEventListener('change', e => {
+    document.querySelectorAll('.coche-gl').forEach(c => { c.checked = e.target.checked; });
+    majBarreLettrage();
+  });
+
+  const lignesGlChoisies = () =>
+    [...document.querySelectorAll('.coche-gl:checked')].map(c => c.dataset.ligne);
+
+  $('#btn-lettrer').addEventListener('click', async () => {
+    const lignes = lignesGlChoisies();
+    if (lignes.length < 2) { toast('Sélectionnez au moins deux lignes à rapprocher.', 'warn'); return; }
+    try {
+      const r = await api('/api/comptabilite/lettrer', { method: 'POST', body: { lignes } });
+      toast('Lignes rapprochées sous la lettre ' + r.code + '.', 'ok');
+      await chargerGrandLivre();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-delettrer').addEventListener('click', async () => {
+    const lignes = lignesGlChoisies();
+    if (!lignes.length) return;
+    try {
+      await api('/api/comptabilite/delettrer', { method: 'POST', body: { lignes } });
+      toast('Rapprochement défait.', 'ok');
+      await chargerGrandLivre();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Balance -----------------------------------------------------------
+  async function chargerBalance() {
+    const p = new URLSearchParams();
+    if ($('#ba-du').value) p.set('du', $('#ba-du').value);
+    if ($('#ba-au').value) p.set('au', $('#ba-au').value);
+    let b;
+    try { b = await api('/api/comptabilite/balance?' + p); }
+    catch (e) { toast(e.message, 'danger'); return; }
+
+    const etat = $('#ba-etat');
+    const bouts = [];
+    if (b.equilibree) {
+      bouts.push(`<div class="alert ok">La balance est équilibrée :
+        ${fmt(b.total_debit)} au débit comme au crédit. Tout est cohérent.</div>`);
+    } else {
+      bouts.push(`<div class="alert danger"><strong>La balance n'est pas équilibrée</strong> :
+        ${fmt(b.total_debit)} au débit contre ${fmt(b.total_credit)} au crédit. Cela ne devrait
+        jamais arriver — signalez-le.</div>`);
+    }
+    if (b.nb_incompletes) {
+      bouts.push(`<div class="alert warn">${b.nb_incompletes} écriture(s) attendent encore un compte
+        (compte 471). Écrivez la règle qui manque, puis « Rejouer » depuis l'onglet « À ranger ».</div>`);
+    }
+    etat.innerHTML = bouts.join('');
+
+    $('#corps-balance').innerHTML = b.lignes.length
+      ? b.lignes.map(l => `<tr>
+          <td class="compte-pastille">${esc(l.numero)}</td>
+          <td>${esc(l.libelle)}${l.solde_anormal
+            ? ` <span class="badge badge-warn" title="Ce compte a un solde dans le sens inverse de son habitude. Ce n'est pas forcément une erreur.">solde inhabituel</span>` : ''}</td>
+          <td class="right">${fmt(l.debit)}</td>
+          <td class="right">${fmt(l.credit)}</td>
+          <td class="right ${l.solde < 0 ? 'solde-neg' : 'solde-pos'}">${fmt(l.solde)}</td></tr>`).join('')
+        + `<tr style="font-weight:600"><td colspan="2">Total</td>
+           <td class="right">${fmt(b.total_debit)}</td>
+           <td class="right">${fmt(b.total_credit)}</td><td></td></tr>`
+      : `<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">
+           Aucune écriture pour l'instant. Rangez d'abord votre historique.</td></tr>`;
+  }
+
+  $('#btn-balance').addEventListener('click', chargerBalance);
+
+  demarrer();
+})();
+</script>
+</body>
+</html>

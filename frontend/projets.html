@@ -6,20 +6,10 @@
 <title>Djigui · Projets</title>
 <link rel="icon" href="assets/logo-djigui.png">
 <link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
-<link rel="stylesheet" href="styles.css?v=19">
-<style>
-.proj-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.proj-carte { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow); padding: 0; overflow: hidden; cursor: pointer; transition: box-shadow .15s, transform .1s; }
-.proj-carte:hover { box-shadow: 0 4px 14px rgba(20,40,30,.1); transform: translateY(-1px); }
-.proj-bandeau { height: 6px; background: var(--brand); }
-.proj-corps { padding: 16px 18px; }
-.proj-nom { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
-.proj-meta { font-size: 12.5px; color: var(--text-2); display: flex; flex-direction: column; gap: 3px; margin: 8px 0 12px; }
-.proj-meta i { width: 16px; color: var(--text-muted); }
-.barre { height: 8px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
-.barre > div { height: 100%; background: var(--brand); border-radius: 6px; }
-</style>
+<link rel="stylesheet" href="styles.css?v=33">
+<!-- Les styles de cartes (.proj-grille / .proj-carte…) sont désormais dans
+     styles.css : l'écran des marchés reprend la même présentation, et une
+     définition unique évite que les deux divergent. -->
 </head>
 <body>
 <div class="app">
@@ -93,7 +83,7 @@
   </div>
 </div>
 
-<script src="assets/app.js?v=9"></script>
+<script src="assets/app.js?v=16"></script>
 <script>
 const STATUT_PROJ = { planifie:['#4a72a8','Planifié'], en_cours:['#16794f','En cours'],
   suspendu:['#9a6a12','Suspendu'], cloture:['#5c6a61','Clôturé'] };

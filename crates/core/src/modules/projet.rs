@@ -333,6 +333,21 @@ pub struct Tache {
     /// Nombre de jours (fin_calcule − debut_calcule, inclusif) ; 0 si indéfini.
     #[serde(default)]
     pub nb_jours: i64,
+    /// Jours de retard. Pour une **activité feuille** : sa fin prévue est passée
+    /// et elle n'est pas terminée. Pour une **activité parente** : le plus grand
+    /// retard de sa descendance — sans quoi replier une branche ferait
+    /// disparaître le retard de l'écran.
+    ///
+    /// ⚠️ Définition **strictement alignée** sur `notification::activites_en_retard`
+    /// (feuille, `statut <> terminee`, `date_fin_prevue < aujourd'hui`) : la
+    /// cloche et le planning ne doivent jamais se contredire.
+    /// **Signalement seulement** — aucune date n'est recalculée (barrière « cascade »).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retard_jours: Option<i64>,
+    /// Combien d'activités feuilles en retard sous celle-ci (elle-même comprise
+    /// si c'est une feuille). Sert à dire « 3 activités en retard » au survol.
+    #[serde(default)]
+    pub nb_en_retard: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -385,6 +400,10 @@ fn ligne_tache(r: &rusqlite::Row) -> rusqlite::Result<Tache> {
         fin_calcule: None,
         avancement_calcule: 0,
         nb_jours: 0,
+        // Le retard se calcule dans `enrichir` : il dépend de la hiérarchie
+        // entière, pas d'une ligne isolée.
+        retard_jours: None,
+        nb_en_retard: 0,
     })
 }
 
@@ -459,6 +478,42 @@ fn enrichir(taches: &mut [Tache]) {
     for &r in &roots {
         calc_rollup(r, &children, taches, &mut budget, &mut debut, &mut fin, &mut av);
     }
+    // --- Retard ---
+    // Il se calcule sur les FEUILLES, puis remonte : une parente porte le plus
+    // grand retard de sa descendance, sinon replier une branche escamoterait le
+    // retard. Le tri par niveau décroissant garantit qu'un enfant est traité
+    // avant son parent, sans récursion supplémentaire.
+    let today = crate::now()[..10].to_string();
+    let mut retard = vec![None::<i64>; n];
+    let mut nb_retard = vec![0i64; n];
+    for i in 0..n {
+        if !children[i].is_empty() {
+            continue;
+        }
+        let en_retard = taches[i].statut != StatutTache::Terminee.as_str()
+            && taches[i]
+                .date_fin_prevue
+                .as_deref()
+                .is_some_and(|f| f < today.as_str());
+        if en_retard {
+            // `jours_entre` compte les bornes ; le retard s'exprime en jours
+            // écoulés DEPUIS l'échéance : une fin prévue hier = 1 jour.
+            let f = taches[i].date_fin_prevue.clone();
+            retard[i] = Some((jours_entre(&f, &Some(today.clone())) - 1).max(0));
+            nb_retard[i] = 1;
+        }
+    }
+    let mut ordre: Vec<usize> = (0..n).collect();
+    ordre.sort_by_key(|&i| std::cmp::Reverse(niveau[i]));
+    for &i in &ordre {
+        if let Some(&p) = taches[i].tache_parente_id.as_ref().and_then(|p| idx.get(p)) {
+            if let Some(r) = retard[i] {
+                retard[p] = Some(retard[p].map_or(r, |x: i64| x.max(r)));
+            }
+            nb_retard[p] += nb_retard[i];
+        }
+    }
+
     for i in 0..n {
         taches[i].niveau = niveau[i];
         taches[i].a_enfants = !children[i].is_empty();
@@ -467,6 +522,8 @@ fn enrichir(taches: &mut [Tache]) {
         taches[i].debut_calcule = debut[i].take();
         taches[i].fin_calcule = fin[i].take();
         taches[i].avancement_calcule = av[i];
+        taches[i].retard_jours = retard[i];
+        taches[i].nb_en_retard = nb_retard[i];
     }
 }
 
@@ -1103,6 +1160,49 @@ mod tests {
 
         // budget planifié projet = Σ feuilles = 500k (le parent ne compte pas)
         assert_eq!(lire(&conn, &p).unwrap().budget_planifie, 500000.0);
+    }
+
+    /// Le retard remonte aux parentes : sans cela, replier une branche ferait
+    /// disparaître le retard du planning — exactement ce que l'utilisateur
+    /// reprochait au Gantt (les barres sont colorées par niveau, pas par état).
+    #[test]
+    fn le_retard_remonte_aux_activites_parentes() {
+        let conn = db::open_in_memory().unwrap();
+        let p = projet_simple(&conn);
+        let parent = creer_tache(&conn, &nouvelle(&p, "Gros œuvre")).unwrap();
+
+        // Une feuille largement dépassée, non terminée.
+        let mut r = nouvelle(&p, "Fondations"); r.tache_parente_id = Some(parent.id.clone());
+        r.date_debut_prevue = Some("2020-01-01".into());
+        r.date_fin_prevue = Some("2020-03-01".into());
+        let retardee = creer_tache(&conn, &r).unwrap();
+
+        // Une feuille tout aussi dépassée, mais TERMINÉE : ce n'est pas un retard.
+        let mut f = nouvelle(&p, "Terrassement"); f.tache_parente_id = Some(parent.id.clone());
+        f.date_fin_prevue = Some("2020-02-01".into());
+        f.statut = Some(StatutTache::Terminee);
+        creer_tache(&conn, &f).unwrap();
+
+        // Une feuille sans date : rien à signaler, et surtout pas d'erreur.
+        let mut s = nouvelle(&p, "Réserve"); s.tache_parente_id = Some(parent.id.clone());
+        creer_tache(&conn, &s).unwrap();
+
+        let taches = lister_taches(&conn, &p).unwrap();
+        let t = |id: &str| taches.iter().find(|x| x.id == id).unwrap().clone();
+
+        let ret = t(&retardee.id);
+        assert!(ret.retard_jours.unwrap() > 2000, "retard réel : {:?}", ret.retard_jours);
+        assert_eq!(ret.nb_en_retard, 1);
+
+        let par = t(&parent.id);
+        assert_eq!(par.retard_jours, ret.retard_jours, "la parente porte le plus grand retard");
+        assert_eq!(par.nb_en_retard, 1, "seule la non terminée compte");
+
+        // Terminer l'activité fait disparaître le retard, partout.
+        changer_statut_taches(&conn, &[retardee.id.clone()], StatutTache::Terminee).unwrap();
+        let taches = lister_taches(&conn, &p).unwrap();
+        assert!(taches.iter().all(|x| x.retard_jours.is_none()));
+        assert!(taches.iter().all(|x| x.nb_en_retard == 0));
     }
 
     #[test]

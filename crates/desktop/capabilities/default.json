@@ -3,6 +3,9 @@
   "identifier": "default",
   "description": "Permissions de la fenêtre principale. Sans ce fichier, `event.listen` est refusé côté interface : la demande de fermeture émise par Rust n'est écoutée par personne, la fenêtre refuse de se fermer et il faut tuer le processus.",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:1704/*", "http://127.0.0.1:1704/*"]
+  },
   "permissions": [
     "core:default",
     "core:event:default",

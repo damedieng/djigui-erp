@@ -4,7 +4,7 @@
 //! garanti à l'écriture et par un CHECK du schéma. Le stock affiché est **dérivé
 //! du journal** `mouvement_stock` (§3.3) : Σ(entrées) − Σ(sorties), jamais stocké.
 
-use crate::domain::{TypeArticle, TypeTaxe};
+use crate::domain::{NatureComptable, TypeArticle, TypeTaxe};
 use crate::error::{CoreError, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -24,9 +24,18 @@ pub struct Article {
     pub id: String,
     pub code: String,
     pub r#type: TypeArticle,
+    /// Nature comptable OHADA (migration 0032) : décide où l'article apparaît
+    /// (caisse ou recettes) et quels comptes seront employés.
+    pub nature_comptable: NatureComptable,
     pub designation: String,
     pub prix_vente: f64,
     pub prix_achat: Option<f64>,
+    /// Vrai quand `prix_achat` est une **estimation** posée par Djigui faute de
+    /// vrai prix (migration 0035), et non un chiffre saisi par le commerçant.
+    /// Un chiffre inventé sans étiquette est plus dangereux qu'une case vide :
+    /// l'écran doit toujours le dire.
+    #[serde(default)]
+    pub prix_achat_estime: bool,
     pub taux_tva: f64,
     pub gere_stock: bool,
     pub stock_alerte: Option<f64>,
@@ -49,6 +58,10 @@ pub struct Article {
 pub struct NouvelArticle {
     pub code: String,
     pub r#type: TypeArticle,
+    /// Absente = on déduit du type (service → service, sinon marchandise), ce qui
+    /// garde compatibles les appels qui ignorent encore ce champ.
+    #[serde(default)]
+    pub nature_comptable: Option<NatureComptable>,
     pub designation: String,
     #[serde(default)]
     pub prix_vente: f64,
@@ -77,6 +90,41 @@ pub enum Filtre {
     Biens,
     Services,
     EnRupture,
+    /// Ce qui se **vend** : marchandises, produits fabriqués, services.
+    /// Une matière première n'a rien à faire à la caisse.
+    Vendables,
+    /// Ce qui se **consomme** en fabrication : matières premières et
+    /// marchandises (le sac de ciment qu'on revend entier *et* qu'on
+    /// reconditionne). Un produit fini reste utilisable via `Tous` si l'on
+    /// fabrique en plusieurs étapes.
+    Composants,
+}
+
+/// Nature comptable à la **création** : celle demandée, sinon déduite du type.
+/// Un service ne peut être que de nature `service` (il n'est ni stocké ni
+/// transformé) — on corrige silencieusement plutôt que de refuser.
+fn nature_de(a: &NouvelArticle) -> NatureComptable {
+    nature_maj(a).unwrap_or(NatureComptable::Marchandise)
+}
+
+/// Nature comptable à la **modification**. `None` = « ne touche pas au
+/// classement existant ».
+///
+/// ⚠️ Indispensable : le classement est calculé automatiquement par la
+/// production (une farine mise dans une recette devient matière première). Si
+/// une simple modification de prix depuis l'écran Articles — qui n'envoie pas ce
+/// champ — remettait la nature à `marchandise`, la farine réapparaîtrait à la
+/// caisse sans que personne ne comprenne pourquoi.
+fn nature_maj(a: &NouvelArticle) -> Option<NatureComptable> {
+    if a.r#type == TypeArticle::Service {
+        return Some(NatureComptable::Service);
+    }
+    match a.nature_comptable {
+        None => None,
+        // `service` est incohérent avec un bien : on retombe sur le défaut.
+        Some(NatureComptable::Service) => Some(NatureComptable::Marchandise),
+        Some(n) => Some(n),
+    }
 }
 
 pub fn creer(conn: &Connection, a: &NouvelArticle) -> Result<Article> {
@@ -86,11 +134,13 @@ pub fn creer(conn: &Connection, a: &NouvelArticle) -> Result<Article> {
     conn.execute(
         "INSERT INTO article
             (id, code, type, designation, prix_vente, prix_achat, taux_tva,
-             gere_stock, stock_alerte, actif, categorie_id, image, code_barre)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, ?10, ?11, ?12)",
+             gere_stock, stock_alerte, actif, categorie_id, image, code_barre,
+             nature_comptable)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, ?10, ?11, ?12, ?13)",
         params![
             id, a.code, a.r#type, a.designation, a.prix_vente, a.prix_achat,
             a.taux_tva, gere_stock as i64, a.stock_alerte, a.categorie_id, a.image, a.code_barre,
+            nature_de(a),
         ],
     )?;
     if let Some(taxes) = &a.taxes {
@@ -137,11 +187,16 @@ pub fn modifier(conn: &Connection, id: &str, a: &NouvelArticle) -> Result<Articl
         "UPDATE article SET
             code = ?2, type = ?3, designation = ?4, prix_vente = ?5, prix_achat = ?6,
             taux_tva = ?7, gere_stock = ?8, stock_alerte = ?9, categorie_id = ?10,
-            image = ?11, code_barre = ?12
+            image = ?11, code_barre = ?12,
+            nature_comptable = COALESCE(?13, nature_comptable),
+            -- Dès que le commerçant saisit un prix d'achat, ce n'est plus une
+            -- estimation de Djigui : le badge « prix estimé » doit disparaître.
+            prix_achat_estime = CASE WHEN COALESCE(?6, 0) > 0 THEN 0 ELSE prix_achat_estime END
          WHERE id = ?1",
         params![
             id, a.code, a.r#type, a.designation, a.prix_vente, a.prix_achat,
             a.taux_tva, gere_stock as i64, a.stock_alerte, a.categorie_id, a.image, a.code_barre,
+            nature_maj(a),
         ],
     )?;
     if n == 0 {
@@ -272,6 +327,12 @@ fn clause_filtre(filtre: Filtre) -> &'static str {
             "a.actif = 1 AND a.gere_stock = 1 \
              AND stock <= COALESCE(a.stock_alerte, 0)"
         }
+        Filtre::Vendables => {
+            "a.actif = 1 AND a.nature_comptable IN ('marchandise','produit_fini','service')"
+        }
+        Filtre::Composants => {
+            "a.actif = 1 AND a.nature_comptable IN ('matiere_premiere','marchandise','produit_fini')"
+        }
     }
 }
 
@@ -354,6 +415,7 @@ const BASE_SELECT: &str = "
     SELECT a.id, a.code, a.type, a.designation, a.prix_vente, a.prix_achat,
            a.taux_tva, a.gere_stock, a.stock_alerte, a.actif,
            a.categorie_id, c.nom AS categorie_nom, a.image, a.code_barre,
+           a.nature_comptable, a.prix_achat_estime,
            CASE WHEN a.gere_stock = 1 THEN (
                SELECT COALESCE(SUM(CASE WHEN m.sens='entree' THEN m.quantite
                                         ELSE -m.quantite END), 0)
@@ -364,13 +426,16 @@ const BASE_SELECT: &str = "
 
 fn ligne_vers_article(r: &rusqlite::Row) -> rusqlite::Result<Article> {
     let t: String = r.get(2)?;
+    let nat: String = r.get(14)?;
     Ok(Article {
         id: r.get(0)?,
         code: r.get(1)?,
         r#type: TypeArticle::parse(&t).unwrap_or(TypeArticle::Bien),
+        nature_comptable: NatureComptable::parse(&nat).unwrap_or(NatureComptable::Marchandise),
         designation: r.get(3)?,
         prix_vente: r.get(4)?,
         prix_achat: r.get(5)?,
+        prix_achat_estime: r.get::<_, i64>(15)? != 0,
         taux_tva: r.get(6)?,
         gere_stock: r.get::<_, i64>(7)? != 0,
         stock_alerte: r.get(8)?,
@@ -380,7 +445,7 @@ fn ligne_vers_article(r: &rusqlite::Row) -> rusqlite::Result<Article> {
         image: r.get(12)?,
         code_barre: r.get(13)?,
         taxes: Vec::new(), // rempli séparément (jointure) par lire/lister
-        stock: r.get(14)?,
+        stock: r.get(16)?,
     })
 }
 
@@ -401,7 +466,7 @@ mod tests {
             taux_tva: 0.0,
             gere_stock: true, // demandé mais doit être forcé à false
             stock_alerte: None,
-            categorie_id: None, image: None, code_barre: None, taxes: None,
+            categorie_id: None, image: None, code_barre: None, taxes: None, nature_comptable: None,
         }).unwrap();
         assert!(!a.gere_stock);
         assert_eq!(a.stock, None);
@@ -415,7 +480,7 @@ mod tests {
             r#type: TypeArticle::Bien,
             designation: "Riz 1kg".into(),
             prix_vente: 650.0, prix_achat: Some(500.0), taux_tva: 18.0,
-            gere_stock: true, stock_alerte: Some(10.0), categorie_id: None, image: None, code_barre: None, taxes: None,
+            gere_stock: true, stock_alerte: Some(10.0), categorie_id: None, image: None, code_barre: None, taxes: None, nature_comptable: None,
         }).unwrap();
         assert_eq!(a.stock, Some(0.0));
 
@@ -441,13 +506,13 @@ mod tests {
         let a = creer(&conn, &NouvelArticle {
             code: "ART-9".into(), r#type: TypeArticle::Bien, designation: "Sucre".into(),
             prix_vente: 1000.0, prix_achat: Some(800.0), taux_tva: 18.0,
-            gere_stock: true, stock_alerte: None, categorie_id: None, image: None, code_barre: None, taxes: None,
+            gere_stock: true, stock_alerte: None, categorie_id: None, image: None, code_barre: None, taxes: None, nature_comptable: None,
         }).unwrap();
 
         let m = modifier(&conn, &a.id, &NouvelArticle {
             code: "ART-9".into(), r#type: TypeArticle::Bien, designation: "Sucre 1kg".into(),
             prix_vente: 1100.0, prix_achat: Some(850.0), taux_tva: 18.0,
-            gere_stock: true, stock_alerte: Some(5.0), categorie_id: None, image: None, code_barre: None, taxes: None,
+            gere_stock: true, stock_alerte: Some(5.0), categorie_id: None, image: None, code_barre: None, taxes: None, nature_comptable: None,
         }).unwrap();
         assert_eq!(m.designation, "Sucre 1kg");
         assert_eq!(m.prix_vente, 1100.0);

@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Sauvegarde</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  /* Réutilise `.proj-grille` / `.proj-carte` / `.pe-bloc` de styles.css :
+     une seule définition pour toute l'application (voir modules.html). */
+  .dest-ligne { display:flex; align-items:center; gap:12px; padding:12px 14px;
+    border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+  .dest-ligne + .dest-ligne { margin-top:8px; }
+  .dest-ic { width:38px; height:38px; border-radius:10px; flex:none; display:flex;
+    align-items:center; justify-content:center; font-size:19px;
+    background:var(--brand-tint); color:var(--brand-strong); }
+  .dest-ligne.hs .dest-ic { background:var(--danger-tint); color:var(--danger); }
+  .dest-nom { font-weight:600; font-size:14px; }
+  .dest-chemin { font-size:12px; color:var(--text-2); word-break:break-all; }
+  /* ⚠️ Piège n°2 (5 occurrences dans ce projet) : une règle d'auteur `display`
+     écrase le `display:none` de [hidden]. Toujours le rétablir explicitement. */
+  .dest-ligne[hidden] { display:none; }
+  .explo { border:1px solid var(--border); border-radius:10px; max-height:230px;
+    overflow:auto; background:var(--surface); }
+  .explo-item { display:flex; align-items:center; gap:9px; padding:8px 12px; cursor:pointer;
+    font-size:13px; border-bottom:1px solid var(--border); }
+  .explo-item:last-child { border-bottom:none; }
+  .explo-item:hover { background:var(--brand-tint); }
+  .sugg { display:flex; gap:11px; align-items:flex-start; padding:11px 13px; cursor:pointer;
+    border:1px solid var(--border); border-radius:10px; text-align:left; width:100%;
+    background:var(--surface); font:inherit; color:inherit; }
+  .sugg:hover { border-color:var(--brand); }
+  .sugg + .sugg { margin-top:8px; }
+  .jrn { width:100%; border-collapse:collapse; font-size:13px; }
+  .jrn th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--text-2); padding:6px 10px; border-bottom:1px solid var(--border); }
+  .jrn td { padding:8px 10px; border-bottom:1px solid var(--border); }
+  /* `.reglage-bloc` / `.reglage-titre` vivent dans styles.css : ils servent
+     aussi aux Paramètres de paie et aux Salariés. */
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Sauvegarde</div>
+        <div class="topbar-date">Mettre vos données à l'abri</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn" id="btn-restaurer"><i class="ti ti-history"></i>Restaurer</button>
+        <button class="btn btn-primary" id="btn-maintenant"><i class="ti ti-device-floppy"></i>Sauvegarder maintenant</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <!-- Alertes d'état : ce sont elles qui empêchent la fausse tranquillité. -->
+      <div id="alertes"></div>
+
+      <div class="synthese" id="tuiles" style="padding:0"></div>
+
+      <div class="tabs-folder">
+        <button class="tab active" data-vue="dest">Où sauvegarder</button>
+        <button class="tab" data-vue="protection">Protection</button>
+        <button class="tab" data-vue="reglages">Réglages</button>
+        <button class="tab" data-vue="journal">Historique</button>
+      </div>
+
+      <div class="card">
+        <!-- ===================== OÙ SAUVEGARDER ===================== -->
+        <div class="tab-panel" data-panneau="dest">
+          <div class="card-head">
+            <span class="card-title">Dossiers de sauvegarde</span>
+            <button class="btn btn-primary" id="btn-add-dest"><i class="ti ti-plus"></i>Ajouter un dossier</button>
+          </div>
+          <p class="muted" style="font-size:13px;margin:0 0 14px">
+            À chaque sauvegarde, une copie complète est écrite dans <strong>chacun</strong> de ces
+            dossiers. Prévoyez-en au moins un qui ne soit pas dans cet ordinateur.
+          </p>
+          <div id="liste-dest"></div>
+        </div>
+
+        <!-- ===================== PROTECTION ===================== -->
+        <div class="tab-panel" data-panneau="protection" hidden>
+          <div class="card-head"><span class="card-title">Qui peut lire vos sauvegardes</span></div>
+          <p class="muted" style="font-size:13px;margin:0 0 14px">
+            Les fichiers de sauvegarde sont <strong>chiffrés</strong> : une clé USB perdue ou un
+            dossier Drive partagé par erreur ne laisse rien lire.
+          </p>
+
+          <div class="alert" id="etat-protection" style="margin-bottom:16px"></div>
+
+          <div class="form-grid">
+            <div class="field full">
+              <label>Clé de licence de cette installation</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="licence" class="input-std" style="flex:1"
+                       placeholder="Recopiez la clé remise lors de l'installation">
+                <button class="btn btn-primary" id="btn-licence">Enregistrer</button>
+              </div>
+              <div class="muted" style="font-size:12px">
+                C'est <strong>elle</strong> qui protège vos sauvegardes. Elle vous appartient :
+                aucune autre installation ne peut ouvrir vos fichiers.
+                <strong>Gardez-la avec vos documents</strong> — sans elle, une réinstallation ne
+                pourra pas récupérer vos données.
+              </div>
+            </div>
+          </div>
+
+          <details style="margin-top:18px">
+            <summary style="cursor:pointer;font-size:13px;font-weight:600">
+              Utiliser plutôt un mot de passe à moi (facultatif)</summary>
+            <div style="padding-top:12px">
+              <div class="alert warn" style="margin-bottom:12px">
+                <i class="ti ti-alert-triangle"></i>
+                <span>Un mot de passe protège encore mieux — même Djigui ne peut pas ouvrir vos
+                  fichiers. Mais <strong>s'il est perdu, vos sauvegardes sont définitivement
+                  illisibles</strong> : personne ne pourra les récupérer, nous non plus.</span>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input type="password" id="mdp" class="input-std" style="flex:1;min-width:200px"
+                       placeholder="Mot de passe (8 caractères minimum)">
+                <button class="btn" id="btn-mdp">Poser ce mot de passe</button>
+                <button class="btn" id="btn-mdp-off">Revenir à ma licence</button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- ===================== RÉGLAGES ===================== -->
+        <div class="tab-panel" data-panneau="reglages" hidden>
+          <div class="card-head"><span class="card-title">Quand et comment</span></div>
+
+          <!-- Trois questions, dans l'ordre où on se les pose :
+               QUAND sauvegarder · COMBIEN garder · QUELLE machine le fait.
+               Chacune est un bloc, séparé du suivant : les empiler sans
+               respiration donnait une suite de cases sans hiérarchie. -->
+          <div class="reglage-bloc">
+            <div class="reglage-titre">Quand sauvegarder</div>
+            <div class="form-grid">
+              <div class="field full">
+                <label class="coche"><input type="checkbox" id="p-activee">
+                  <span>Sauvegarder automatiquement</span></label>
+                <div class="muted coche-aide" style="font-size:12px">
+                  Décochez pour ne sauvegarder qu'avec le bouton « Sauvegarder maintenant ».
+                </div>
+              </div>
+              <div class="field full">
+                <label class="coche"><input type="checkbox" id="p-fermeture">
+                  <span>À la fermeture de Djigui</span></label>
+                <div class="muted coche-aide" style="font-size:12px">
+                  Le moment le plus sûr : la journée est finie et plus personne ne saisit.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="reglage-bloc">
+            <div class="reglage-titre">Combien de copies garder</div>
+            <div class="form-grid">
+              <div class="field">
+                <label for="p-copies">Nombre de copies à conserver</label>
+                <input type="number" id="p-copies" class="input-std" min="1" max="365">
+                <div class="muted" style="font-size:12px">
+                  Au-delà, les plus anciennes sont effacées de chaque dossier. Sans cela, le disque
+                  finirait par se remplir — et un disque plein empêche la sauvegarde suivante.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="reglage-bloc">
+            <div class="reglage-titre">Quel ordinateur sauvegarde</div>
+            <div class="form-grid">
+              <div class="field full">
+                <label class="coche"><input type="checkbox" id="p-serveur">
+                  <span>Cet ordinateur est le serveur Djigui</span></label>
+                <div class="muted coche-aide" style="font-size:12px">
+                  Seul l'ordinateur qui héberge les données sauvegarde. Sur un poste qui se connecte
+                  à un autre ordinateur, décochez cette case : il ne sauvegardera pas, et il ne
+                  pourra pas non plus configurer les dossiers.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions" style="justify-content:flex-start;padding-left:0">
+            <button class="btn btn-primary" id="btn-enr-reglages">Enregistrer</button>
+          </div>
+        </div>
+
+        <!-- ===================== HISTORIQUE ===================== -->
+        <div class="tab-panel" data-panneau="journal" hidden>
+          <div class="card-head"><span class="card-title">Historique des sauvegardes</span></div>
+          <p class="muted" style="font-size:13px;margin:0 0 12px">
+            Les échecs figurent ici aussi : une sauvegarde qui échoue sans le dire est pire que
+            pas de sauvegarde du tout.
+          </p>
+          <div style="overflow-x:auto"><table class="jrn"><thead><tr>
+            <th>Date</th><th>Déclenchée par</th><th>Résultat</th><th>Copies</th>
+            <th>Taille</th><th>Détail</th></tr></thead>
+            <tbody id="corps-journal"></tbody></table></div>
+        </div>
+      </div>
+
+      <div class="aide" style="margin-top:20px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Djigui recopie <strong>toutes vos données</strong> (ventes, articles, marchés, projets,
+            et les pièces jointes) dans un fichier unique, qu'il dépose dans les dossiers que vous
+            choisissez.</li>
+          <li><strong>Choisissez au moins un dossier hors de cet ordinateur</strong> : une clé USB,
+            un disque externe, ou votre dossier Google Drive. Une copie posée sur le même disque
+            que l'original disparaît en même temps que lui.</li>
+          <li>Le fichier est <strong>chiffré avec votre clé de licence</strong>. Si quelqu'un trouve
+            votre clé USB, il ne peut rien lire. <strong>Gardez votre licence avec vos papiers</strong> :
+            c'est elle qui rouvrira vos données après une réinstallation.</li>
+          <li>Djigui <strong>relit chaque copie</strong> juste après l'avoir écrite. Une copie qu'on
+            n'a pas su rouvrir n'est pas une copie.</li>
+          <li>Pour <strong>récupérer</strong> vos données : bouton « Restaurer », choisissez le
+            fichier, Djigui vérifie tout avant de remplacer quoi que ce soit — et met vos données
+            actuelles de côté au cas où vous vous seriez trompé de sauvegarde.</li>
+          <li>Si vous travaillez à plusieurs, <strong>seul l'ordinateur qui héberge les données</strong>
+            sauvegarde. Les autres postes n'ont rien à copier.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== MODALE : AJOUTER UN DOSSIER ==================== -->
+<div class="modal-overlay" id="modal-dest" hidden>
+  <div class="modal" style="max-width:640px">
+    <div class="card-head"><span class="card-title" id="titre-dest">Ajouter un dossier de sauvegarde</span>
+      <i class="ti ti-x" data-fermer="modal-dest" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div id="zone-sugg" style="margin-bottom:18px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">Endroits proposés</div>
+        <div id="suggestions"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field full">
+          <label>Nom de cette destination</label>
+          <input type="text" id="d-libelle" class="input-std"
+                 placeholder="Clé USB bleue, Dossier Drive…">
+          <div class="muted" style="font-size:12px">
+            C'est ce nom qui apparaîtra si la copie échoue. « E:\ » ne vous dira rien dans six mois.
+          </div>
+        </div>
+        <div class="field full">
+          <label>Dossier</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="d-chemin" class="input-std" style="flex:1"
+                   placeholder="Cliquez sur « Parcourir » pour choisir…">
+            <button class="btn btn-primary" id="btn-parcourir">
+              <i class="ti ti-folder-open"></i>Parcourir…</button>
+          </div>
+        </div>
+        <!-- Explorateur de repli, servi par le serveur. Masqué dès que la
+             fenêtre Djigui peut ouvrir le VRAI sélecteur de dossiers Windows
+             (demande de l'utilisateur : « c'est plus simple »). Il reste utile
+             quand l'écran est ouvert depuis un navigateur, et le jour du mode
+             client, où les dossiers à montrer sont ceux d'une AUTRE machine. -->
+        <!-- Masqué par défaut : deux façons de choisir un dossier côte à côte
+             font hésiter sur celle qui compte. On ne le montre que si le
+             sélecteur Windows n'a pas pu s'ouvrir. `.field[hidden]` existe déjà
+             dans styles.css, le masquage est donc réel. -->
+        <div class="field full" id="zone-explo" hidden>
+          <label>Parcourir cet ordinateur</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <button class="btn" id="btn-remonter"><i class="ti ti-arrow-up"></i>Dossier parent</button>
+            <span class="muted" id="explo-ici" style="font-size:12px;word-break:break-all"></span>
+          </div>
+          <div class="explo" id="explo"></div>
+        </div>
+      </div>
+      <div class="alert warn" id="avert-dest" style="margin-top:14px" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-dest">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-dest">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE : RESTAURER ====================
+     ⚠️ Opération destructrice. L'ordre des étapes n'est pas cosmétique :
+     on montre CE QU'ON VA REMETTRE avant de demander confirmation. -->
+<div class="modal-overlay" id="modal-restore" hidden>
+  <div class="modal" style="max-width:640px">
+    <div class="card-head"><span class="card-title">Restaurer une sauvegarde</span>
+      <i class="ti ti-x" data-fermer="modal-restore" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="alert danger" style="margin-bottom:14px">
+        <i class="ti ti-alert-triangle"></i>
+        <span>Restaurer <strong>remplace les données actuelles</strong> par celles de la
+          sauvegarde. Tout ce qui a été saisi depuis sera perdu. Vos données actuelles sont
+          malgré tout mises de côté, au cas où vous choisiriez le mauvais fichier.</span>
+      </div>
+      <div class="field full">
+        <label>Fichier de sauvegarde</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="r-chemin" class="input-std" style="flex:1"
+                 placeholder="Collez ici le chemin du fichier .djigui">
+          <button class="btn" id="btn-lire-archive">Examiner</button>
+        </div>
+        <div class="muted" style="font-size:12px">
+          Ces fichiers s'appellent <code>djigui-<em>date</em>.djigui</code> et se trouvent dans vos
+          dossiers de sauvegarde.
+        </div>
+      </div>
+      <div id="apercu-archive" style="margin-top:16px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-restore">Annuler</button>
+      <button class="btn btn-danger" id="btn-lancer-restore" disabled>Restaurer ces données</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE : SECRET DEMANDÉ ==================== -->
+<div class="modal-overlay" id="modal-secret" hidden>
+  <div class="modal" style="max-width:480px">
+    <div class="card-head"><span class="card-title">Secret demandé</span>
+      <i class="ti ti-x" data-fermer="modal-secret" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p id="secret-explication" class="muted" style="font-size:13px"></p>
+      <div class="field full">
+        <label id="secret-label">Secret</label>
+        <input type="password" id="secret-valeur" class="input-std">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-secret">Annuler</button>
+      <button class="btn btn-primary" id="btn-secret-ok">Continuer</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, esc, toast } = Djigui;
+
+  let params = {}, destinations = [], journal = [], destEnCours = null;
+  let archiveExaminee = null;
+
+  const octets = o => o == null ? '—'
+    : o < 1024 * 1024 ? Math.round(o / 1024) + ' Ko' : (o / 1048576).toFixed(1) + ' Mo';
+
+  const quand = s => {
+    if (!s) return 'jamais';
+    const d = new Date(s.replace(' ', 'T'));
+    return isNaN(d) ? s : d.toLocaleString('fr-FR',
+      { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  async function charger() {
+    try {
+      const r = await api('/api/sauvegarde/parametres');
+      params = r.parametres; destinations = r.destinations; journal = r.journal;
+    } catch (e) { toast('Chargement impossible : ' + e.message, 'danger'); return; }
+    rendre();
+  }
+
+  function rendre() {
+    rendreAlertes();
+    rendreTuiles();
+    rendreDestinations();
+    rendreProtection();
+    rendreReglages();
+    rendreJournal();
+  }
+
+  // Les alertes disent la VÉRITÉ sur l'état de la protection. Sans elles, un
+  // écran bien rempli laisserait croire qu'on est sauvegardé alors que rien
+  // n'est configuré.
+  function rendreAlertes() {
+    const a = [];
+    if (!destinations.length) {
+      a.push(['danger', 'ti-alert-triangle',
+        `<strong>Vos données ne sont pas sauvegardées.</strong> Aucun dossier n'est configuré :
+         ajoutez-en un, de préférence hors de cet ordinateur.`]);
+    } else if (!destinations.some(d => d.actif && d.accessible)) {
+      a.push(['danger', 'ti-plug-connected-x',
+        `<strong>Aucun dossier n'est accessible en ce moment.</strong> Si vous sauvegardez sur une
+         clé USB ou un disque externe, vérifiez qu'il est branché.`]);
+    } else {
+      const hs = destinations.filter(d => d.actif && !d.accessible);
+      if (hs.length) a.push(['warn', 'ti-alert-circle',
+        `${hs.length} dossier(s) inaccessible(s) : <strong>${hs.map(d => esc(d.libelle)).join(', ')}</strong>.
+         Les autres copies se feront normalement.`]);
+    }
+    if (!params.licence_definie && params.mode_cle !== 'motdepasse') {
+      a.push(['warn', 'ti-license',
+        `<strong>Votre clé de licence n'est pas encore enregistrée.</strong> En attendant, vos
+         sauvegardes utilisent une protection commune à toutes les installations Djigui.
+         Saisissez-la dans l'onglet « Protection ».`]);
+    }
+    if (!params.cette_machine_est_serveur) {
+      a.push(['warn', 'ti-server-off',
+        `Cet ordinateur est déclaré comme <strong>poste secondaire</strong> : il ne sauvegarde pas.
+         La sauvegarde se fait depuis l'ordinateur qui héberge les données.`]);
+    }
+    if (params.dernier_statut === 'echec') {
+      a.push(['danger', 'ti-x',
+        `<strong>La dernière sauvegarde a échoué.</strong> Voir l'onglet « Historique ».`]);
+    } else if (params.dernier_statut === 'partiel') {
+      a.push(['warn', 'ti-alert-circle',
+        `La dernière sauvegarde n'a réussi que <strong>partiellement</strong>. Voir l'historique.`]);
+    }
+    $('#alertes').innerHTML = a.map(([t, ic, txt]) =>
+      `<div class="alert ${t}" style="margin-bottom:10px"><i class="ti ${ic}"></i><span>${txt}</span></div>`).join('');
+  }
+
+  function rendreTuiles() {
+    const horsMachine = destinations.filter(d => d.actif).length;
+    const statut = { succes: 'Réussie', partiel: 'Partielle', echec: 'Échouée' }[params.dernier_statut]
+      || 'Aucune';
+    const prot = params.mode_cle === 'motdepasse' ? 'Mot de passe'
+      : params.mode_cle === 'licence' ? 'Votre licence' : 'Clé Djigui commune';
+    $('#tuiles').innerHTML = [
+      ['ti-clock', 'Dernière sauvegarde', quand(params.derniere_sauvegarde),
+        params.dernier_statut === 'succes' ? 'acc-ok' : params.dernier_statut ? 'acc-moyen' : ''],
+      ['ti-checkbox', 'Résultat', statut,
+        params.dernier_statut === 'echec' ? 'acc-danger' : params.dernier_statut === 'succes' ? 'acc-ok' : ''],
+      ['ti-folders', 'Dossiers actifs', horsMachine, horsMachine ? '' : 'acc-danger'],
+      ['ti-lock', 'Protection', prot, params.mode_cle === 'integree' ? 'acc-moyen' : 'acc-brand fort'],
+    ].map(([ic, l, v, acc]) => `<div class="pe-bloc ${acc || ''}">
+        <div class="pe-ic"><i class="ti ${ic}"></i></div>
+        <div class="pe-corps"><div class="pe-lbl">${l}</div><div class="pe-val">${esc(String(v))}</div></div>
+      </div>`).join('');
+  }
+
+  function rendreDestinations() {
+    if (!destinations.length) {
+      $('#liste-dest').innerHTML = `<div class="muted" style="padding:18px 0">
+        Aucun dossier configuré. Cliquez sur « Ajouter un dossier ».</div>`;
+      return;
+    }
+    $('#liste-dest').innerHTML = destinations.map(d => `
+      <div class="dest-ligne ${d.accessible ? '' : 'hs'}">
+        <div class="dest-ic"><i class="ti ${d.accessible ? 'ti-folder-check' : 'ti-folder-x'}"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="dest-nom">${esc(d.libelle)}
+            ${d.actif ? '' : '<span class="badge neutral">en pause</span>'}
+            ${d.accessible ? '' : '<span class="badge danger">inaccessible</span>'}</div>
+          <div class="dest-chemin">${esc(d.chemin)}</div>
+          ${d.dernier_essai ? `<div class="muted" style="font-size:11.5px;margin-top:3px">
+            Dernier essai ${quand(d.dernier_essai)} —
+            ${d.dernier_statut === 'succes' ? 'copie écrite'
+              : esc(d.dernier_message || 'échec')}</div>` : ''}
+        </div>
+        <button class="btn btn-sm" data-modif="${esc(d.id)}" data-tip="Modifier">
+          <i class="ti ti-pencil"></i></button>
+        <button class="btn btn-sm" data-suppr="${esc(d.id)}" data-tip="Retirer de la liste">
+          <i class="ti ti-trash"></i></button>
+      </div>`).join('');
+  }
+
+  function rendreProtection() {
+    const e = $('#etat-protection');
+    if (params.mode_cle === 'motdepasse') {
+      e.className = 'alert';
+      e.innerHTML = `<i class="ti ti-key"></i><span>Vos sauvegardes sont protégées par
+        <strong>votre mot de passe</strong>. Personne d'autre ne peut les ouvrir, Djigui non plus.</span>`;
+    } else if (params.mode_cle === 'licence') {
+      e.className = 'alert';
+      e.innerHTML = `<i class="ti ti-shield-check"></i><span>Vos sauvegardes sont protégées par
+        <strong>votre clé de licence</strong> (…${esc(params.licence_fin || '')}).
+        Gardez-la avec vos documents : c'est elle qui rouvrira vos données.</span>`;
+    } else {
+      e.className = 'alert warn';
+      e.innerHTML = `<i class="ti ti-alert-triangle"></i><span>Vos sauvegardes utilisent la
+        <strong>clé commune à toutes les installations Djigui</strong>. Elle empêche un curieux de
+        lire vos fichiers, mais elle n'est pas propre à vous. Enregistrez votre clé de licence
+        ci-dessous.</span>`;
+    }
+    $('#licence').value = '';
+    $('#licence').placeholder = params.licence_definie
+      ? `Licence enregistrée (…${params.licence_fin || ''}) — saisir pour remplacer`
+      : 'Recopiez la clé remise lors de l\'installation';
+  }
+
+  function rendreReglages() {
+    $('#p-activee').checked = !!params.activee;
+    $('#p-fermeture').checked = !!params.a_la_fermeture;
+    $('#p-copies').value = params.copies_a_conserver;
+    $('#p-serveur').checked = !!params.cette_machine_est_serveur;
+  }
+
+  function rendreJournal() {
+    if (!journal.length) {
+      $('#corps-journal').innerHTML =
+        `<tr><td colspan="6" class="muted" style="padding:18px">Aucune sauvegarde pour l'instant.</td></tr>`;
+      return;
+    }
+    const b = { succes: 'ok', partiel: 'warn', echec: 'danger' };
+    const l = { succes: 'Réussie', partiel: 'Partielle', echec: 'Échouée' };
+    $('#corps-journal').innerHTML = journal.map(j => `<tr>
+      <td>${quand(j.horodatage)}</td>
+      <td>${j.declencheur === 'fermeture' ? 'Fermeture de Djigui' : 'Bouton'}</td>
+      <td><span class="badge ${b[j.statut]}">${l[j.statut]}</span>
+        ${j.verifiee ? '<span class="badge ok" data-tip="La copie a été relue et déchiffrée">relue</span>' : ''}</td>
+      <td>${j.nb_destinations_ok} / ${j.nb_destinations_ok + j.nb_destinations_echec}</td>
+      <td>${octets(j.taille_octets)}</td>
+      <td class="muted">${esc(j.message || '')}</td></tr>`).join('');
+  }
+
+  // ---- Onglets -------------------------------------------------------------
+  document.querySelectorAll('.tab[data-vue]').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab[data-vue]').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('[data-panneau]').forEach(p =>
+      p.hidden = p.dataset.panneau !== t.dataset.vue);
+  }));
+
+  document.querySelectorAll('[data-fermer]').forEach(b =>
+    b.addEventListener('click', () => { $('#' + b.dataset.fermer).hidden = true; }));
+
+  // ---- Demander un secret (licence ou mot de passe) ------------------------
+  // Une seule question du point de vue de l'utilisateur : « quel secret ouvre
+  // ce fichier ? ». Le serveur dit lequel attendre.
+  function demanderSecret(label, explication) {
+    return new Promise(resolve => {
+      $('#secret-label').textContent = label;
+      $('#secret-explication').textContent = explication;
+      $('#secret-valeur').value = '';
+      $('#modal-secret').hidden = false;
+      $('#secret-valeur').focus();
+      const ok = () => { fin($('#secret-valeur').value); };
+      const annuler = () => fin(null);
+      const fin = v => {
+        $('#modal-secret').hidden = true;
+        $('#btn-secret-ok').removeEventListener('click', ok);
+        document.querySelector('[data-fermer="modal-secret"]').removeEventListener('click', annuler);
+        resolve(v);
+      };
+      $('#btn-secret-ok').addEventListener('click', ok);
+      document.querySelector('[data-fermer="modal-secret"]').addEventListener('click', annuler);
+    });
+  }
+
+  // ---- Sauvegarder maintenant ---------------------------------------------
+  $('#btn-maintenant').addEventListener('click', async () => {
+    const b = $('#btn-maintenant');
+    b.disabled = true;
+    b.innerHTML = '<i class="ti ti-loader"></i>Sauvegarde en cours…';
+    try {
+      let corps = { declencheur: 'manuelle' };
+      // En mode mot de passe, le serveur ne l'a pas : il faut le fournir.
+      if (params.mode_cle === 'motdepasse') {
+        const s = await demanderSecret('Mot de passe de sauvegarde',
+          'Vos sauvegardes sont protégées par un mot de passe ; il est nécessaire pour en écrire une nouvelle.');
+        if (s === null) return;
+        corps.mot_de_passe = s;
+      }
+      const r = await api('/api/sauvegarde/executer', { method: 'POST', body: corps });
+      toast(r.message, r.statut === 'succes' ? 'ok' : r.statut === 'partiel' ? 'warn' : 'danger');
+      if (r.statut !== 'succes') {
+        await Djigui.alert(r.destinations.map(d =>
+          `${d.reussi ? '✓' : '✗'} ${d.libelle}\n   ${d.message}`).join('\n\n'));
+      }
+      await charger();
+    } catch (e) {
+      toast(e.message, 'danger');
+    } finally {
+      b.disabled = false;
+      b.innerHTML = '<i class="ti ti-device-floppy"></i>Sauvegarder maintenant';
+    }
+  });
+
+  // ---- Réglages ------------------------------------------------------------
+  $('#btn-enr-reglages').addEventListener('click', async () => {
+    try {
+      await api('/api/sauvegarde/parametres', { method: 'PUT', body: {
+        activee: $('#p-activee').checked,
+        a_la_fermeture: $('#p-fermeture').checked,
+        cette_machine_est_serveur: $('#p-serveur').checked,
+        copies_a_conserver: parseInt($('#p-copies').value, 10) || 10,
+      }});
+      toast('Réglages enregistrés.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Protection ----------------------------------------------------------
+  $('#btn-licence').addEventListener('click', async () => {
+    const v = $('#licence').value.trim();
+    if (!v) { toast('Saisissez la clé de licence.', 'warn'); return; }
+    try {
+      await api('/api/sauvegarde/licence', { method: 'POST', body: { licence: v } });
+      toast('Licence enregistrée. Vos prochaines sauvegardes seront protégées par votre clé.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-mdp').addEventListener('click', async () => {
+    const v = $('#mdp').value;
+    if (!await Djigui.confirm(
+      `Poser ce mot de passe ?\n\n`
+      + `Vos PROCHAINES sauvegardes ne s'ouvriront qu'avec lui.\n\n`
+      + `⚠️ Si vous le perdez, elles seront définitivement illisibles. `
+      + `Personne ne pourra les récupérer, Djigui non plus.\n\n`
+      + `Les sauvegardes déjà écrites ne changent pas : elles restent lisibles comme avant.`)) return;
+    try {
+      await api('/api/sauvegarde/mot-de-passe', { method: 'POST', body: { mot_de_passe: v } });
+      $('#mdp').value = '';
+      toast('Mot de passe enregistré.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#btn-mdp-off').addEventListener('click', async () => {
+    if (!await Djigui.confirm(
+      `Revenir à la protection par votre clé de licence ?\n\n`
+      + `Les sauvegardes déjà faites avec le mot de passe continueront de l'exiger.`)) return;
+    try {
+      await api('/api/sauvegarde/mot-de-passe', { method: 'POST', body: { mot_de_passe: null } });
+      toast('Protection ramenée à votre licence.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Destinations --------------------------------------------------------
+  $('#btn-add-dest').addEventListener('click', () => ouvrirDest(null));
+
+  document.addEventListener('click', async e => {
+    const m = e.target.closest('[data-modif]');
+    if (m) { ouvrirDest(destinations.find(d => d.id === m.dataset.modif)); return; }
+    const s = e.target.closest('[data-suppr]');
+    if (s) {
+      const d = destinations.find(x => x.id === s.dataset.suppr);
+      if (!await Djigui.confirm(
+        `Retirer « ${d.libelle} » de la liste ?\n\n`
+        + `Les copies déjà écrites dans ce dossier ne sont PAS supprimées : elles restent `
+        + `utilisables pour une restauration.`)) return;
+      try {
+        await api('/api/sauvegarde/destinations/' + d.id, { method: 'DELETE' });
+        toast('Destination retirée.', 'ok');
+        await charger();
+      } catch (err) { toast(err.message, 'danger'); }
+    }
+  });
+
+  async function ouvrirDest(d) {
+    destEnCours = d;
+    $('#titre-dest').textContent = d ? 'Modifier ce dossier' : 'Ajouter un dossier de sauvegarde';
+    $('#d-libelle').value = d ? d.libelle : '';
+    $('#d-chemin').value = d ? d.chemin : '';
+    $('#avert-dest').hidden = true;
+    $('#zone-sugg').hidden = !!d;
+    $('#modal-dest').hidden = false;
+    if (!d) chargerSuggestions();
+    // L'explorateur de repli reste masqué tant que le sélecteur Windows
+    // fonctionne : inutile de solliciter le serveur pour un panneau invisible.
+    $('#zone-explo').hidden = true;
+  }
+
+  async function chargerSuggestions() {
+    try {
+      const s = await api('/api/sauvegarde/suggestions');
+      $('#suggestions').innerHTML = s.length ? s.map(x => `
+        <button type="button" class="sugg" data-sugg="${esc(x.chemin)}" data-lib="${esc(x.libelle)}">
+          <i class="ti ${x.hors_machine ? 'ti-device-usb' : 'ti-folder'}"
+             style="font-size:20px;color:var(--${x.hors_machine ? 'success' : 'text-2'});flex:none"></i>
+          <span><strong>${esc(x.libelle)}</strong>
+            ${x.hors_machine ? '<span class="badge ok">hors de cet ordinateur</span>'
+                             : '<span class="badge warn">sur cet ordinateur</span>'}
+            <div class="muted" style="font-size:12px;margin-top:2px">${esc(x.explication)}</div>
+            <div class="muted" style="font-size:11px">${esc(x.chemin)}</div></span>
+        </button>`).join('')
+        : '<div class="muted" style="font-size:12.5px">Aucun endroit reconnu automatiquement — parcourez ci-dessous.</div>';
+    } catch { $('#suggestions').innerHTML = ''; }
+  }
+
+  $('#suggestions').addEventListener('click', e => {
+    const b = e.target.closest('[data-sugg]');
+    if (!b) return;
+    $('#d-chemin').value = b.dataset.sugg;
+    if (!$('#d-libelle').value.trim()) $('#d-libelle').value = b.dataset.lib;
+  });
+
+  // ---- Le vrai sélecteur de dossiers Windows -------------------------------
+  // Disponible seulement dans la fenêtre Djigui (coquille Tauri). Depuis un
+  // navigateur, aucune page ne peut ouvrir l'explorateur du système : c'est là
+  // que l'explorateur de repli sert.
+  // ---- Le vrai sélecteur de dossiers Windows -------------------------------
+  //
+  // ⚠️ C'est le SERVEUR qui l'ouvre, pas la coquille Tauri. Une première version
+  // passait par `window.__TAURI__.core.invoke` et échouait : la fenêtre charge
+  // une URL distante (http://localhost:1704), et Tauri 2 refuse tout l'IPC dans
+  // ce cas. Le serveur tourne sur la machine dont on veut justement les
+  // dossiers — c'est plus simple, et cela se vérifie par un appel HTTP.
+  const btnParcourir = $('#btn-parcourir');
+  btnParcourir.addEventListener('click', async () => {
+    btnParcourir.disabled = true;
+    try {
+      const r = await api('/api/sauvegarde/choisir-dossier', { method: 'POST', body: {} });
+      // Annulation : on ne touche à rien et on n'affiche aucun message.
+      // Annuler n'est pas un échec.
+      if (!r || !r.chemin) return;
+      $('#d-chemin').value = r.chemin;
+      if (!$('#d-libelle').value.trim()) {
+        // Un nom par défaut tiré du dossier : « Sauvegardes Djigui » sur E:
+        // devient « Sauvegardes Djigui (E:) », reconnaissable dans un message
+        // d'échec — contrairement à un chemin brut.
+        // ⚠️ La classe doit contenir l'antislash ET la barre oblique : un
+        // chemin Windows (« E:\Sauvegardes Djigui ») ne se découpe pas sinon,
+        // et le nom proposé serait le chemin entier.
+        const bouts = r.chemin.replace(/[\\/]+$/, '').split(/[\\/]/);
+        const lecteur = bouts[0] || '';
+        $('#d-libelle').value = (bouts[bouts.length - 1] || r.chemin)
+          + (lecteur && bouts.length > 1 ? ` (${lecteur})` : '');
+      }
+      // Le dossier est choisi : l'explorateur de repli n'a plus lieu d'être.
+      $('#zone-explo').hidden = true;
+    } catch (e) {
+      toast("Le sélecteur de dossiers n'a pas pu s'ouvrir. Choisissez le dossier "
+            + "dans la liste ci-dessous. (" + (e && e.message ? e.message : String(e)) + ")",
+            'warn');
+      // On rouvre l'explorateur de repli : l'utilisateur doit pouvoir finir ce
+      // qu'il a commencé, pas rester devant un bouton mort.
+      $('#zone-explo').hidden = false;
+      explorer($('#d-chemin').value || '');
+    } finally {
+      btnParcourir.disabled = false;
+    }
+  });
+
+  let exploIci = '';
+  async function explorer(chemin) {
+    try {
+      const r = await api('/api/sauvegarde/parcourir'
+        + (chemin ? '?chemin=' + encodeURIComponent(chemin) : ''));
+      exploIci = r.chemin;
+      $('#explo-ici').textContent = r.chemin || 'Cet ordinateur';
+      $('#btn-remonter').disabled = !r.parent && !r.chemin;
+      $('#btn-remonter').dataset.parent = r.parent || '';
+      $('#explo').innerHTML = r.dossiers.length
+        ? r.dossiers.map(d => `<div class="explo-item" data-aller="${esc(d.chemin)}">
+             <i class="ti ti-folder" style="color:var(--text-2)"></i>${esc(d.nom)}</div>`).join('')
+        : '<div class="muted" style="padding:12px;font-size:12.5px">Ce dossier ne contient pas de sous-dossier.</div>';
+    } catch (e) {
+      $('#explo').innerHTML = `<div class="muted" style="padding:12px;font-size:12.5px">${esc(e.message)}</div>`;
+    }
+  }
+
+  $('#explo').addEventListener('click', e => {
+    const it = e.target.closest('[data-aller]');
+    if (!it) return;
+    // Un clic sert à la fois à ENTRER dans le dossier et à le CHOISIR : on
+    // remplit le champ au passage, sinon il faudrait deviner qu'il y a deux
+    // gestes différents.
+    $('#d-chemin').value = it.dataset.aller;
+    explorer(it.dataset.aller);
+  });
+
+  $('#btn-remonter').addEventListener('click', () => explorer($('#btn-remonter').dataset.parent || ''));
+
+  $('#btn-enr-dest').addEventListener('click', async () => {
+    const body = {
+      libelle: $('#d-libelle').value.trim(),
+      chemin: $('#d-chemin').value.trim(),
+      actif: true,
+    };
+    try {
+      if (destEnCours) {
+        await api('/api/sauvegarde/destinations/' + destEnCours.id, { method: 'PUT', body });
+      } else {
+        await api('/api/sauvegarde/destinations', { method: 'POST', body });
+      }
+      $('#modal-dest').hidden = true;
+      toast('Dossier enregistré.', 'ok');
+      await charger();
+    } catch (e) {
+      const a = $('#avert-dest');
+      a.hidden = false;
+      a.textContent = e.message;
+    }
+  });
+
+  // ---- Restauration --------------------------------------------------------
+  $('#btn-restaurer').addEventListener('click', () => {
+    archiveExaminee = null;
+    $('#r-chemin').value = '';
+    $('#apercu-archive').innerHTML = '';
+    $('#btn-lancer-restore').disabled = true;
+    $('#modal-restore').hidden = false;
+  });
+
+  $('#btn-lire-archive').addEventListener('click', async () => {
+    const chemin = $('#r-chemin').value.trim();
+    if (!chemin) { toast('Indiquez le fichier de sauvegarde.', 'warn'); return; }
+    try {
+      const a = await api('/api/sauvegarde/apercu', { method: 'POST', body: { chemin } });
+      archiveExaminee = { ...a, chemin };
+      $('#apercu-archive').innerHTML = `
+        <div class="alert"><i class="ti ti-file-check"></i><span>
+          Sauvegarde du <strong>${quand(a.cree_le)}</strong> —
+          ${a.nb_documents} pièce(s) jointe(s), ${octets(a.taille_fichier)}.<br>
+          Secret nécessaire : <strong>${esc(a.secret_attendu)}</strong>.</span></div>`;
+      $('#btn-lancer-restore').disabled = false;
+    } catch (e) {
+      archiveExaminee = null;
+      $('#btn-lancer-restore').disabled = true;
+      $('#apercu-archive').innerHTML =
+        `<div class="alert danger"><i class="ti ti-x"></i><span>${esc(e.message)}</span></div>`;
+    }
+  });
+
+  $('#btn-lancer-restore').addEventListener('click', async () => {
+    if (!archiveExaminee) return;
+    const a = archiveExaminee;
+    let secret = null;
+    if (a.secret_requis) {
+      secret = await demanderSecret(a.secret_attendu,
+        `Cette sauvegarde du ${quand(a.cree_le)} ne peut être ouverte qu'avec ce secret.`);
+      if (secret === null) return;
+    }
+    if (!await Djigui.confirm(
+      `Restaurer la sauvegarde du ${quand(a.cree_le)} ?\n\n`
+      + `Vos données actuelles seront REMPLACÉES par celles de ce fichier.\n`
+      + `Tout ce qui a été saisi depuis cette date sera perdu.\n\n`
+      + `Vos données actuelles seront mises de côté à côté de la base, `
+      + `au cas où vous vous seriez trompé de fichier.`)) return;
+
+    try {
+      const r = await api('/api/sauvegarde/restaurer', { method: 'POST',
+        body: { chemin: a.chemin, mot_de_passe: secret } });
+      $('#modal-restore').hidden = true;
+      // ⚠️ La connexion serveur pointe encore sur l'ANCIEN fichier : sans
+      // redémarrage, l'écran montrerait les données d'avant et laisserait
+      // croire que la restauration a échoué.
+      await Djigui.alert(r.message
+        + (r.sauvegarde_de_securite ? `\n\nVos données d'avant sont conservées ici :\n${r.sauvegarde_de_securite}` : '')
+        + `\n\nFERMEZ puis ROUVREZ Djigui maintenant.`);
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  charger();
+})();
+</script>
+</body>
+</html>

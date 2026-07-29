@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Salariés</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  /* Réutilise `.proj-grille` / `.proj-carte` / `.pe-bloc` de styles.css,
+     comme les modules, les projets et les marchés. */
+  .emp-ic { width:42px; height:42px; border-radius:50%; flex:none; display:flex;
+    align-items:center; justify-content:center; font-size:15px; font-weight:700;
+    background:var(--brand-tint); color:var(--brand-strong); }
+  .proj-carte.sorti .emp-ic { background:var(--surface-2); color:var(--text-muted); }
+  .proj-carte.sorti { opacity:.72; }
+  .emp-nom { font-weight:700; font-size:15px; }
+  .emp-mat { font-size:12px; color:var(--text-2); }
+  .emp-ligne { display:flex; align-items:center; gap:7px; font-size:12.5px;
+    color:var(--text-2); margin-top:5px; }
+  .emp-ligne i { font-size:15px; flex:none; }
+  .emp-salaire { font-weight:700; font-size:15px; color:var(--text); }
+  .emp-alerte { margin-top:10px; padding:7px 9px; border-radius:8px;
+    background:rgba(217,160,20,.07); box-shadow:inset 3px 0 0 var(--warning);
+    font-size:12px; color:var(--text-2); }
+  /* Case à cocher posée SUR la carte (motif du module Marchés). */
+  .proj-coche { position:absolute; top:10px; right:10px; width:18px; height:18px; }
+  .proj-carte { position:relative; }
+  .proj-carte.choisie { border-color:var(--brand); box-shadow:0 0 0 2px var(--brand-tint); }
+  .ctr-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .ctr-tbl th { text-align:left; font-size:11px; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--text-2); padding:6px 8px;
+    border-bottom:1px solid var(--border); }
+  .ctr-tbl td { padding:7px 8px; border-bottom:1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">Salariés</div>
+        <div class="topbar-date">Les personnes que vous payez</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" id="btn-nouveau"><i class="ti ti-user-plus"></i>Nouveau salarié</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="synthese" id="tuiles" style="padding:0"></div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="rech" class="input-std" placeholder="Rechercher un nom, un matricule, un poste…"
+                 style="flex:1;min-width:220px">
+          <div class="chips" id="chips">
+            <span class="chip active" data-filtre="actifs">Présents</span>
+            <span class="chip" data-filtre="sortis">Partis</span>
+            <span class="chip" data-filtre="tous">Tous</span>
+          </div>
+          <label class="coche-tout" style="display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="chk-tous" style="width:18px;height:18px"> Tout sélectionner</label>
+        </div>
+      </div>
+
+      <!-- Traitement par lot -->
+      <div class="bulk-bar" id="barre-lot" hidden>
+        <span class="bulk-count" id="lot-compte">0 sélectionné</span>
+        <div class="bulk-spacer"></div>
+        <button class="btn" id="lot-depart"><i class="ti ti-door-exit"></i>Enregistrer leur départ</button>
+        <button class="btn" id="lot-vider">Tout décocher</button>
+      </div>
+
+      <div id="grille"></div>
+
+      <div class="aide" style="margin-top:20px">
+        <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert cet écran ?</div>
+        <ul>
+          <li>Chaque salarié a une <strong>fiche</strong> (qui il est, sa situation de famille) et un
+            <strong>contrat</strong> (ce qu'il gagne). Les deux sont nécessaires pour établir un bulletin.</li>
+          <li><strong>Un seul contrat est actif à la fois.</strong> Pour une augmentation ou un changement de
+            poste, enregistrez un <strong>nouveau contrat</strong> : l'ancien se ferme tout seul la veille et
+            reste dans l'historique. Ne modifiez pas l'ancien, sinon vous réécririez le passé.</li>
+          <li>La <strong>situation de famille</strong> n'est pas une formalité : elle décide du nombre de
+            parts, donc de l'impôt retenu. Djigui calcule les parts tout seul et les affiche sur la fiche.</li>
+          <li>Quand quelqu'un s'en va, <strong>enregistrez son départ</strong> — ne le supprimez pas.
+            Ses bulletins doivent rester consultables pendant des années : ce sont vos preuves.</li>
+          <li>Les mentions en <strong>jaune</strong> signalent ce qui manque (numéro IPRES, CDD sans terme,
+            compte bancaire absent). Elles <strong>n'empêchent jamais d'enregistrer</strong> : un dossier
+            peut être en cours de régularisation. Mais elles feront rejeter vos déclarations si elles restent.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== MODALE SALARIÉ ==================== -->
+<div class="modal-overlay" id="modal-emp" hidden>
+  <div class="modal" style="max-width:820px">
+    <div class="card-head"><span class="card-title" id="titre-emp">Nouveau salarié</span>
+      <i class="ti ti-x" data-fermer="modal-emp" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="reglage-bloc">
+        <div class="reglage-titre">Identité</div>
+        <div class="form-grid">
+          <div class="field"><label>Matricule</label><input id="f-matricule" class="input-std"
+            placeholder="ex. SAL-001"></div>
+          <div class="field"><label>Poste</label><input id="f-poste" class="input-std"></div>
+          <div class="field"><label>Nom</label><input id="f-nom" class="input-std"></div>
+          <div class="field"><label>Prénom</label><input id="f-prenom" class="input-std"></div>
+          <div class="field"><label>Date de naissance</label><input id="f-naissance" type="date" class="input-std"></div>
+          <div class="field"><label>Lieu de naissance</label><input id="f-lieu" class="input-std"></div>
+          <div class="field"><label>Sexe</label>
+            <select id="f-sexe" class="input-std">
+              <option value="">—</option><option value="f">Féminin</option><option value="m">Masculin</option>
+            </select></div>
+          <div class="field"><label>N° CNI <span class="muted">(facultatif)</span></label>
+            <input id="f-cni" class="input-std"></div>
+          <div class="field"><label>Téléphone</label><input id="f-tel" class="input-std"></div>
+          <div class="field"><label>Adresse</label><input id="f-adresse" class="input-std"></div>
+        </div>
+      </div>
+
+      <div class="reglage-bloc">
+        <div class="reglage-titre">Situation de famille</div>
+        <p class="muted" style="font-size:12px;margin:0 0 12px">
+          Elle décide du <strong>nombre de parts</strong>, donc de l'impôt retenu chaque mois.
+        </p>
+        <div class="form-grid">
+          <div class="field"><label>Situation</label>
+            <select id="f-situation" class="input-std">
+              <option value="celibataire">Célibataire</option>
+              <option value="marie">Marié(e)</option>
+              <option value="veuf">Veuf / veuve</option>
+              <option value="divorce">Divorcé(e)</option>
+            </select></div>
+          <div class="field"><label>Enfants à charge</label>
+            <input id="f-enfants" type="number" min="0" max="20" class="input-std" value="0"></div>
+          <div class="field"><label>Épouses non salariées à charge</label>
+            <input id="f-conjoints" type="number" min="0" max="10" class="input-std" value="0">
+            <span class="check-hint muted">Elles comptent pour la TRIMF, pas pour l'impôt sur le revenu.</span></div>
+          <div class="field full">
+            <div class="alert" id="apercu-parts" style="margin:0"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reglage-bloc">
+        <div class="reglage-titre">Emploi et affiliations</div>
+        <div class="form-grid">
+          <div class="field"><label>Date d'embauche</label><input id="f-embauche" type="date" class="input-std"></div>
+          <div class="field"><label>Catégorie / classement</label><input id="f-categorie" class="input-std"></div>
+          <div class="field full">
+            <label class="coche"><input type="checkbox" id="f-cadre"><span>Cadre</span></label>
+            <div class="muted coche-aide" style="font-size:12px">
+              Déclenche la <strong>retraite complémentaire</strong> : une cotisation en plus, pour lui
+              comme pour vous. Ce n'est pas un titre honorifique.
+            </div>
+          </div>
+          <div class="field"><label>N° IPRES</label><input id="f-ipres" class="input-std"></div>
+          <div class="field"><label>N° CSS</label><input id="f-css" class="input-std"></div>
+          <div class="field"><label>N° IPM</label><input id="f-ipm" class="input-std"></div>
+        </div>
+      </div>
+
+      <div class="reglage-bloc">
+        <div class="reglage-titre">Comment il est payé</div>
+        <div class="form-grid">
+          <div class="field"><label>Mode de paiement</label>
+            <select id="f-mode" class="input-std">
+              <option value="virement">Virement bancaire</option>
+              <option value="especes">Espèces</option>
+              <option value="cheque">Chèque</option>
+              <option value="mobile_money">Mobile money</option>
+            </select></div>
+          <div class="field"><label>Banque</label><input id="f-banque" class="input-std"></div>
+          <div class="field full"><label>N° de compte</label><input id="f-compte" class="input-std"></div>
+          <div class="field full"><label>Note</label><textarea id="f-note" rows="2"></textarea></div>
+        </div>
+      </div>
+
+      <div class="alert warn" id="err-emp" style="margin-top:12px" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-emp">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-emp">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE FICHE ==================== -->
+<div class="modal-overlay" id="modal-fiche" hidden>
+  <div class="modal" style="max-width:820px">
+    <div class="card-head"><span class="card-title" id="titre-fiche">Fiche</span>
+      <i class="ti ti-x" data-fermer="modal-fiche" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body" id="corps-fiche"></div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-fiche">Fermer</button>
+      <button class="btn btn-primary" id="btn-nouveau-contrat">
+        <i class="ti ti-file-plus"></i>Nouveau contrat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE CONTRAT ==================== -->
+<div class="modal-overlay" id="modal-ctr" hidden>
+  <div class="modal" style="max-width:640px">
+    <div class="card-head"><span class="card-title">Nouveau contrat</span>
+      <i class="ti ti-x" data-fermer="modal-ctr" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="alert" style="margin-bottom:14px">
+        <i class="ti ti-info-circle"></i>
+        <span>Le contrat en cours <strong>se fermera automatiquement la veille</strong> de la date de
+          début choisie. Il restera consultable dans l'historique : on ne réécrit pas le passé.</span>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Type de contrat</label>
+          <select id="c-type" class="input-std">
+            <option value="cdi">CDI — durée indéterminée</option>
+            <option value="cdd">CDD — durée déterminée</option>
+            <option value="stage">Stage</option>
+            <option value="apprentissage">Apprentissage</option>
+            <option value="journalier">Journalier</option>
+          </select></div>
+        <div class="field"><label>Date de début</label><input id="c-debut" type="date" class="input-std"></div>
+        <div class="field"><label>Date de fin <span class="muted">(CDD)</span></label>
+          <input id="c-fin" type="date" class="input-std">
+          <span class="check-hint muted">Obligatoire en droit pour un CDD.</span></div>
+        <div class="field"><label>Heures par mois</label>
+          <input id="c-heures" type="number" step="0.01" class="input-std" value="173.33"></div>
+        <div class="field"><label>Salaire de base</label>
+          <input id="c-salaire" type="number" step="1" class="input-std"></div>
+        <div class="field"><label>Sursalaire</label>
+          <input id="c-sursalaire" type="number" step="1" class="input-std" value="0">
+          <span class="check-hint muted">Complément versé au-delà du minimum conventionnel.</span></div>
+        <div class="field full">
+          <label>Avantages en nature</label>
+          <div id="c-avantages" style="display:flex;flex-direction:column;gap:7px"></div>
+          <span class="check-hint muted">Ils sont évalués selon les barèmes des
+            <a href="paie-parametres.html">paramètres de paie</a>, puis ajoutés au brut.</span>
+        </div>
+      </div>
+      <div class="alert warn" id="err-ctr" style="margin-top:12px" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-ctr">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-ctr">Enregistrer le contrat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE DÉPART ==================== -->
+<div class="modal-overlay" id="modal-depart" hidden>
+  <div class="modal" style="max-width:520px">
+    <div class="card-head"><span class="card-title">Enregistrer un départ</span>
+      <i class="ti ti-x" data-fermer="modal-depart" data-tip="Fermer"
+         style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="alert" style="margin-bottom:14px">
+        <i class="ti ti-info-circle"></i>
+        <span>Le salarié <strong>n'est pas supprimé</strong> : sa fiche et ses bulletins restent
+          consultables. Son contrat se clôt automatiquement.</span>
+      </div>
+      <div class="form-grid">
+        <div class="field full"><label>Date de départ</label>
+          <input id="d-date" type="date" class="input-std"></div>
+        <div class="field full"><label>Motif</label>
+          <input id="d-motif" class="input-std"
+            placeholder="Démission, fin de CDD, licenciement, retraite…">
+          <span class="check-hint muted">Il détermine les droits du salarié (préavis, indemnités)
+            et sera le premier document réclamé en cas de litige.</span></div>
+      </div>
+      <div class="alert warn" id="err-depart" style="margin-top:12px" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-depart">Annuler</button>
+      <button class="btn btn-danger" id="btn-enr-depart">Enregistrer le départ</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, fmt, esc, toast } = Djigui;
+
+  const TYPES = { cdi:'CDI', cdd:'CDD', stage:'Stage',
+                  apprentissage:'Apprentissage', journalier:'Journalier' };
+  const SITUATIONS = { celibataire:'Célibataire', marie:'Marié(e)',
+                       veuf:'Veuf / veuve', divorce:'Divorcé(e)' };
+
+  let employes = [], filtre = 'actifs', choisis = new Set();
+  let editeId = null, ficheId = null, departIds = null;
+  let avantagesDisponibles = [];
+
+  const initiales = e =>
+    ((e.prenom || '').trim()[0] || '') + ((e.nom || '').trim()[0] || '');
+
+  async function charger() {
+    try {
+      employes = await api('/api/paie/employes?filtre=' + filtre);
+    } catch (e) { toast('Chargement impossible : ' + e.message, 'danger'); return; }
+    rendre();
+  }
+
+  // Les avantages proposés viennent des PARAMÈTRES DE PAIE : on ne réinvente
+  // pas une liste ici, sinon les deux écrans divergeraient.
+  async function chargerAvantages() {
+    try {
+      const p = await api('/api/paie/parametres');
+      avantagesDisponibles = (p.primes || []).filter(x => x.usage_prime === 'avantage');
+    } catch { avantagesDisponibles = []; }
+  }
+
+  function rendre() {
+    const q = $('#rech').value.trim().toLowerCase();
+    const vus = employes.filter(e => !q ||
+      (e.nom_complet + ' ' + e.matricule + ' ' + (e.poste || '')).toLowerCase().includes(q));
+
+    const masse = employes.filter(e => e.actif)
+      .reduce((s, e) => s + (e.remuneration_base || 0), 0);
+    const avecAlerte = employes.filter(e => e.alertes.length).length;
+    $('#tuiles').innerHTML = [
+      ['ti-users', 'Salariés présents', fmt(employes.filter(e => e.actif).length), ''],
+      ['ti-cash', 'Masse salariale de base', fmt(masse), 'acc-brand fort'],
+      ['ti-user-star', 'Cadres', fmt(employes.filter(e => e.actif && e.est_cadre).length), ''],
+      ['ti-alert-triangle', 'Fiches à compléter', fmt(avecAlerte), avecAlerte ? 'acc-moyen' : 'acc-ok'],
+    ].map(([ic, l, v, acc]) => `<div class="pe-bloc ${acc}">
+        <div class="pe-ic"><i class="ti ${ic}"></i></div>
+        <div class="pe-corps"><div class="pe-lbl">${l}</div><div class="pe-val">${v}</div></div>
+      </div>`).join('');
+
+    $('#grille').innerHTML = vus.length ? `<div class="proj-grille">${vus.map(carte).join('')}</div>`
+      : `<div class="muted" style="padding:24px;text-align:center">
+           ${employes.length ? 'Aucun salarié ne correspond à votre recherche.'
+             : 'Aucun salarié enregistré. Cliquez sur « Nouveau salarié ».'}</div>`;
+
+    majBarreLot();
+  }
+
+  function carte(e) {
+    const ctr = e.contrat;
+    return `<div class="proj-carte ${e.actif ? '' : 'sorti'} ${choisis.has(e.id) ? 'choisie' : ''}"
+                 data-id="${esc(e.id)}">
+      <input type="checkbox" class="proj-coche" data-coche="${esc(e.id)}"
+             ${choisis.has(e.id) ? 'checked' : ''}>
+      <div class="proj-corps">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div class="emp-ic">${esc(initiales(e).toUpperCase() || '?')}</div>
+          <div style="flex:1;min-width:0;padding-right:22px">
+            <div class="emp-nom">${esc(e.nom_complet)}</div>
+            <div class="emp-mat">${esc(e.matricule)}${e.poste ? ' · ' + esc(e.poste) : ''}</div>
+            <div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">
+              ${e.actif ? '' : '<span class="badge neutral">parti</span>'}
+              ${e.est_cadre ? '<span class="badge">cadre</span>' : ''}
+              ${ctr ? `<span class="badge ok">${esc(TYPES[ctr.type_contrat] || ctr.type_contrat)}</span>`
+                    : '<span class="badge warn">sans contrat</span>'}
+            </div>
+          </div>
+        </div>
+
+        <div class="emp-ligne"><i class="ti ti-cash"></i>
+          <span class="emp-salaire">${e.remuneration_base ? fmt(e.remuneration_base) : '—'}</span>
+          <span class="muted">par mois</span></div>
+        <div class="emp-ligne"><i class="ti ti-users"></i>
+          ${esc(SITUATIONS[e.situation_matrimoniale] || '')} ·
+          ${e.nb_enfants_charge} enfant(s) ·
+          <strong>${e.nb_parts_ir} part(s)</strong></div>
+        <div class="emp-ligne"><i class="ti ti-calendar"></i>
+          Depuis le ${esc(e.date_embauche)}
+          ${e.anciennete_mois ? `<span class="muted">(${e.anciennete_mois} mois)</span>` : ''}</div>
+
+        ${e.alertes.length ? `<div class="emp-alerte">
+          <i class="ti ti-alert-triangle" style="color:var(--warning)"></i>
+          ${esc(e.alertes[0])}${e.alertes.length > 1
+            ? ` <strong>+${e.alertes.length - 1} autre(s)</strong>` : ''}</div>` : ''}
+
+        <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-sm" data-fiche="${esc(e.id)}"><i class="ti ti-id"></i>Fiche</button>
+          <button class="btn btn-sm" data-modif="${esc(e.id)}"><i class="ti ti-pencil"></i>Modifier</button>
+          ${e.actif
+            ? `<button class="btn btn-sm" data-depart="${esc(e.id)}"><i class="ti ti-door-exit"></i>Départ</button>`
+            : `<button class="btn btn-sm" data-reprise="${esc(e.id)}"><i class="ti ti-arrow-back-up"></i>Réintégrer</button>`}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ---- Sélection et traitement par lot ------------------------------------
+  function majBarreLot() {
+    const n = choisis.size;
+    $('#barre-lot').hidden = n === 0;
+    $('#lot-compte').textContent = `${n} sélectionné${n > 1 ? 's' : ''}`;
+    const total = employes.length;
+    const c = $('#chk-tous');
+    c.checked = n > 0 && n === total;
+    c.indeterminate = n > 0 && n < total;
+  }
+
+  $('#chk-tous').addEventListener('change', e => {
+    choisis = e.target.checked ? new Set(employes.map(x => x.id)) : new Set();
+    rendre();
+  });
+  $('#lot-vider').addEventListener('click', () => { choisis = new Set(); rendre(); });
+
+  document.addEventListener('change', e => {
+    const c = e.target.closest('[data-coche]');
+    if (!c) return;
+    if (c.checked) choisis.add(c.dataset.coche); else choisis.delete(c.dataset.coche);
+    // On ne re-rend PAS toute la grille : le nœud cliqué serait détaché et le
+    // clic suivant ne remonterait plus (piège rencontré sur l'écran Marchés).
+    c.closest('.proj-carte').classList.toggle('choisie', c.checked);
+    majBarreLot();
+  });
+
+  $('#rech').addEventListener('input', rendre);
+  document.querySelectorAll('#chips .chip').forEach(ch => ch.addEventListener('click', () => {
+    document.querySelectorAll('#chips .chip').forEach(x => x.classList.toggle('active', x === ch));
+    filtre = ch.dataset.filtre;
+    choisis = new Set();
+    charger();
+  }));
+
+  document.querySelectorAll('[data-fermer]').forEach(b =>
+    b.addEventListener('click', () => { $('#' + b.dataset.fermer).hidden = true; }));
+
+  // ---- Aperçu des parts, en direct pendant la saisie ----------------------
+  // On refait le calcul du serveur ici UNIQUEMENT pour l'aperçu : la valeur qui
+  // fait foi reste celle que le serveur renvoie sur la fiche.
+  function apercuParts() {
+    const s = $('#f-situation').value;
+    const enf = parseInt($('#f-enfants').value, 10) || 0;
+    const conj = parseInt($('#f-conjoints').value, 10) || 0;
+    const base = s === 'marie' ? 1.5 : (s === 'veuf' && enf > 0 ? 1.5 : 1);
+    const parts = Math.min(base + 0.5 * enf, 5);
+    $('#apercu-parts').innerHTML = `<i class="ti ti-calculator"></i>
+      <span><strong>${parts} part(s)</strong> pour l'impôt sur le revenu ·
+      <strong>${1 + conj} part(s)</strong> pour la TRIMF.
+      ${parts === 5 ? ' <em>Plafond de 5 parts atteint.</em>' : ''}</span>`;
+  }
+  ['#f-situation', '#f-enfants', '#f-conjoints'].forEach(id =>
+    document.addEventListener('input', e => { if (e.target.closest(id)) apercuParts(); }));
+  document.addEventListener('change', e => {
+    if (e.target.id === 'f-situation') apercuParts();
+  });
+
+  // ---- Créer / modifier un salarié ----------------------------------------
+  $('#btn-nouveau').addEventListener('click', () => ouvrirEmploye(null));
+
+  function ouvrirEmploye(e) {
+    editeId = e ? e.id : null;
+    $('#titre-emp').textContent = e ? 'Modifier ' + e.nom_complet : 'Nouveau salarié';
+    const v = (id, val) => { $(id).value = val === null || val === undefined ? '' : val; };
+    v('#f-matricule', e && e.matricule); v('#f-nom', e && e.nom); v('#f-prenom', e && e.prenom);
+    v('#f-naissance', e && e.date_naissance); v('#f-lieu', e && e.lieu_naissance);
+    v('#f-sexe', (e && e.sexe) || ''); v('#f-cni', e && e.cni);
+    v('#f-tel', e && e.telephone); v('#f-adresse', e && e.adresse);
+    v('#f-situation', (e && e.situation_matrimoniale) || 'celibataire');
+    v('#f-enfants', e ? e.nb_enfants_charge : 0);
+    v('#f-conjoints', e ? e.nb_conjoints_a_charge : 0);
+    $('#f-cadre').checked = !!(e && e.est_cadre);
+    v('#f-poste', e && e.poste); v('#f-categorie', e && e.categorie);
+    v('#f-embauche', (e && e.date_embauche) || new Date().toISOString().slice(0, 10));
+    v('#f-ipres', e && e.numero_ipres); v('#f-css', e && e.numero_css); v('#f-ipm', e && e.numero_ipm);
+    v('#f-mode', (e && e.mode_paiement) || 'virement');
+    v('#f-banque', e && e.banque); v('#f-compte', e && e.numero_compte);
+    v('#f-note', e && e.note);
+    $('#err-emp').hidden = true;
+    apercuParts();
+    $('#modal-emp').hidden = false;
+  }
+
+  $('#btn-enr-emp').addEventListener('click', async () => {
+    const t = id => { const x = $(id).value.trim(); return x === '' ? null : x; };
+    const corps = {
+      matricule: $('#f-matricule').value.trim(), nom: $('#f-nom').value.trim(),
+      prenom: t('#f-prenom'), date_naissance: t('#f-naissance'), lieu_naissance: t('#f-lieu'),
+      sexe: t('#f-sexe'), cni: t('#f-cni'), telephone: t('#f-tel'), adresse: t('#f-adresse'),
+      situation_matrimoniale: $('#f-situation').value,
+      nb_enfants_charge: parseInt($('#f-enfants').value, 10) || 0,
+      nb_conjoints_a_charge: parseInt($('#f-conjoints').value, 10) || 0,
+      est_cadre: $('#f-cadre').checked, poste: t('#f-poste'), categorie: t('#f-categorie'),
+      date_embauche: $('#f-embauche').value, numero_ipres: t('#f-ipres'),
+      numero_css: t('#f-css'), numero_ipm: t('#f-ipm'), mode_paiement: $('#f-mode').value,
+      banque: t('#f-banque'), numero_compte: t('#f-compte'), note: t('#f-note'),
+    };
+    try {
+      if (editeId) await api('/api/paie/employes/' + editeId, { method: 'PUT', body: corps });
+      else await api('/api/paie/employes', { method: 'POST', body: corps });
+      $('#modal-emp').hidden = true;
+      toast(editeId ? 'Fiche mise à jour.' : 'Salarié enregistré. Ajoutez-lui un contrat.', 'ok');
+      await charger();
+    } catch (e) {
+      const a = $('#err-emp'); a.hidden = false; a.textContent = e.message;
+    }
+  });
+
+  // ---- Fiche ---------------------------------------------------------------
+  document.addEventListener('click', async e => {
+    const f = e.target.closest('[data-fiche]');
+    if (f) { await ouvrirFiche(f.dataset.fiche); return; }
+    const m = e.target.closest('[data-modif]');
+    if (m) { ouvrirEmploye(employes.find(x => x.id === m.dataset.modif)); return; }
+    const d = e.target.closest('[data-depart]');
+    if (d) { ouvrirDepart([d.dataset.depart]); return; }
+    const r = e.target.closest('[data-reprise]');
+    if (r) {
+      const emp = employes.find(x => x.id === r.dataset.reprise);
+      if (!await Djigui.confirm(
+        `Réintégrer ${emp.nom_complet} ?\n\n`
+        + `Son ancien contrat ne revient pas : il faudra en enregistrer un nouveau `
+        + `avant de pouvoir le payer.`)) return;
+      try {
+        await api('/api/paie/employes/' + emp.id + '/reintegrer', { method: 'POST', body: {} });
+        toast('Salarié réintégré. Enregistrez son nouveau contrat.', 'ok');
+        await charger();
+      } catch (err) { toast(err.message, 'danger'); }
+    }
+  });
+
+  async function ouvrirFiche(id) {
+    ficheId = id;
+    try {
+      const [e, ctrs] = await Promise.all([
+        api('/api/paie/employes/' + id),
+        api('/api/paie/employes/' + id + '/contrats'),
+      ]);
+      $('#titre-fiche').textContent = e.nom_complet + ' — ' + e.matricule;
+      const l = (lib, val) => `<div><span class="muted" style="font-size:12px">${lib}</span><br>
+        <strong>${esc(val === null || val === undefined || val === '' ? '—' : String(val))}</strong></div>`;
+      $('#corps-fiche').innerHTML = `
+        ${e.alertes.length ? `<div class="alert warn" style="margin-bottom:14px">
+          <i class="ti ti-alert-triangle"></i><span>${e.alertes.map(esc).join('<br>')}</span></div>` : ''}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:18px">
+          ${l('Poste', e.poste)}
+          ${l('Situation', SITUATIONS[e.situation_matrimoniale])}
+          ${l('Parts (impôt)', e.nb_parts_ir)}
+          ${l('Parts (TRIMF)', e.nb_parts_trimf)}
+          ${l('Embauché le', e.date_embauche)}
+          ${l('Ancienneté', e.anciennete_mois + ' mois')}
+          ${l('Rémunération de base', fmt(e.remuneration_base))}
+          ${l('Payé par', e.mode_paiement)}
+        </div>
+        <div class="reglage-titre">Contrats</div>
+        <table class="ctr-tbl"><thead><tr>
+          <th>Type</th><th>Du</th><th>Au</th><th>Salaire</th><th>Sursalaire</th>
+          <th>Avantages</th><th>État</th></tr></thead>
+        <tbody>${ctrs.length ? ctrs.map(c => `<tr>
+          <td>${esc(TYPES[c.type_contrat] || c.type_contrat)}</td>
+          <td>${esc(c.date_debut)}</td><td>${esc(c.date_fin || '—')}</td>
+          <td>${fmt(c.salaire_base)}</td><td>${fmt(c.sursalaire)}</td>
+          <td>${c.avantages.length ? c.avantages.map(a => esc(a.code_avantage)).join(', ') : '—'}</td>
+          <td>${c.actif ? '<span class="badge ok">en cours</span>'
+                : `<span class="badge neutral">clos</span>`}
+              ${c.motif_fin ? `<div class="muted" style="font-size:11px">${esc(c.motif_fin)}</div>` : ''}</td>
+        </tr>`).join('')
+          : '<tr><td colspan="7" class="muted" style="padding:16px">Aucun contrat enregistré.</td></tr>'}
+        </tbody></table>`;
+      $('#modal-fiche').hidden = false;
+    } catch (err) { toast(err.message, 'danger'); }
+  }
+
+  // ---- Contrat -------------------------------------------------------------
+  $('#btn-nouveau-contrat').addEventListener('click', () => {
+    $('#modal-fiche').hidden = true;
+    $('#c-type').value = 'cdi';
+    $('#c-debut').value = new Date().toISOString().slice(0, 10);
+    $('#c-fin').value = ''; $('#c-salaire').value = ''; $('#c-sursalaire').value = 0;
+    $('#c-heures').value = 173.33;
+    $('#c-avantages').innerHTML = avantagesDisponibles.length
+      ? avantagesDisponibles.map(a => `<label class="coche" style="display:flex;gap:9px;align-items:center;cursor:pointer">
+          <input type="checkbox" data-av="${esc(a.code)}" style="width:18px;height:18px;flex:none">
+          <span>${esc(a.libelle)}</span></label>`).join('')
+      : '<span class="muted" style="font-size:12.5px">Aucun avantage paramétré.</span>';
+    $('#err-ctr').hidden = true;
+    $('#modal-ctr').hidden = false;
+  });
+
+  $('#btn-enr-ctr').addEventListener('click', async () => {
+    const corps = {
+      employe_id: ficheId, type_contrat: $('#c-type').value,
+      date_debut: $('#c-debut').value,
+      date_fin: $('#c-fin').value || null,
+      salaire_base: parseFloat($('#c-salaire').value) || 0,
+      sursalaire: parseFloat($('#c-sursalaire').value) || 0,
+      heures_mois: parseFloat($('#c-heures').value) || 173.33,
+      avantages: [...document.querySelectorAll('[data-av]:checked')]
+        .map(x => ({ code_avantage: x.dataset.av, valeur_declaree: null })),
+    };
+    try {
+      await api('/api/paie/contrats', { method: 'POST', body: corps });
+      $('#modal-ctr').hidden = true;
+      toast('Contrat enregistré. Le précédent a été clos la veille.', 'ok');
+      await charger();
+    } catch (e) {
+      const a = $('#err-ctr'); a.hidden = false; a.textContent = e.message;
+    }
+  });
+
+  // ---- Départ --------------------------------------------------------------
+  function ouvrirDepart(ids) {
+    departIds = ids;
+    $('#d-date').value = new Date().toISOString().slice(0, 10);
+    $('#d-motif').value = '';
+    $('#err-depart').hidden = true;
+    $('#modal-depart').hidden = false;
+  }
+  $('#lot-depart').addEventListener('click', () => ouvrirDepart([...choisis]));
+
+  $('#btn-enr-depart').addEventListener('click', async () => {
+    const date_sortie = $('#d-date').value, motif = $('#d-motif').value.trim();
+    try {
+      if (departIds.length === 1) {
+        await api('/api/paie/employes/' + departIds[0] + '/depart',
+                  { method: 'POST', body: { date_sortie, motif } });
+        toast('Départ enregistré. La fiche reste consultable.', 'ok');
+      } else {
+        const r = await api('/api/paie/employes/lot/depart',
+                            { method: 'POST', body: { ids: departIds, date_sortie, motif } });
+        // ⚠️ On montre CE QUI N'EST PAS PASSÉ : un simple compteur laisserait
+        // croire à un échec silencieux.
+        toast(r.message, r.conserves ? 'warn' : 'ok');
+      }
+      $('#modal-depart').hidden = true;
+      choisis = new Set();
+      await charger();
+    } catch (e) {
+      const a = $('#err-depart'); a.hidden = false; a.textContent = e.message;
+    }
+  });
+
+  chargerAvantages();
+  charger();
+})();
+</script>
+</body>
+</html>

@@ -162,6 +162,81 @@ const MIGRATIONS: &[Migration] = &[
         nom: "notifications",
         sql: include_str!("../migrations/0030_notifications.sql"),
     },
+    Migration {
+        version: 31,
+        nom: "production",
+        sql: include_str!("../migrations/0031_production.sql"),
+    },
+    Migration {
+        version: 32,
+        nom: "nature_comptable_article",
+        sql: include_str!("../migrations/0032_nature_comptable_article.sql"),
+    },
+    Migration {
+        version: 33,
+        nom: "reclassement_articles",
+        sql: include_str!("../migrations/0033_reclassement_articles.sql"),
+    },
+    Migration {
+        version: 34,
+        nom: "comptabilite",
+        sql: include_str!("../migrations/0034_comptabilite.sql"),
+    },
+    Migration {
+        version: 35,
+        nom: "prix_achat_estime",
+        sql: include_str!("../migrations/0035_prix_achat_estime.sql"),
+    },
+    Migration {
+        version: 36,
+        nom: "valorisation_stock",
+        sql: include_str!("../migrations/0036_valorisation_stock.sql"),
+    },
+    Migration {
+        version: 37,
+        nom: "marches",
+        sql: include_str!("../migrations/0037_marches.sql"),
+    },
+    Migration {
+        version: 38,
+        nom: "marches_enchainement",
+        sql: include_str!("../migrations/0038_marches_enchainement.sql"),
+    },
+    Migration {
+        version: 39,
+        nom: "marches_phases",
+        sql: include_str!("../migrations/0039_marches_phases.sql"),
+    },
+    Migration {
+        version: 40,
+        nom: "modules",
+        sql: include_str!("../migrations/0040_modules.sql"),
+    },
+    Migration {
+        version: 41,
+        nom: "modules_ouverture_existant",
+        sql: include_str!("../migrations/0041_modules_ouverture_existant.sql"),
+    },
+    Migration {
+        version: 42,
+        nom: "sauvegarde",
+        sql: include_str!("../migrations/0042_sauvegarde.sql"),
+    },
+    Migration {
+        version: 43,
+        nom: "retenue_source",
+        sql: include_str!("../migrations/0043_retenue_source.sql"),
+    },
+    Migration {
+        version: 44,
+        nom: "paie_parametres",
+        sql: include_str!("../migrations/0044_paie_parametres.sql"),
+    },
+    Migration {
+        version: 45,
+        nom: "paie_employes",
+        sql: include_str!("../migrations/0045_paie_employes.sql"),
+    },
 ];
 
 struct Migration {
@@ -249,7 +324,10 @@ mod tests {
         let v: i64 = conn
             .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(v, 30);
+        // Comparé au registre lui-même, et non à un numéro écrit à la main :
+        // ce test doit vérifier que TOUTES les migrations déclarées se sont
+        // appliquées, pas qu'on a pensé à incrémenter un chiffre ici.
+        assert_eq!(v, MIGRATIONS.last().unwrap().version);
         // migration 0007 : les taxes reprennent les taux de TVA
         let nt: i64 = conn.query_row("SELECT COUNT(*) FROM taxe", [], |r| r.get(0)).unwrap();
         assert_eq!(nt, 3);

@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Djigui · Marché</title>
+<link rel="icon" href="assets/logo-djigui.png">
+<link rel="stylesheet" href="assets/tabler/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=33">
+<style>
+  /* Les anciennes tuiles maison ont été remplacées par l'en-tête partagé
+     (.projet-hero / .pe-bloc), défini dans styles.css comme sur le détail
+     d'un projet. */
+  .neg { color:#b91c1c; } .pos { color:#166534; }
+  tr.retard td { background:#fffbeb; }
+  tr.terminee td { background:#f0fdf4; }
+  tr.retenu td { background:#f0fdf4; font-weight:600; }
+  /* L'étape du moment est mise en avant ; celles qui attendent leur tour sont
+     estompées. On lit la procédure d'un coup d'œil, sans compter les lignes. */
+  tr.courante td { background: var(--brand-tint); }
+  tr.courante td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+  tr.verrouillee td { opacity: .55; }
+  /* Le numéro d'étape : c'est lui qui situe dans la procédure. La couleur dit
+     l'état, le chiffre reste toujours lisible. */
+  .etape-num { display:inline-flex; align-items:center; justify-content:center;
+    width:24px; height:24px; border-radius:50%; font-size:12px; font-weight:700;
+    background:var(--surface-2); color:var(--text-2); border:1px solid var(--border); }
+  .etape-num.faite { background:var(--brand); color:#fff; border-color:var(--brand); }
+  .etape-num.courante { background:#fff; color:var(--brand); border:2px solid var(--brand); }
+  .etape-num.bloquee { opacity:.6; }
+  /* Écart réalisé / prévu : la couleur porte le sens, on lit la colonne d'un
+     coup d'œil sans déchiffrer les signes. */
+  .ecart { display:inline-block; min-width:52px; padding:2px 8px; border-radius:6px;
+    font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; cursor:help; }
+  .ecart.retard { background:var(--danger-tint); color:var(--danger); }
+  .ecart.ok { background:var(--success-tint); color:var(--success); }
+  /* Retard EN COURS : réel, mais pas encore constaté — d'où l'italique. */
+  .ecart.encours { font-style:italic; border:1px dashed var(--danger); }
+  .jauge { height:8px; background:#e5e7eb; border-radius:999px; overflow:hidden; }
+  .jauge > div { height:100%; background:#16a34a; }
+  /* ⚠️ `.content` est un flex colonne : un enfant peut être écrasé à 0 px quand
+     le contenu déborde. Cette règle existe déjà globalement, on la rappelle. */
+  .content > * { flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar"><!-- rempli par app.js : voir MENU --></aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title" id="t-numero">Marché</div>
+        <div class="topbar-date" id="t-objet"></div>
+      </div>
+      <div class="topbar-right">
+        <a class="btn" href="marches.html"><i class="ti ti-arrow-left"></i>Retour</a>
+      </div>
+    </header>
+
+    <section class="content">
+      <!-- En-tête du marché : même présentation que le détail d'un projet
+           (bandeau + tuiles `.pe-bloc` + jauges). Styles dans styles.css. -->
+      <div class="projet-hero">
+        <div class="hero-bandeau">
+          <div class="hero-titre">
+            <i class="ti ti-gavel"></i>
+            <span id="h-objet">…</span>
+          </div>
+          <div class="hero-actions">
+            <select id="h-statut" class="stat-select"></select>
+          </div>
+        </div>
+        <div class="hero-jauges" id="h-jauges"></div>
+        <div class="synthese" id="h-synthese"></div>
+        <div id="h-note" class="hero-note"></div>
+      </div>
+
+      <div id="alertes"></div>
+
+      <div class="tabs" id="onglets">
+        <span class="tab active" data-tab="etapes">Étapes</span>
+        <span class="tab" data-tab="offres">Soumissionnaires</span>
+        <span class="tab" data-tab="avenants">Avenants</span>
+        <span class="tab" data-tab="reception">Réception</span>
+        <span class="tab" data-tab="infos">Informations</span>
+      </div>
+
+      <!-- ==================== ÉTAPES ==================== -->
+      <div class="tab-panel" data-panel="etapes">
+        <!-- Incidents de procédure : ils expliquent pourquoi ça n'avance pas.
+             Placés AVANT les étapes, sinon on cherche la raison en vain. -->
+        <div id="incidents"></div>
+
+        <div class="page-head" style="margin-bottom:10px">
+          <div style="font-weight:600;font-size:15px">Déroulé de la procédure</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="btn-recours"><i class="ti ti-scale"></i>Déclarer un recours</button>
+            <button class="btn" id="btn-infructueux"><i class="ti ti-refresh-alert"></i>Appel d'offres infructueux</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th style="width:34px">#</th><th>Étape</th>
+              <th>Prévue le</th><th>Faite le</th><th class="right">Écart</th><th>Statut</th>
+              <th>Validée par</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-etapes"><tr><td colspan="8" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Suivre la procédure</div>
+          <ul>
+            <li>Les étapes ont été installées d'après le <strong>type de marché</strong>, avec leurs dates calculées d'après la durée de chacune. Vous pouvez tout corriger.</li>
+            <li>Marquer une étape <strong>terminée</strong> enregistre automatiquement la date du jour, votre nom et l'heure. C'est ce qui donne sa valeur de preuve au dossier.</li>
+            <li>Une étape en cours dont la date est dépassée apparaît en <strong>jaune</strong> avec son retard. <strong>Rien n'est bloqué</strong> : l'étape suivante peut démarrer quand même.</li>
+            <li>Quand une étape prend du retard, le bouton <strong>« Décaler les suivantes »</strong> vous montre d'abord <strong>ce que deviendraient les dates</strong>. Rien n'est écrit tant que vous n'avez pas confirmé — Djigui ne déplace jamais vos dates tout seul.</li>
+            <li>Une étape validée reste modifiable pendant un temps limité (30 jours par défaut, réglable). Passé ce délai elle est figée.</li>
+            <li><strong>Les étapes se suivent dans l'ordre.</strong> Une procédure n'est pas une liste de cases à cocher : chaque acte fonde le suivant. On ne peut pas évaluer des offres qu'on n'a pas ouvertes. Les étapes qui attendent leur tour portent un <strong>cadenas</strong> qui dit ce qu'il faut terminer d'abord.</li>
+            <li>Si vous reprenez un dossier <strong>déjà commencé sur papier</strong>, le bouton <strong>cadenas ouvert</strong> permet de <strong>passer outre</strong> : Djigui vous demande le motif et garde votre nom. L'étape est alors marquée d'un point d'exclamation.</li>
+            <li>⚠️ <strong>Annuler une étape déjà franchie remet en cause tout ce qui en découle</strong> : les étapes suivantes repassent « à faire ». C'est normal — si l'ouverture des plis est annulée, l'évaluation et l'attribution qui en découlaient ne valent plus rien. Djigui vous dit ce qu'il a rouvert et conserve la trace dans les observations.</li>
+            <li>Si <strong>aucune offre valable</strong> n'est reçue, déclarez l'<strong>appel d'offres infructueux</strong> : la procédure repart après la publication, les offres sont écartées (jamais effacées) et le marché passe en 2ᵉ tentative.</li>
+            <li>Si une entreprise <strong>conteste</strong>, déclarez un <strong>recours</strong> : la procédure est gelée jusqu'à la décision. C'est un arrêt subi, pas un retard de votre part — et l'écran le dit.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== SOUMISSIONNAIRES ==================== -->
+      <div class="tab-panel" data-panel="offres" hidden>
+        <div class="page-head">
+          <div style="font-weight:600;font-size:15px">Offres reçues</div>
+          <button class="btn btn-primary" id="btn-nouvelle-offre"><i class="ti ti-plus"></i>Enregistrer une offre</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Soumissionnaire</th>
+              <th class="right">Montant proposé</th><th class="right">Écart / estimé</th>
+              <th class="right">Délai</th><th class="right">Notes</th>
+              <th>Statut</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-offres"><tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Dépouiller les offres</div>
+          <ul>
+            <li>Enregistrez chaque offre reçue : le montant proposé, le délai annoncé, et si vous les utilisez, les notes technique et financière.</li>
+            <li>L'<strong>écart avec votre estimation</strong> est calculé tout seul. Une offre très en dessous mérite autant d'attention qu'une offre très au-dessus.</li>
+            <li>Rattacher le soumissionnaire à une <strong>fiche tiers</strong> est <strong>facultatif</strong> : recevoir une offre ne doit pas vous obliger à créer un contact.</li>
+            <li><strong>Attribuer</strong> fait tout d'un coup : l'offre passe « retenue », les autres sont écartées, et le marché reçoit son attributaire et son montant.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== AVENANTS ==================== -->
+      <div class="tab-panel" data-panel="avenants" hidden>
+        <div class="page-head">
+          <div style="font-weight:600;font-size:15px">Avenants au marché</div>
+          <button class="btn btn-primary" id="btn-nouvel-avenant"><i class="ti ti-plus"></i>Nouvel avenant</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th style="width:44px">N°</th><th>Objet</th><th>Date</th>
+              <th class="right">Variation</th><th class="right">Délai</th>
+              <th>Statut</th><th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-avenants"></tbody>
+            <tfoot id="pied-avenants"></tfoot>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> À quoi sert un avenant</div>
+          <ul>
+            <li>Un avenant sert quand le marché <strong>change en cours de route</strong> : des travaux en plus, un délai rallongé, une quantité revue.</li>
+            <li>Le <strong>montant du marché d'origine ne bouge jamais</strong>. Djigui l'additionne avec les avenants pour afficher le <strong>montant courant</strong>. Vous gardez ainsi la trace de ce qui était prévu et de ce qui a été ajouté.</li>
+            <li>Un avenant reste un <strong>projet</strong> tant qu'il n'est pas approuvé : il ne compte pas encore dans le montant. C'est <strong>l'approbation</strong> qui l'engage, et elle enregistre qui a approuvé et quand.</li>
+            <li>Une fois approuvé, un avenant ne se modifie plus et ne se supprime plus. Pour revenir dessus, prenez un <strong>nouvel avenant en sens inverse</strong> — comme un avoir sur une facture.</li>
+            <li>Si un avenant allonge le délai, Djigui vous <strong>propose</strong> la nouvelle date de clôture dans les alertes. <strong>Il ne la change pas tout seul.</strong></li>
+            <li>Quand les avenants dépassent <strong>30 %</strong> du montant de départ, un avertissement s'affiche. C'est un repère habituel des marchés publics, <strong>pas une interdiction</strong>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== RÉCEPTION ==================== -->
+      <div class="tab-panel" data-panel="reception" hidden>
+        <div class="page-head">
+          <div style="font-weight:600;font-size:15px">Procès-verbaux de réception</div>
+          <button class="btn btn-primary" id="btn-nouvelle-reception"><i class="ti ti-plus"></i>Enregistrer une réception</button>
+        </div>
+        <div class="card" style="padding:0;overflow:visible">
+          <table class="table">
+            <thead><tr>
+              <th>Type</th><th>Date</th><th>Résultat</th><th>Réserves</th>
+              <th class="right">Retenue de garantie</th><th>Garantie</th>
+              <th class="right">Actions</th>
+            </tr></thead>
+            <tbody id="corps-receptions"></tbody>
+          </table>
+        </div>
+        <div class="aide" style="margin-top:16px">
+          <div class="aide-titre"><i class="ti ti-info-circle"></i> Réceptionner un marché</div>
+          <ul>
+            <li>La <strong>réception provisoire</strong> se prononce quand le travail est livré. La <strong>réception définitive</strong> vient après, une fois la période de garantie écoulée.</li>
+            <li>Si tout n'est pas conforme, choisissez <strong>« avec réserves »</strong> et <strong>écrivez ce qui reste à faire</strong>. Djigui l'exige : une réserve qu'on ne peut pas relire ne sert à rien.</li>
+            <li>Tant que les réserves ne sont pas levées, l'écran vous le rappelle : <strong>la retenue de garantie reste due</strong> à l'entreprise. Le bouton <strong>« Lever les réserves »</strong> date cette levée.</li>
+            <li>La <strong>retenue de garantie</strong> est la part du montant que vous conservez le temps de la garantie. Notez-la ici pour ne pas l'oublier au moment de payer.</li>
+            <li>Rien n'est bloqué : une réception définitive prononcée trop tôt sera <strong>signalée</strong>, jamais refusée.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ==================== INFORMATIONS ==================== -->
+      <div class="tab-panel" data-panel="infos" hidden>
+        <div class="card"><div id="infos"></div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================== MODALE APERÇU DE REPLANIFICATION ==================== -->
+<div class="modal-overlay" id="modal-plan" hidden>
+  <div class="modal" style="max-width:640px">
+    <div class="card-head"><span class="card-title">Décaler les étapes suivantes</span>
+      <i class="ti ti-x" data-fermer="modal-plan" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted">Voici ce que deviendraient les dates. <strong>Rien n'est encore
+        enregistré</strong> : c'est vous qui décidez.</p>
+      <table class="table">
+        <thead><tr><th>Étape</th><th>Date actuelle</th><th>Nouvelle date</th><th class="right">Décalage</th></tr></thead>
+        <tbody id="corps-plan"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-plan">Ne rien changer</button>
+      <button class="btn btn-primary" id="btn-appliquer-plan">Appliquer ces dates</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE OFFRE ==================== -->
+<div class="modal-overlay" id="modal-offre" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title" id="titre-offre">Enregistrer une offre</span>
+      <i class="ti ti-x" data-fermer="modal-offre" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label style="grid-column:1/-1">Nom du soumissionnaire <input type="text" id="o-nom"></label>
+        <label style="grid-column:1/-1">Fiche tiers <em>(facultatif)</em>
+          <select id="o-tiers" class="select-std"><option value="">Aucune</option></select></label>
+        <label>Montant proposé <input type="number" id="o-montant" step="1000"></label>
+        <label>Délai (jours) <input type="number" id="o-delai" min="0"></label>
+        <label>Note technique /100 <input type="number" id="o-nt" min="0" max="100"></label>
+        <label>Note financière /100 <input type="number" id="o-nf" min="0" max="100"></label>
+        <label>Date de dépôt <input type="date" id="o-date"></label>
+        <label>Statut
+          <select id="o-statut" class="select-std">
+            <option value="recu">Reçue</option>
+            <option value="conforme">Conforme</option>
+            <option value="non_conforme">Non conforme</option>
+            <option value="ecarte">Écartée</option>
+          </select>
+        </label>
+        <label style="grid-column:1/-1">Observations <textarea id="o-obs" rows="2"></textarea></label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-offre">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-offre">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE CHANGEMENT D'ÉTAPE ====================
+     Franchir une étape est un ACTE DATÉ. Poser « aujourd'hui » d'office ferait
+     perdre la vraie date dès qu'on saisit avec un jour de retard — et c'est le
+     cas courant sur le terrain. -->
+<div class="modal-overlay" id="modal-etape" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title" id="titre-etape">Changer l'état de l'étape</span>
+      <i class="ti ti-x" data-fermer="modal-etape" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted" id="etape-contexte"></p>
+      <div id="etape-avertissement"></div>
+      <div class="form-grid">
+        <label>Date de l'acte <input type="date" id="e-date">
+          <span id="etape-bornes"></span></label>
+        <label>Nouvel état <input type="text" id="e-etat" disabled></label>
+        <label style="grid-column:1/-1">Observation
+          <textarea id="e-obs" rows="3"
+            placeholder="ex. : 4 plis reçus, ouverture en présence des soumissionnaires"></textarea></label>
+      </div>
+      <p class="muted" style="margin-top:8px;font-size:12.5px">L'observation s'ajoute
+        à l'historique de l'étape ; elle n'efface pas les précédentes.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-etape">Annuler</button>
+      <button class="btn btn-primary" id="btn-confirmer-etape">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE DÉROGATION ====================
+     Franchir une étape hors de son rang. Le motif est obligatoire : c'est ce
+     qui distingue une reprise de dossier assumée d'une saisie négligente. -->
+<div class="modal-overlay" id="modal-derogation" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title">Passer outre le verrou</span>
+      <i class="ti ti-x" data-fermer="modal-derogation" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted" id="derogation-contexte"></p>
+      <p class="muted">Normalement, cette étape vient après une autre qui n'est pas
+        terminée. Vous pouvez la franchir quand même — c'est le cas si vous
+        <strong>reprenez un dossier déjà commencé</strong> — mais Djigui gardera
+        <strong>votre nom et votre motif</strong>.</p>
+      <div class="form-grid">
+        <label style="grid-column:1/-1">Motif <em>(obligatoire)</em>
+          <textarea id="d-motif" rows="3"
+            placeholder="ex. : dossier repris en cours, attribution déjà prononcée sur support papier"></textarea></label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-derogation">Renoncer</button>
+      <button class="btn btn-primary" id="btn-confirmer-derogation">Franchir cette étape</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE INCIDENT ==================== -->
+<div class="modal-overlay" id="modal-incident" hidden>
+  <div class="modal" style="max-width:580px">
+    <div class="card-head"><span class="card-title" id="titre-incident">Incident de procédure</span>
+      <i class="ti ti-x" data-fermer="modal-incident" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted" id="incident-explication"></p>
+      <div class="form-grid">
+        <label>Date <input type="date" id="i-date"></label>
+        <label id="bloc-auteur">Qui conteste ?
+          <input type="text" id="i-auteur" placeholder="nom de l'entreprise"></label>
+        <label style="grid-column:1/-1">Motif <em>(obligatoire)</em>
+          <textarea id="i-motif" rows="3"></textarea></label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-incident">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-incident">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE DÉCISION (clore un incident) ==================== -->
+<div class="modal-overlay" id="modal-decision" hidden>
+  <div class="modal" style="max-width:520px">
+    <div class="card-head"><span class="card-title">Clore l'incident</span>
+      <i class="ti ti-x" data-fermer="modal-decision" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <p class="muted">Quelle suite a été donnée ? Une fois l'incident clos, la
+        procédure repart.</p>
+      <div class="form-grid">
+        <label style="grid-column:1/-1">Décision <em>(obligatoire)</em>
+          <textarea id="dec-texte" rows="3"
+            placeholder="ex. : recours rejeté par la commission de règlement des différends"></textarea></label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-decision">Annuler</button>
+      <button class="btn btn-primary" id="btn-confirmer-decision">Clore</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE AVENANT ==================== -->
+<div class="modal-overlay" id="modal-avenant" hidden>
+  <div class="modal" style="max-width:560px">
+    <div class="card-head"><span class="card-title" id="titre-avenant">Nouvel avenant</span>
+      <i class="ti ti-x" data-fermer="modal-avenant" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label style="grid-column:1/-1">Objet de l'avenant <input type="text" id="a-objet"
+          placeholder="Ex. : travaux supplémentaires de terrassement"></label>
+        <label>Variation de montant <input type="number" id="a-montant" step="1000" value="0"></label>
+        <label>Jours de délai en plus <input type="number" id="a-delai" value="0"></label>
+        <label>Date de l'avenant <input type="date" id="a-date"></label>
+        <label style="grid-column:1/-1">Motif <textarea id="a-motif" rows="2"></textarea></label>
+      </div>
+      <p class="muted" style="margin-top:10px">Un montant <strong>négatif</strong> est accepté :
+        c'est une diminution. L'avenant est enregistré comme <strong>projet</strong> ; il ne comptera
+        dans le montant du marché qu'une fois <strong>approuvé</strong>.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-avenant">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-avenant">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALE RÉCEPTION ==================== -->
+<div class="modal-overlay" id="modal-reception" hidden>
+  <div class="modal" style="max-width:620px">
+    <div class="card-head"><span class="card-title" id="titre-reception">Enregistrer une réception</span>
+      <i class="ti ti-x" data-fermer="modal-reception" title="Fermer" style="cursor:pointer;font-size:20px;color:var(--text-2)"></i></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>Type de réception
+          <select id="r-type" class="select-std">
+            <option value="provisoire">Provisoire</option>
+            <option value="definitive">Définitive</option>
+            <option value="partielle">Partielle</option>
+          </select></label>
+        <label>Date de réception <input type="date" id="r-date"></label>
+        <label>Résultat
+          <select id="r-resultat" class="select-std">
+            <option value="prononcee">Prononcée</option>
+            <option value="avec_reserves">Avec réserves</option>
+            <option value="refusee">Refusée</option>
+          </select></label>
+        <label>Réceptionnée par <input type="text" id="r-par" placeholder="Ex. : commission de réception"></label>
+        <label style="grid-column:1/-1" id="bloc-reserves">Réserves <em>(ce qui reste à faire)</em>
+          <textarea id="r-reserves" rows="2"></textarea></label>
+        <label>Durée de garantie (mois) <input type="number" id="r-garantie" min="0"></label>
+        <label>Retenue de garantie <input type="number" id="r-retenue" step="1000"></label>
+        <label style="grid-column:1/-1">Observations <textarea id="r-obs" rows="2"></textarea></label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-fermer="modal-reception">Annuler</button>
+      <button class="btn btn-primary" id="btn-enr-reception">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js?v=16"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const { api, fmt, esc, dateFr, toast } = Djigui;
+  const id = new URLSearchParams(location.search).get('id');
+
+  let m = null, tiers = [], offreEditee = null, etapePlan = null,
+      avenantEdite = null, receptionEditee = null,
+      etapeDerogee = null, incidentType = null, incidentAClore = null,
+      etapeSaisie = null;
+
+  const LIB_ETAPE = { en_attente: 'À faire', en_cours: 'En cours', termine: 'Terminée',
+                      annule: 'Annulée', reporte: 'Reportée' };
+  const LIB_OFFRE = { recu: 'Reçue', conforme: 'Conforme', non_conforme: 'Non conforme',
+                      retenu: 'Retenue', ecarte: 'Écartée' };
+  const LIB_STATUT = { en_cours: 'En cours', realise: 'Réalisé', suspendu: 'Suspendu', annule: 'Annulé' };
+  // Mêmes couleurs que les cartes de l'écran Marchés : l'utilisateur doit
+  // retrouver le même code d'un écran à l'autre.
+  const COUL_STATUT = { en_cours: '#16794f', realise: '#2e9e5b',
+                        suspendu: '#c8860a', annule: '#8a94a6' };
+  const aujourdhui = () => new Date().toISOString().slice(0, 10);
+  // Jours entre deux dates « AAAA-MM-JJ ». 0 si l'une manque : mieux vaut une
+  // jauge vide qu'un NaN à l'écran.
+  const joursEntre = (a, b) => {
+    if (!a || !b) return 0;
+    const d = (new Date(b) - new Date(a)) / 86400000;
+    return Number.isFinite(d) ? Math.round(d) : 0;
+  };
+  const LIB_AVENANT = { projet: 'Projet', approuve: 'Approuvé', rejete: 'Rejeté' };
+  const LIB_RECEP = { provisoire: 'Provisoire', definitive: 'Définitive', partielle: 'Partielle' };
+  const LIB_RESULTAT = { prononcee: 'Prononcée', avec_reserves: 'Avec réserves', refusee: 'Refusée' };
+  const signe = v => (v > 0 ? '+' : '') + fmt(v);
+
+  // La cellule « Écart » du déroulé : rouge en retard, verte à l'heure ou en
+  // avance. Un retard EN COURS (étape échue non faite) est mis en italique et
+  // dit son état au survol : c'est un retard réel, mais pas encore un constat.
+  function ecartCellule(e) {
+    if (e.ecart_jours == null) return '<span class="muted">—</span>';
+    const j = e.ecart_jours;
+    const txt = (j > 0 ? '+' : '') + j + ' j';
+    const bulle = j > 0
+      ? (e.ecart_en_cours
+          ? `Cette étape devait être faite le ${dateFr(e.date_prevue)}.\nElle ne l'est toujours pas : ${j} jour(s) de retard à ce jour.`
+          : `Faite avec ${j} jour(s) de retard sur la date prévue.`)
+      : (j === 0 ? 'Faite le jour prévu.' : `Faite ${-j} jour(s) en avance.`);
+    return `<span class="ecart ${j > 0 ? 'retard' : 'ok'} ${e.ecart_en_cours ? 'encours' : ''}"
+              tabindex="0" data-tip="${esc(bulle)}">${txt}</span>`;
+  }
+
+  document.querySelectorAll('[data-fermer]').forEach(b =>
+    b.addEventListener('click', () => { $('#' + b.dataset.fermer).hidden = true; }));
+
+  $('#onglets').addEventListener('click', e => {
+    const t = e.target.closest('.tab');
+    if (!t) return;
+    document.querySelectorAll('#onglets .tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== t.dataset.tab; });
+  });
+
+  // Changement de statut depuis l'en-tête, comme sur un projet.
+  // ⚠️ « Annulé » ne passe PAS par là : l'annulation exige un motif (le serveur
+  // le refuserait, et à raison). On envoie donc l'utilisateur vers la bonne
+  // porte au lieu de lui montrer une erreur.
+  $('#h-statut').addEventListener('change', async e => {
+    const nouveau = e.target.value;
+    if (nouveau === 'annule') {
+      e.target.value = m.statut;
+      toast("Pour annuler un marché, il faut en donner le motif : passez par l'écran Marchés.", 'warn');
+      return;
+    }
+    try {
+      await api('/api/marches/' + id + '/statut', { method: 'POST', body: { statut: nouveau } });
+      toast('Statut mis à jour.', 'ok');
+      await charger();
+    } catch (err) {
+      e.target.value = m.statut;         // on remet ce qui est vrai en base
+      toast(err.message, 'danger');
+    }
+  });
+
+  async function charger() {
+    try { m = await api('/api/marches/' + id); }
+    catch (e) { toast('Marché introuvable : ' + e.message, 'danger'); return; }
+    rendre();
+  }
+
+  // En-tête du marché : même présentation que le détail d'un projet — bandeau
+  // coloré, tuiles à pastille d'icône, jauges sur fond teinté. Les styles sont
+  // partagés (styles.css), donc les deux écrans ne peuvent plus diverger.
+  function rendreEntete() {
+    $('#h-objet').textContent = m.objet;
+
+    // Le statut se change ici même, comme sur un projet.
+    const sel = $('#h-statut');
+    sel.innerHTML = Object.entries(LIB_STATUT)
+      .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    sel.value = m.statut;
+    // Sur le bandeau, le texte reste blanc : une couleur de statut en dur y
+    // serait illisible. On ne teinte que le fond de la pastille.
+    const coul = COUL_STATUT[m.statut] || '#5c6a61';
+    sel.style.background = coul + '55';
+    sel.style.borderColor = 'rgba(255,255,255,.5)';
+    // Un marché annulé ne se remet pas en route depuis ce sélecteur : son
+    // annulation est un acte motivé, on ne la défait pas d'un clic.
+    sel.disabled = m.statut === 'annule';
+
+    const fcfa = v => fmt(Math.round(v)) + ` <span class="muted" style="font-size:11px">${esc(m.monnaie)}</span>`;
+    const tuiles = [
+      ['ti-category', 'Type de marché', esc(m.type_libelle || '—'), ''],
+      ['ti-building', 'Attributaire', esc(m.attributaire_nom || 'Pas encore attribué'), ''],
+      ['ti-calendar-event', 'Clôture prévue',
+        dateFr(m.date_cloture_effective || m.date_cloture_revisee || m.date_cloture_prevue) || '—',
+        'acc-date'],
+      ['ti-wallet', 'Montant estimé', fcfa(m.montant_estime), 'acc-brand fort'],
+      ['ti-writing-sign', 'Montant attribué',
+        m.montant_attribue == null ? '—' : fcfa(m.montant_attribue), 'acc-brand fort'],
+    ];
+    // L'écart ne s'affiche que s'il existe : une tuile « — » n'apprend rien.
+    if (m.ecart_montant != null) {
+      tuiles.push(['ti-arrows-diff', 'Écart / estimé',
+        `<span style="color:${m.ecart_montant > 0 ? 'var(--danger)' : 'var(--brand-strong)'}">${signe(m.ecart_montant)}</span>`,
+        m.ecart_montant > 0 ? 'acc-danger fort' : 'acc-ok fort']);
+    }
+    if (m.montant_avenants) {
+      tuiles.push(['ti-file-plus', 'Avenants approuvés',
+        `${signe(m.montant_avenants)}${m.avenants_pct == null ? '' : ` <span class="muted">(${m.avenants_pct} %)</span>`}`,
+        'acc-moyen']);
+      tuiles.push(['ti-sum', 'Montant courant', fcfa(m.montant_courant), 'acc-brand fort']);
+    }
+    if (m.nb_receptions) {
+      tuiles.push(['ti-clipboard-check', 'Réception',
+        m.reserves_ouvertes ? 'Réserves ouvertes'
+          : (m.date_reception_definitive ? 'Définitive le ' + dateFr(m.date_reception_definitive)
+                                         : 'Provisoire'),
+        m.reserves_ouvertes ? 'acc-danger' : 'acc-ok']);
+    }
+    if (m.lieu_execution) tuiles.push(['ti-map-pin', 'Lieu', esc(m.lieu_execution), '']);
+    if (m.projet_nom) tuiles.push(['ti-briefcase', 'Projet rattaché', esc(m.projet_nom), '']);
+
+    $('#h-synthese').innerHTML = tuiles.map(([ic, l, v, acc]) =>
+      `<div class="pe-bloc ${acc}" title="${l}">
+         <div class="pe-ic"><i class="ti ${ic}"></i></div>
+         <div class="pe-corps"><div class="pe-lbl">${l}</div><div class="pe-val">${v}</div></div>
+       </div>`).join('');
+
+    // Deux jauges : la procédure (étapes franchies) et le temps écoulé. La
+    // seconde répond à la question qu'on se pose vraiment : « suis-je dans les
+    // temps ? » — un marché à 30 % d'étapes et 90 % de délai est en difficulté.
+    const av = m.avancement || 0;
+    const total = joursEntre(m.date_lancement, m.date_cloture_revisee || m.date_cloture_prevue);
+    const ecoule = joursEntre(m.date_lancement, aujourdhui());
+    const pctTemps = total > 0 ? Math.min(100, Math.round(ecoule / total * 100)) : null;
+    // Rouge quand le temps file plus vite que la procédure n'avance.
+    const coulTemps = pctTemps == null ? 'var(--brand)'
+      : (pctTemps > av + 10 ? 'var(--warning)' : (pctTemps >= 100 ? 'var(--danger)' : 'var(--brand)'));
+
+    const jauge = (icone, libelle, valeur, couleur, aide) => `
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+          <span style="font-size:12.5px;font-weight:600;color:var(--text-2)">
+            <i class="ti ${icone}"></i> ${libelle}${aide ? ` <span class="muted" style="font-size:10.5px;font-weight:400">${aide}</span>` : ''}</span>
+          <span style="font-weight:700;font-size:14px">${valeur == null ? '—' : valeur + ' %'}</span>
+        </div>
+        <div class="barre"><div style="width:${valeur || 0}%;background:${couleur}"></div></div>
+      </div>`;
+    $('#h-jauges').innerHTML =
+      jauge('ti-list-check', 'Procédure', av, 'var(--brand)',
+            `${m.nb_etapes_terminees}/${m.nb_etapes} étapes obligatoires`)
+      + jauge('ti-hourglass', 'Délai écoulé', pctTemps, coulTemps,
+              total > 0 ? `${ecoule} j sur ${total}` : 'pas de date de clôture');
+
+    $('#h-note').textContent = m.observations || '';
+  }
+
+  function rendre() {
+    $('#t-numero').textContent = m.numero + ' · ' + (LIB_STATUT[m.statut] || m.statut);
+    $('#t-objet').textContent = m.objet;
+    document.title = 'Djigui · ' + m.numero;
+
+    $('#alertes').innerHTML = (m.alertes || []).length
+      ? `<div class="alert warn" style="margin-bottom:12px"><ul style="margin:0 0 0 18px">`
+        + m.alertes.map(a => `<li>${esc(a)}</li>`).join('') + `</ul></div>`
+      : '';
+
+    rendreEntete();
+
+    // --- Étapes ---
+    const etapes = m.etapes || [];
+    // Une procédure est une CHAÎNE d'actes : l'étape courante est mise en avant,
+    // les suivantes sont verrouillées tant que celle qui les fonde n'est pas
+    // franchie. Le cadenas dit pourquoi, et « Passer outre » reste possible.
+    $('#corps-etapes').innerHTML = etapes.length
+      ? etapes.map((e, i) => `<tr data-etape="${esc(e.id)}"
+          class="${e.statut === 'termine' ? 'terminee'
+                 : e.est_courante ? 'courante'
+                 : e.verrouillee ? 'verrouillee'
+                 : (e.retard_jours != null ? 'retard' : '')}">
+        ${/* Le NUMÉRO reste visible : c'est lui qui dit où l'on en est dans la
+              procédure (« 5 sur 8 »). L'état se lit à la couleur de la pastille,
+              pas en remplaçant le chiffre. */''}
+        <td><span class="etape-num ${e.statut === 'termine' ? 'faite'
+              : e.est_courante ? 'courante' : e.verrouillee ? 'bloquee' : ''}"
+              >${e.statut === 'termine' ? '<i class="ti ti-check"></i>' : (i + 1)}</span></td>
+        <td>${esc(e.libelle)}${e.obligatoire ? '' : ' <span class="badge neutral">facultative</span>'}
+          ${e.est_courante ? ' <span class="badge ok">étape du moment</span>' : ''}
+          ${e.derogation ? ` <i class="retard-info" tabindex="0" style="background:var(--warning)"
+             data-tip="${esc('Franchie hors de son rang.\n' + (e.motif_derogation || '')
+               + (e.derogation_par ? '\nPar : ' + e.derogation_par : ''))}">!</i>` : ''}
+          ${e.retard_jours != null ? `<br><span class="badge warn">retard ${e.retard_jours} j</span>` : ''}
+          ${e.verrouillee ? `<br><span class="muted" style="font-size:11px">
+             <i class="ti ti-lock"></i> ${esc(e.raison_verrou || '')}</span>` : ''}
+          ${e.nb_documents ? `<br><span class="muted" style="font-size:11px">${e.nb_documents} document(s)</span>` : ''}</td>
+        ${/* La date PRÉVUE ne se saisit pas ici : elle est le fruit de la
+              procédure. On la décale avec « Décaler les suivantes », qui montre
+              d'abord l'effet sur toute la chaîne. */''}
+        <td class="num">${e.date_prevue ? dateFr(e.date_prevue) : '—'}</td>
+        <td class="num">${e.date_effective ? dateFr(e.date_effective) : '—'}</td>
+        ${/* L'écart réalisé / prévu : + retard (rouge), − avance ou 0 (vert).
+              Un retard EN COURS (étape échue mais pas faite) est en italique :
+              c'est un retard réel, mais pas encore un constat. */''}
+        <td class="right">${ecartCellule(e)}</td>
+        <td><select class="select-std sel-statut" data-etape="${esc(e.id)}" ${e.modifiable ? '' : 'disabled'}>
+            ${Object.entries(LIB_ETAPE).map(([k, v]) =>
+              `<option value="${k}"${e.statut === k ? ' selected' : ''}>${v}</option>`).join('')}
+          </select></td>
+        <td class="muted" style="font-size:12px">${esc(e.valide_par || '')}
+          ${e.modifiable ? '' : '<br><span class="badge neutral">figée</span>'}</td>
+        <td class="right">
+          ${e.verrouillee ? `<button class="btn btn-sm" data-deroger="${esc(e.id)}"
+             title="Passer outre le verrou, avec motif"><i class="ti ti-lock-open"></i></button>` : ''}
+          <button class="btn btn-sm" data-plan="${esc(e.id)}" title="Décaler les étapes suivantes">
+            <i class="ti ti-calendar-event"></i></button>
+        </td></tr>`).join('')
+      : `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">
+           Ce marché n'a pas d'étape. Il a été créé sans type de marché.</td></tr>`;
+
+    // --- Incidents de procédure ---
+    rendreIncidents();
+
+    // --- Offres ---
+    const offres = m.soumissionnaires || [];
+    $('#corps-offres').innerHTML = offres.length
+      ? offres.map(o => `<tr class="${o.statut === 'retenu' ? 'retenu' : ''}">
+        <td>${esc(o.nom)}${o.tiers_id ? '' : ' <span class="badge">hors fichier</span>'}</td>
+        <td class="right">${o.montant_offre == null ? '—' : fmt(o.montant_offre)}</td>
+        <td class="right ${o.ecart_estime_pct > 0 ? 'neg' : 'pos'}">${
+          o.ecart_estime_pct == null ? '—' : (o.ecart_estime_pct > 0 ? '+' : '') + o.ecart_estime_pct + ' %'}</td>
+        <td class="right">${o.delai_jours == null ? '—' : o.delai_jours + ' j'}</td>
+        <td class="right">${[o.note_technique, o.note_financiere].filter(x => x != null).join(' / ') || '—'}</td>
+        <td><span class="badge ${o.statut === 'retenu' ? 'ok' : ''}">${esc(LIB_OFFRE[o.statut] || o.statut)}</span></td>
+        <td class="right">
+          ${o.statut !== 'retenu'
+            ? `<button class="btn btn-sm btn-primary" data-attribuer="${esc(o.id)}" title="Attribuer le marché"><i class="ti ti-award"></i></button>` : ''}
+          <button class="btn btn-sm" data-modifier-offre="${esc(o.id)}"><i class="ti ti-pencil"></i></button>
+          <button class="btn btn-sm btn-danger" data-supprimer-offre="${esc(o.id)}"><i class="ti ti-trash"></i></button>
+        </td></tr>`).join('')
+      : `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
+           Aucune offre enregistrée pour l'instant.</td></tr>`;
+
+    // --- Avenants ---
+    const avenants = m.avenants || [];
+    $('#corps-avenants').innerHTML = avenants.length
+      ? avenants.map(a => `<tr class="${a.statut === 'approuve' ? 'terminee' : ''}">
+        <td>${a.numero}</td>
+        <td>${esc(a.objet)}${a.motif ? `<br><span class="muted" style="font-size:11px">${esc(a.motif)}</span>` : ''}</td>
+        <td>${dateFr(a.date_avenant)}</td>
+        <td class="right ${a.montant_variation > 0 ? 'neg' : (a.montant_variation < 0 ? 'pos' : '')}">${
+          a.montant_variation ? signe(a.montant_variation) : '—'}</td>
+        <td class="right">${a.delai_jours ? (a.delai_jours > 0 ? '+' : '') + a.delai_jours + ' j' : '—'}</td>
+        <td><span class="badge ${a.statut === 'approuve' ? 'ok' : (a.statut === 'rejete' ? 'danger' : 'warn')}">${
+          esc(LIB_AVENANT[a.statut] || a.statut)}</span>
+          ${a.approuve_par ? `<br><span class="muted" style="font-size:11px">par ${esc(a.approuve_par)}</span>` : ''}</td>
+        <td class="right">
+          ${a.modifiable ? `
+            <button class="btn btn-sm btn-primary" data-approuver="${esc(a.id)}" title="Approuver"><i class="ti ti-check"></i></button>
+            <button class="btn btn-sm" data-modifier-avenant="${esc(a.id)}" title="Modifier"><i class="ti ti-pencil"></i></button>
+            <button class="btn btn-sm btn-danger" data-supprimer-avenant="${esc(a.id)}" title="Supprimer"><i class="ti ti-trash"></i></button>`
+            : '<span class="badge neutral">figé</span>'}
+        </td></tr>`).join('')
+      : `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
+           Aucun avenant. Le marché en est resté à ses conditions d'origine.</td></tr>`;
+
+    $('#pied-avenants').innerHTML = m.montant_avenants
+      ? `<tr><td colspan="3" class="right"><strong>Montant courant du marché</strong></td>
+           <td class="right"><strong>${fmt(m.montant_courant)}</strong></td>
+           <td class="right">${m.delai_avenants_jours ? (m.delai_avenants_jours > 0 ? '+' : '') + m.delai_avenants_jours + ' j' : ''}</td>
+           <td colspan="2" class="muted">avenants approuvés seulement</td></tr>`
+      : '';
+
+    // --- Réceptions ---
+    const receptions = m.receptions || [];
+    $('#corps-receptions').innerHTML = receptions.length
+      ? receptions.map(r => `<tr class="${r.reserves_ouvertes ? 'retard' : (r.resultat === 'prononcee' ? 'terminee' : '')}">
+        <td>${esc(LIB_RECEP[r.type_reception] || r.type_reception)}</td>
+        <td>${dateFr(r.date_reception)}</td>
+        <td><span class="badge ${r.resultat === 'prononcee' ? 'ok' : (r.resultat === 'refusee' ? 'danger' : 'warn')}">${
+          esc(LIB_RESULTAT[r.resultat] || r.resultat)}</span></td>
+        <td>${r.reserves ? esc(r.reserves) : '—'}
+          ${r.date_levee_reserves ? `<br><span class="badge ok">levées le ${dateFr(r.date_levee_reserves)}</span>` : ''}</td>
+        <td class="right">${r.montant_retenue_garantie == null ? '—' : fmt(r.montant_retenue_garantie)}</td>
+        <td>${r.garantie_mois == null ? '—' : r.garantie_mois + ' mois'}
+          ${r.fin_garantie ? `<br><span class="muted" style="font-size:11px">jusqu'au ${dateFr(r.fin_garantie)}</span>` : ''}</td>
+        <td class="right">
+          ${r.reserves_ouvertes
+            ? `<button class="btn btn-sm btn-primary" data-lever="${esc(r.id)}" title="Lever les réserves"><i class="ti ti-check"></i></button>` : ''}
+          <button class="btn btn-sm" data-modifier-reception="${esc(r.id)}"><i class="ti ti-pencil"></i></button>
+          <button class="btn btn-sm btn-danger" data-supprimer-reception="${esc(r.id)}"><i class="ti ti-trash"></i></button>
+        </td></tr>`).join('')
+      : `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">
+           Aucune réception enregistrée. Le marché n'est pas encore réceptionné.</td></tr>`;
+
+    // --- Informations ---
+    const ligne = (l, v) => v ? `<div style="margin-bottom:8px"><span class="muted">${esc(l)} :</span> ${esc(v)}</div>` : '';
+    $('#infos').innerHTML =
+      ligne('Type de marché', m.type_libelle) +
+      ligne('Attributaire', m.attributaire_nom) +
+      ligne('Projet rattaché', m.projet_nom) +
+      ligne('Responsable', m.responsable_nom) +
+      ligne('Lieu d\'exécution', m.lieu_execution) +
+      ligne('Lancé le', dateFr(m.date_lancement)) +
+      ligne('Clôture prévue', m.date_cloture_prevue && dateFr(m.date_cloture_prevue)) +
+      ligne('Clôture reportée par avenant', m.date_cloture_revisee && dateFr(m.date_cloture_revisee)) +
+      ligne('Clôture effective', m.date_cloture_effective && dateFr(m.date_cloture_effective)) +
+      ligne('Observations', m.observations) +
+      ligne('Motif d\'annulation', m.motif_annulation);
+  }
+
+  // ---- Incidents de procédure ---------------------------------------------
+  const LIB_INCIDENT = { infructueux: "Appel d'offres infructueux", recours: 'Recours' };
+
+  function rendreIncidents() {
+    const inc = m.incidents || [];
+    if (!inc.length) { $('#incidents').innerHTML = ''; return; }
+    // Les incidents ouverts d'abord : ce sont eux qui expliquent l'arrêt.
+    const ouverts = inc.filter(x => x.statut === 'ouvert');
+    const clos = inc.filter(x => x.statut !== 'ouvert');
+    const ligne = x => `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;
+        border-bottom:1px solid var(--border)">
+      <i class="ti ${x.type_incident === 'recours' ? 'ti-scale' : 'ti-refresh-alert'}"
+         style="font-size:19px;color:${x.statut === 'ouvert' ? 'var(--danger)' : 'var(--text-muted)'}"></i>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${esc(LIB_INCIDENT[x.type_incident] || x.type_incident)}
+          <span class="muted" style="font-weight:400">du ${dateFr(x.date_incident)}</span>
+          ${x.tentative > 1 ? `<span class="badge neutral">tentative ${x.tentative}</span>` : ''}
+          ${x.statut === 'ouvert' ? '<span class="badge danger">en cours</span>'
+                                  : '<span class="badge ok">clos</span>'}</div>
+        <div style="font-size:12.5px">${esc(x.motif)}</div>
+        ${x.auteur_recours ? `<div class="muted" style="font-size:12px">Déposé par ${esc(x.auteur_recours)}</div>` : ''}
+        ${x.decision ? `<div class="muted" style="font-size:12px">Décision du ${dateFr(x.date_decision)} :
+           ${esc(x.decision)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex:none">
+        ${x.statut === 'ouvert'
+          ? `<button class="btn btn-sm btn-primary" data-clore="${esc(x.id)}"><i class="ti ti-gavel"></i>Clore</button>` : ''}
+        <button class="btn btn-sm btn-danger" data-suppr-incident="${esc(x.id)}"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+    $('#incidents').innerHTML = `<div class="card" style="margin-bottom:12px;
+        ${ouverts.length ? 'border-color:var(--danger)' : ''}">
+      <div class="card-head"><span class="card-title">
+        <i class="ti ti-alert-octagon"></i> Incidents de procédure</span></div>
+      ${[...ouverts, ...clos].map(ligne).join('')}
+      ${ouverts.length ? `<p class="muted" style="margin:10px 0 0;font-size:12.5px">
+        Tant qu'un recours est ouvert, <strong>les étapes n'avancent pas</strong> :
+        c'est un arrêt subi, il ne compte pas comme un retard de votre part.</p>` : ''}
+    </div>`;
+  }
+
+  function ouvrirIncident(type) {
+    incidentType = type;
+    $('#titre-incident').textContent = type === 'recours'
+      ? 'Déclarer un recours' : "Déclarer l'appel d'offres infructueux";
+    $('#incident-explication').textContent = type === 'recours'
+      ? "Une entreprise conteste la procédure. Elle sera gelée jusqu'à la décision : "
+        + "les étapes n'avanceront plus tant que l'incident est ouvert."
+      : "Aucune offre valable n'a été reçue. La procédure repartira après la publication : "
+        + "les étapes suivantes repasseront « à faire », les offres reçues seront écartées "
+        + "(elles restent au dossier) et l'attribution éventuelle sera annulée.";
+    $('#bloc-auteur').hidden = type !== 'recours';
+    $('#i-date').value = new Date().toISOString().slice(0, 10);
+    $('#i-auteur').value = '';
+    $('#i-motif').value = '';
+    $('#modal-incident').hidden = false;
+  }
+
+  $('#btn-recours').addEventListener('click', () => ouvrirIncident('recours'));
+  $('#btn-infructueux').addEventListener('click', () => ouvrirIncident('infructueux'));
+
+  $('#btn-enr-incident').addEventListener('click', async () => {
+    const motif = $('#i-motif').value.trim();
+    if (!motif) { toast("Le motif est obligatoire : un incident sans motif ne vaut rien au dossier.", 'warn'); return; }
+    if (incidentType === 'infructueux'
+        && !await Djigui.confirm("Déclarer l'appel d'offres infructueux ?\n\n"
+          + "Les étapes qui suivent la publication repasseront « à faire », "
+          + "les offres seront écartées et l'attribution annulée.\n\n"
+          + "Tout reste au dossier : rien n'est effacé.")) return;
+    try {
+      await api('/api/marches/' + id + '/incidents', { method: 'POST', body: {
+        type_incident: incidentType, motif,
+        date_incident: $('#i-date').value || null,
+        auteur_recours: incidentType === 'recours' ? ($('#i-auteur').value.trim() || null) : null,
+      }});
+      $('#modal-incident').hidden = true;
+      toast(incidentType === 'recours' ? 'Recours enregistré : la procédure est gelée.'
+                                       : 'Procédure relancée.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#incidents').addEventListener('click', async e => {
+    const c = e.target.closest('[data-clore]');
+    if (c) { incidentAClore = c.dataset.clore; $('#dec-texte').value = '';
+             $('#modal-decision').hidden = false; return; }
+    const s = e.target.closest('[data-suppr-incident]');
+    if (!s) return;
+    if (!await Djigui.confirm('Supprimer cet incident du dossier ?')) return;
+    try {
+      await api('/api/incidents/' + s.dataset.supprIncident, { method: 'DELETE' });
+      toast('Incident supprimé.', 'ok');
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  });
+
+  $('#btn-confirmer-decision').addEventListener('click', async () => {
+    const decision = $('#dec-texte').value.trim();
+    if (!decision) { toast('Indiquez la décision.', 'warn'); return; }
+    try {
+      await api('/api/incidents/' + incidentAClore + '/clore', { method: 'POST', body: { decision } });
+      $('#modal-decision').hidden = true;
+      toast('Incident clos : la procédure repart.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Étapes -------------------------------------------------------------
+  // Changer l'état d'une étape passe TOUJOURS par la modale : on demande la
+  // date réelle de l'acte et ce qui s'est dit. Un changement d'état sans date
+  // ni observation ne laisse rien au dossier.
+  $('#corps-etapes').addEventListener('change', e => {
+    const sel = e.target.closest('.sel-statut');
+    if (!sel) return;
+    const et = (m.etapes || []).find(x => x.id === sel.dataset.etape);
+    if (!et) return;
+    ouvrirEtape(et, sel.value);
+    sel.value = et.statut;   // l'écran ne bouge qu'une fois la base à jour
+  });
+
+  // Bornes chronologiques d'une étape : on ne peut pas la dater avant l'acte
+  // qui la fonde, ni après ceux qui l'ont suivie.
+  function bornesEtape(et) {
+    const faites = (m.etapes || []).filter(x => x.statut === 'termine' && x.date_effective);
+    const avant = faites.filter(x => x.ordre < et.ordre)
+      .sort((a, b) => b.date_effective.localeCompare(a.date_effective))[0];
+    const apres = faites.filter(x => x.ordre > et.ordre)
+      .sort((a, b) => a.date_effective.localeCompare(b.date_effective))[0];
+    return { avant, apres };
+  }
+
+  function ouvrirEtape(et, nouveau) {
+    etapeSaisie = { id: et.id, statut: nouveau };
+    $('#titre-etape').textContent = `${et.libelle}`;
+    $('#etape-contexte').textContent =
+      `Étape prévue le ${dateFr(et.date_prevue) || '—'}. Vous la passez à « ${LIB_ETAPE[nouveau] || nouveau} ».`;
+    $('#e-etat').value = LIB_ETAPE[nouveau] || nouveau;
+    $('#e-date').value = et.date_effective || new Date().toISOString().slice(0, 10);
+    $('#e-obs').value = '';
+
+    // Le calendrier lui-même refuse les dates impossibles : c'est plus clair
+    // qu'un message d'erreur après coup. Le serveur revérifie de toute façon.
+    const { avant, apres } = bornesEtape(et);
+    const dt = $('#e-date');
+    dt.min = avant ? avant.date_effective : '';
+    dt.max = apres ? apres.date_effective : '';
+    $('#etape-bornes').innerHTML = (avant || apres)
+      ? `<div class="muted" style="font-size:12.5px;margin-top:6px">
+           ${avant ? `Ne peut pas être avant le <strong>${dateFr(avant.date_effective)}</strong>
+             (« ${esc(avant.libelle)} »).` : ''}
+           ${apres ? `${avant ? '<br>' : ''}Ne peut pas être après le <strong>${dateFr(apres.date_effective)}</strong>
+             (« ${esc(apres.libelle)} »).` : ''}
+         </div>`
+      : '';
+
+    // ⚠️ Rouvrir une étape franchie remet en cause tout ce qui en découle.
+    // On le montre AVANT d'agir, dans la modale même.
+    const suivantes = (et.statut === 'termine' && nouveau !== 'termine')
+      ? (m.etapes || []).filter(x => x.ordre > et.ordre && x.statut !== 'en_attente')
+      : [];
+    $('#etape-avertissement').innerHTML = suivantes.length
+      ? `<div class="alert warn" style="margin-bottom:12px">
+           <strong>Cette étape fonde celles qui suivent.</strong> En la remettant en
+           cause, ${suivantes.length} étape(s) repasseront « à faire » :
+           <ul style="margin:6px 0 0 18px">${suivantes.map(x => `<li>${esc(x.libelle)}</li>`).join('')}</ul>
+           <div style="margin-top:6px">La trace de ce qui avait été validé sera
+           conservée dans les observations.</div>
+         </div>`
+      : '';
+    $('#modal-etape').hidden = false;
+  }
+
+  $('#btn-confirmer-etape').addEventListener('click', async () => {
+    if (!etapeSaisie) return;
+    // Contrôle avant l'envoi : on explique en français plutôt que de laisser
+    // le serveur refuser. (Il refuse quand même : c'est lui qui fait foi.)
+    const et = (m.etapes || []).find(x => x.id === etapeSaisie.id);
+    const d = $('#e-date').value;
+    if (et && d && etapeSaisie.statut === 'termine') {
+      const { avant, apres } = bornesEtape(et);
+      if (avant && d < avant.date_effective) {
+        toast(`Date impossible : « ${avant.libelle} » a été faite le ${dateFr(avant.date_effective)}. `
+            + `Un acte ne peut pas précéder celui qui le rend possible.`, 'warn');
+        return;
+      }
+      if (apres && d > apres.date_effective) {
+        toast(`Date impossible : « ${apres.libelle} » a déjà été faite le ${dateFr(apres.date_effective)}.`,
+              'warn');
+        return;
+      }
+    }
+    try {
+      const r = await api('/api/marche-etapes/' + etapeSaisie.id + '/statut', {
+        method: 'POST',
+        body: {
+          statut: etapeSaisie.statut,
+          date_effective: $('#e-date').value || null,
+          observations: $('#e-obs').value.trim() || null,
+        },
+      });
+      $('#modal-etape').hidden = true;
+      const n = (r.etapes_rouvertes || []).length;
+      toast(n ? `Étape mise à jour. ${n} étape(s) rouverte(s) : ${r.etapes_rouvertes.join(', ')}.`
+              : 'Étape mise à jour.', n ? 'warn' : 'ok');
+      await charger();
+    } catch (err) {
+      toast(err.message, 'danger');
+      await charger();   // l'écran doit refléter la base, pas le clic refusé
+    }
+  });
+
+  // Passer outre le verrou : motif obligatoire, nom conservé.
+  $('#corps-etapes').addEventListener('click', e => {
+    const d = e.target.closest('[data-deroger]');
+    if (!d) return;
+    etapeDerogee = d.dataset.deroger;
+    const et = (m.etapes || []).find(x => x.id === etapeDerogee);
+    $('#derogation-contexte').textContent = et
+      ? `Étape « ${et.libelle} » — ${et.raison_verrou || ''}` : '';
+    $('#d-motif').value = '';
+    $('#modal-derogation').hidden = false;
+  });
+
+  $('#btn-confirmer-derogation').addEventListener('click', async () => {
+    const motif = $('#d-motif').value.trim();
+    if (!motif) { toast('Le motif est obligatoire pour passer outre.', 'warn'); return; }
+    try {
+      await api('/api/marche-etapes/' + etapeDerogee + '/statut',
+        { method: 'POST', body: { statut: 'termine', motif_derogation: motif,
+          date_effective: new Date().toISOString().slice(0, 10) } });
+      $('#modal-derogation').hidden = true;
+      toast('Étape franchie par dérogation. Le motif est enregistré.', 'warn');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#corps-etapes').addEventListener('click', async e => {
+    const b = e.target.closest('[data-plan]');
+    if (!b) return;
+    etapePlan = b.dataset.plan;
+    let plan;
+    try { plan = await api('/api/marche-etapes/' + etapePlan + '/plan-replanification'); }
+    catch (err) { toast(err.message, 'danger'); return; }
+    if (!plan.length) { toast('Aucune étape suivante à décaler.', 'warn'); return; }
+    $('#corps-plan').innerHTML = plan.map(d => `<tr>
+      <td>${esc(d.libelle)}</td>
+      <td>${d.date_actuelle ? dateFr(d.date_actuelle) : '—'}</td>
+      <td><strong>${dateFr(d.date_proposee)}</strong></td>
+      <td class="right ${d.decalage_jours > 0 ? 'neg' : ''}">${d.decalage_jours > 0 ? '+' : ''}${d.decalage_jours} j</td>
+    </tr>`).join('');
+    $('#modal-plan').hidden = false;
+  });
+
+  $('#btn-appliquer-plan').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/marche-etapes/' + etapePlan + '/replanifier', { method: 'POST', body: {} });
+      $('#modal-plan').hidden = true;
+      toast(`${r.replanifiees} étape(s) décalée(s).`, 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  // ---- Offres -------------------------------------------------------------
+  function ouvrirOffre(o) {
+    offreEditee = o ? o.id : null;
+    $('#titre-offre').textContent = o ? 'Modifier l\'offre' : 'Enregistrer une offre';
+    $('#o-nom').value = o ? o.nom : '';
+    $('#o-tiers').value = o && o.tiers_id ? o.tiers_id : '';
+    $('#o-montant').value = o && o.montant_offre != null ? o.montant_offre : '';
+    $('#o-delai').value = o && o.delai_jours != null ? o.delai_jours : '';
+    $('#o-nt').value = o && o.note_technique != null ? o.note_technique : '';
+    $('#o-nf').value = o && o.note_financiere != null ? o.note_financiere : '';
+    $('#o-date').value = o && o.date_depot ? o.date_depot : '';
+    $('#o-statut').value = o && o.statut !== 'retenu' ? o.statut : 'recu';
+    $('#o-obs').value = o && o.observations ? o.observations : '';
+    $('#modal-offre').hidden = false;
+  }
+
+  $('#btn-nouvelle-offre').addEventListener('click', () => ouvrirOffre(null));
+
+  $('#btn-enr-offre').addEventListener('click', async () => {
+    const nom = $('#o-nom').value.trim();
+    if (!nom) { toast('Le nom du soumissionnaire est obligatoire.', 'warn'); return; }
+    const nb = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+    const corps = {
+      nom, tiers_id: $('#o-tiers').value || null,
+      montant_offre: nb('#o-montant'), delai_jours: nb('#o-delai'),
+      note_technique: nb('#o-nt'), note_financiere: nb('#o-nf'),
+      date_depot: $('#o-date').value || null, statut: $('#o-statut').value,
+      observations: $('#o-obs').value.trim() || null,
+    };
+    try {
+      if (offreEditee) await api('/api/soumissionnaires/' + offreEditee, { method: 'PUT', body: corps });
+      else await api('/api/marches/' + id + '/soumissionnaires', { method: 'POST', body: corps });
+      $('#modal-offre').hidden = true;
+      toast('Offre enregistrée.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#corps-offres').addEventListener('click', async e => {
+    const mod = e.target.closest('[data-modifier-offre]');
+    if (mod) return ouvrirOffre(m.soumissionnaires.find(o => o.id === mod.dataset.modifierOffre));
+
+    const sup = e.target.closest('[data-supprimer-offre]');
+    if (sup) {
+      if (!await Djigui.confirm('Supprimer cette offre ?')) return;
+      try {
+        await api('/api/soumissionnaires/' + sup.dataset.supprimerOffre, { method: 'DELETE' });
+        toast('Offre supprimée.', 'ok');
+        await charger();
+      } catch (err) { toast(err.message, 'danger'); }
+      return;
+    }
+
+    const att = e.target.closest('[data-attribuer]');
+    if (!att) return;
+    const o = m.soumissionnaires.find(x => x.id === att.dataset.attribuer);
+    if (!await Djigui.confirm(`Attribuer le marché à ${o.nom} ?\n\n`
+      + `Cette offre passera « retenue », les autres seront écartées, et le marché `
+      + `recevra son attributaire et son montant.`)) return;
+    try {
+      await api('/api/soumissionnaires/' + o.id + '/attribuer', { method: 'POST', body: {} });
+      toast('Marché attribué.', 'ok');
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  });
+
+  // ---- Avenants -----------------------------------------------------------
+  function ouvrirAvenant(a) {
+    avenantEdite = a ? a.id : null;
+    $('#titre-avenant').textContent = a ? `Modifier l'avenant n° ${a.numero}` : 'Nouvel avenant';
+    $('#a-objet').value = a ? a.objet : '';
+    $('#a-montant').value = a ? a.montant_variation : 0;
+    $('#a-delai').value = a ? a.delai_jours : 0;
+    $('#a-date').value = a ? a.date_avenant : new Date().toISOString().slice(0, 10);
+    $('#a-motif').value = a && a.motif ? a.motif : '';
+    $('#modal-avenant').hidden = false;
+  }
+
+  $('#btn-nouvel-avenant').addEventListener('click', () => ouvrirAvenant(null));
+
+  $('#btn-enr-avenant').addEventListener('click', async () => {
+    const objet = $('#a-objet').value.trim();
+    if (!objet) { toast('L\'objet de l\'avenant est obligatoire.', 'warn'); return; }
+    const corps = {
+      objet,
+      montant_variation: Number($('#a-montant').value || 0),
+      delai_jours: Number($('#a-delai').value || 0),
+      date_avenant: $('#a-date').value || null,
+      motif: $('#a-motif').value.trim() || null,
+    };
+    try {
+      if (avenantEdite) await api('/api/avenants/' + avenantEdite, { method: 'PUT', body: corps });
+      else await api('/api/marches/' + id + '/avenants', { method: 'POST', body: corps });
+      $('#modal-avenant').hidden = true;
+      toast('Avenant enregistré.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#corps-avenants').addEventListener('click', async e => {
+    const mod = e.target.closest('[data-modifier-avenant]');
+    if (mod) return ouvrirAvenant(m.avenants.find(a => a.id === mod.dataset.modifierAvenant));
+
+    const sup = e.target.closest('[data-supprimer-avenant]');
+    if (sup) {
+      if (!await Djigui.confirm('Supprimer cet avenant ?')) return;
+      try {
+        await api('/api/avenants/' + sup.dataset.supprimerAvenant, { method: 'DELETE' });
+        toast('Avenant supprimé.', 'ok');
+        await charger();
+      } catch (err) { toast(err.message, 'danger'); }
+      return;
+    }
+
+    const app = e.target.closest('[data-approuver]');
+    if (!app) return;
+    const a = m.avenants.find(x => x.id === app.dataset.approuver);
+    // L'approbation est irréversible : on le dit avant, pas après.
+    if (!await Djigui.confirm(`Approuver l'avenant n° ${a.numero} ?\n\n`
+      + `Le montant du marché passera à ${fmt(m.montant_courant + a.montant_variation)}.\n`
+      + `Un avenant approuvé ne peut plus être modifié ni supprimé : `
+      + `il faudrait en prendre un nouveau en sens inverse.`)) return;
+    try {
+      await api('/api/avenants/' + a.id + '/statut', { method: 'POST', body: { statut: 'approuve' } });
+      toast('Avenant approuvé.', 'ok');
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  });
+
+  // ---- Réceptions ---------------------------------------------------------
+  // Le champ « réserves » ne s'affiche que s'il a un sens : c'est aussi ce que
+  // le serveur exige, autant que l'écran le montre.
+  function majBlocReserves() {
+    $('#bloc-reserves').hidden = $('#r-resultat').value !== 'avec_reserves';
+  }
+  $('#r-resultat').addEventListener('change', majBlocReserves);
+
+  function ouvrirReception(r) {
+    receptionEditee = r ? r.id : null;
+    $('#titre-reception').textContent = r ? 'Modifier la réception' : 'Enregistrer une réception';
+    $('#r-type').value = r ? r.type_reception : 'provisoire';
+    $('#r-date').value = r ? r.date_reception : new Date().toISOString().slice(0, 10);
+    $('#r-resultat').value = r ? r.resultat : 'prononcee';
+    $('#r-reserves').value = r && r.reserves ? r.reserves : '';
+    $('#r-garantie').value = r && r.garantie_mois != null ? r.garantie_mois : '';
+    $('#r-retenue').value = r && r.montant_retenue_garantie != null ? r.montant_retenue_garantie : '';
+    $('#r-par').value = r && r.receptionne_par ? r.receptionne_par : '';
+    $('#r-obs').value = r && r.observations ? r.observations : '';
+    majBlocReserves();
+    $('#modal-reception').hidden = false;
+  }
+
+  $('#btn-nouvelle-reception').addEventListener('click', () => ouvrirReception(null));
+
+  $('#btn-enr-reception').addEventListener('click', async () => {
+    const resultat = $('#r-resultat').value;
+    const reserves = $('#r-reserves').value.trim();
+    if (resultat === 'avec_reserves' && !reserves) {
+      toast('Dites lesquelles : une réception avec réserves doit préciser ce qui reste à faire.', 'warn');
+      return;
+    }
+    const nb = sel => { const v = $(sel).value.trim(); return v === '' ? null : Number(v); };
+    const corps = {
+      type_reception: $('#r-type').value,
+      date_reception: $('#r-date').value || null,
+      resultat,
+      reserves: reserves || null,
+      garantie_mois: nb('#r-garantie'),
+      montant_retenue_garantie: nb('#r-retenue'),
+      receptionne_par: $('#r-par').value.trim() || null,
+      observations: $('#r-obs').value.trim() || null,
+    };
+    try {
+      if (receptionEditee) await api('/api/receptions/' + receptionEditee, { method: 'PUT', body: corps });
+      else await api('/api/marches/' + id + '/receptions', { method: 'POST', body: corps });
+      $('#modal-reception').hidden = true;
+      toast('Réception enregistrée.', 'ok');
+      await charger();
+    } catch (e) { toast(e.message, 'danger'); }
+  });
+
+  $('#corps-receptions').addEventListener('click', async e => {
+    const mod = e.target.closest('[data-modifier-reception]');
+    if (mod) return ouvrirReception(m.receptions.find(r => r.id === mod.dataset.modifierReception));
+
+    const sup = e.target.closest('[data-supprimer-reception]');
+    if (sup) {
+      if (!await Djigui.confirm('Supprimer ce procès-verbal de réception ?')) return;
+      try {
+        await api('/api/receptions/' + sup.dataset.supprimerReception, { method: 'DELETE' });
+        toast('Réception supprimée.', 'ok');
+        await charger();
+      } catch (err) { toast(err.message, 'danger'); }
+      return;
+    }
+
+    const lev = e.target.closest('[data-lever]');
+    if (!lev) return;
+    if (!await Djigui.confirm('Lever les réserves ?\n\n'
+      + 'Cela signifie que ce qui restait à faire a été fait. '
+      + 'La retenue de garantie peut alors être libérée.')) return;
+    try {
+      await api('/api/receptions/' + lev.dataset.lever + '/lever-reserves', { method: 'POST', body: {} });
+      toast('Réserves levées.', 'ok');
+      await charger();
+    } catch (err) { toast(err.message, 'danger'); }
+  });
+
+  async function demarrer() {
+    if (!id) { location.href = 'marches.html'; return; }
+    try { tiers = await api('/api/tiers'); } catch { tiers = []; }
+    $('#o-tiers').innerHTML = `<option value="">Aucune</option>` +
+      tiers.map(t => `<option value="${esc(t.id)}">${esc(t.nom)}</option>`).join('');
+    await charger();
+  }
+
+  demarrer();
+})();
+</script>
+</body>
+</html>

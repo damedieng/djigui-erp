@@ -24,4 +24,8 @@ anyhow.workspace = true
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
+    # Sélecteur de dossier natif (« Parcourir… » de l'écran Sauvegarde).
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
 ] }

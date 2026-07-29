@@ -11,10 +11,10 @@ use axum::{
     Json, Router,
 };
 use djigui_core::modules::{
-    abonnement, article, audit, categorie, dependance, depot, document, inventaire, jalon, moyen_paiement,
-    notification, paiement,
-    parametres, projet, rapport, rendez_vous, seed, seeder, session_caisse, stock, taux_tva, taxe,
-    tiers, utilisateur,
+    abonnement, article, audit, categorie, comptabilite, dependance, depot, document, inventaire, jalon,
+    activation, calendrier, marche, moyen_paiement, notification, paiement, prix_estime,
+    paie_employe, paie_parametres, parametres, production, projet, rapport, rendez_vous, sauvegarde, seed, seeder, session_caisse,
+    stock, taux_tva, taxe, tiers, utilisateur,
 };
 use djigui_core::CoreError;
 use serde::Deserialize;
@@ -137,7 +137,154 @@ pub fn router(state: AppState) -> Router {
         .route("/api/projets/:id/ressources", get(liste_ressources))
         .route("/api/ressources", post(cree_ressource))
         .route("/api/ressources/:id", axum::routing::put(modifie_ressource).delete(supprime_ressource))
+        // Production : nomenclatures (recettes) et ordres de fabrication (mig 0031)
+        .route("/api/nomenclatures", get(liste_nomenclatures).post(cree_nomenclature))
+        .route(
+            "/api/nomenclatures/:id",
+            get(get_nomenclature)
+                .put(modifie_nomenclature)
+                .delete(supprime_nomenclature),
+        )
+        .route("/api/ordres-production", get(liste_ordres).post(cree_ordre))
+        .route(
+            "/api/ordres-production/:id",
+            get(get_ordre).put(modifie_ordre).delete(supprime_ordre),
+        )
+        .route("/api/ordres-production/:id/statut", post(ordre_statut))
+        .route("/api/ordres-production/:id/cloturer", post(ordre_cloturer))
+        .route("/api/ordres-production/:id/annuler", post(ordre_annuler))
+        .route("/api/ordres-production/lot/statut", post(ordres_statut_lot))
+        .route("/api/ordres-production/lot/supprimer", post(ordres_supprimer_lot))
+        // Comptabilité — écran réservé au comptable (mig 0034). Le comptable
+        // crée SES comptes, écrit SES règles, et range l'historique existant.
+        .route("/api/comptes", get(liste_comptes).post(cree_compte))
+        .route(
+            "/api/comptes/:numero",
+            get(get_compte).put(modifie_compte).delete(supprime_compte),
+        )
+        .route("/api/comptes/plan-ohada", post(installe_plan_ohada))
+        .route("/api/regles-comptables", get(liste_regles).post(cree_regle))
+        .route(
+            "/api/regles-comptables/:id",
+            axum::routing::put(modifie_regle).delete(supprime_regle),
+        )
+        .route("/api/regles-comptables/lot/supprimer", post(regles_supprimer_lot))
+        .route("/api/comptabilite/operations", get(liste_operations))
+        .route("/api/comptabilite/rattacher", post(rattache_operations))
+        .route("/api/comptabilite/rattacher-tout", post(rattache_tout))
+        .route("/api/comptabilite/ecritures", get(liste_ecritures))
+        .route("/api/comptabilite/ecritures/:id", get(get_ecriture))
+        .route("/api/comptabilite/ecritures/:id/contrepasser", post(contrepasse_ecriture))
+        .route("/api/comptabilite/ecritures/:id/rejouer", post(rejoue_ecriture))
+        .route("/api/comptabilite/rejouer-incompletes", post(rejoue_incompletes))
+        .route("/api/comptabilite/lignes/:id/compte", post(affecte_compte_ligne))
+        .route("/api/comptabilite/grand-livre/:numero", get(get_grand_livre))
+        .route("/api/comptabilite/balance", get(get_balance))
+        .route("/api/comptabilite/lettrer", post(lettre_lignes))
+        .route("/api/comptabilite/delettrer", post(delettre_lignes))
+        // Passation et suivi des marchés (mig 0037)
+        .route("/api/marches", get(liste_marches).post(cree_marche))
+        .route("/api/marches/:id", get(get_marche).put(modifie_marche).delete(supprime_marche))
+        .route("/api/marches/:id/statut", post(marche_statut))
+        .route("/api/marches/:id/annuler", post(marche_annuler))
+        .route("/api/marches/lot/statut", post(marches_statut_lot))
+        .route("/api/marches/lot/supprimer", post(marches_supprimer_lot))
+        .route("/api/marches/:id/soumissionnaires", post(cree_soumissionnaire))
+        .route(
+            "/api/soumissionnaires/:id",
+            axum::routing::put(modifie_soumissionnaire).delete(supprime_soumissionnaire),
+        )
+        .route("/api/soumissionnaires/:id/attribuer", post(attribue_marche))
+        .route("/api/marches/:id/avenants", post(cree_avenant))
+        .route(
+            "/api/avenants/:id",
+            axum::routing::put(modifie_avenant).delete(supprime_avenant),
+        )
+        .route("/api/avenants/:id/statut", post(avenant_statut))
+        .route("/api/marches/:id/receptions", post(cree_reception))
+        .route(
+            "/api/receptions/:id",
+            axum::routing::put(modifie_reception).delete(supprime_reception),
+        )
+        .route("/api/receptions/:id/lever-reserves", post(reception_lever_reserves))
+        // Activation des modules (migration 0040). ⚠️ `souscrit` est une donnée
+        // de FACTURATION posée à l'installation ; `actif` est le confort du
+        // client. Les deux ne se pilotent pas par la même route.
+        // Calendriers superposés : l'agenda affiche PAR-DESSUS ses rendez-vous
+        // les échéances des autres modules. ⚠️ LECTURE SEULE — aucune route
+        // d'écriture ici, on modifie dans l'écran d'origine.
+        .route("/api/calendrier", get(liste_evenements))
+        .route("/api/calendrier/sources", get(liste_calendriers))
+        // Sauvegarde chiffrée (mig 0042). Les copies partent vers des dossiers
+        // choisis par l'utilisateur ; aucun envoi vers un service en ligne.
+        .route("/api/sauvegarde/parametres", get(sauvegarde_parametres).put(sauvegarde_modifier))
+        .route("/api/sauvegarde/mot-de-passe", post(sauvegarde_mot_de_passe))
+        .route("/api/sauvegarde/licence", post(sauvegarde_licence))
+        .route("/api/sauvegarde/destinations", get(sauvegarde_destinations).post(sauvegarde_ajout_destination))
+        .route(
+            "/api/sauvegarde/destinations/:id",
+            axum::routing::put(sauvegarde_maj_destination).delete(sauvegarde_suppr_destination),
+        )
+        .route("/api/sauvegarde/executer", post(sauvegarde_executer))
+        .route("/api/sauvegarde/journal", get(sauvegarde_journal))
+        .route("/api/sauvegarde/parcourir", get(sauvegarde_parcourir))
+        .route("/api/sauvegarde/suggestions", get(sauvegarde_suggestions))
+        .route("/api/sauvegarde/choisir-dossier", post(sauvegarde_choisir_dossier))
+        .route("/api/sauvegarde/apercu", post(sauvegarde_apercu))
+        .route("/api/sauvegarde/restaurer", post(sauvegarde_restaurer))
+        // Paie & RH — paramètres légaux (mig 0044). ⚠️ Aucun taux n'est dans
+        // le code : ces routes sont le SEUL moyen de les faire évoluer.
+        .route("/api/paie/parametres", get(paie_lire_parametres))
+        .route("/api/paie/parametres/periode", post(paie_nouvelle_periode))
+        .route("/api/paie/parametres/corriger", post(paie_corriger_periode))
+        .route("/api/paie/parametres/verifie", post(paie_marquer_verifie))
+        .route("/api/paie/employeur", axum::routing::put(paie_enregistrer_employeur))
+        // Salariés & contrats (mig 0045).
+        .route("/api/paie/employes", get(paie_liste_employes).post(paie_cree_employe))
+        .route("/api/paie/employes/:id",
+               get(paie_get_employe).put(paie_modifie_employe).delete(paie_supprime_employe))
+        .route("/api/paie/employes/:id/depart", post(paie_depart))
+        .route("/api/paie/employes/:id/reintegrer", post(paie_reintegrer))
+        .route("/api/paie/employes/:id/contrats", get(paie_liste_contrats))
+        .route("/api/paie/employes/lot/depart", post(paie_depart_lot))
+        .route("/api/paie/contrats", post(paie_cree_contrat))
+        .route("/api/paie/contrats/:id", axum::routing::put(paie_modifie_contrat))
+        .route("/api/modules", get(liste_modules))
+        .route("/api/modules/formules", get(liste_formules))
+        .route("/api/modules/formule", post(applique_formule))
+        .route("/api/modules/:code/actif", post(module_actif))
+        .route("/api/marches/phases", get(marches_par_phase))
+        .route("/api/marches/export-suivi", post(export_suivi_marches))
+        .route("/api/marches/:id/incidents", post(cree_incident))
+        .route("/api/incidents/:id", axum::routing::delete(supprime_incident))
+        .route("/api/incidents/:id/clore", post(clot_incident))
+        .route("/api/marche-etapes/:id", axum::routing::put(modifie_etape))
+        .route("/api/marche-etapes/:id/statut", post(etape_statut))
+        .route("/api/marche-etapes/:id/plan-replanification", get(plan_replanif))
+        .route("/api/marche-etapes/:id/replanifier", post(replanif))
+        .route("/api/marche-types", get(liste_types_marche).post(cree_type_marche))
+        .route(
+            "/api/marche-types/:id",
+            axum::routing::put(modifie_type_marche).delete(supprime_type_marche),
+        )
+        // Rapports (§7) — le langage du commerçant, pas celui du comptable.
         .route("/api/rapports/benefices", get(rapport_benefices))
+        .route("/api/rapports/journal-ventes", get(rapport_journal_ventes))
+        .route("/api/rapports/journal-achats", get(rapport_journal_achats))
+        .route("/api/rapports/marges", get(rapport_marges))
+        .route("/api/rapports/stock", get(rapport_stock))
+        .route("/api/rapports/encours-clients", get(rapport_encours_clients))
+        .route("/api/rapports/encours-fournisseurs", get(rapport_encours_fournisseurs))
+        // Continuité de la numérotation (N1 OHADA). Rapport, jamais blocage :
+        // un trou a parfois une explication légitime, mais l'utilisateur doit
+        // le connaître avant qu'un contrôleur ne le lui montre.
+        .route("/api/rapports/numerotation", get(rapport_numerotation))
+        // Prix d'achat estimés (mig 0035) : des chiffres de démonstration assumés.
+        .route("/api/prix/apercu", get(prix_apercu))
+        .route("/api/prix/estimer", post(prix_estimer))
+        .route("/api/prix/effacer-estimations", post(prix_effacer))
+        .route("/api/prix/a-completer", get(prix_a_completer))
+        .route("/api/prix/reels", post(prix_reels))
         .route("/api/export/xlsx/enregistrer", post(export_xlsx_fichier))
         .route("/api/abonnements", get(liste_abonnements).post(cree_abonnement))
         .route("/api/abonnements/:id", axum::routing::put(modifie_abonnement).delete(supprime_abonnement))
@@ -960,6 +1107,195 @@ async fn jalons_supprimer_lot(
     let conn = s.conn.lock().unwrap();
     let n = jalon::supprimer_jalons(&conn, &b.ids)?;
     journaliser(&conn, &acteur, "suppression", "jalon", None, None);
+    Ok(Json(serde_json::json!({ "traites": n })))
+}
+
+// ---- Production : nomenclatures et ordres de fabrication (mig 0031) --------
+
+#[derive(Deserialize)]
+struct FiltreNomenclatures {
+    article_id: Option<String>,
+    #[serde(default)]
+    actives_seulement: bool,
+}
+
+async fn liste_nomenclatures(
+    State(s): State<AppState>,
+    Query(q): Query<FiltreNomenclatures>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(production::lister_nomenclatures(
+        &conn,
+        q.article_id.as_deref(),
+        q.actives_seulement,
+    )?))
+}
+
+async fn get_nomenclature(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(production::lire_nomenclature(&conn, &id)?))
+}
+
+async fn cree_nomenclature(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(n): Json<production::NouvelleNomenclature>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let r = production::creer_nomenclature(&conn, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "nomenclature", Some(&r.id), Some(&r.nom));
+    Ok((StatusCode::CREATED, Json(r)))
+}
+
+async fn modifie_nomenclature(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<production::NouvelleNomenclature>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let r = production::modifier_nomenclature(&conn, &id, &n)?;
+    journaliser(&conn, &acteur, "modification", "nomenclature", Some(&r.id), Some(&r.nom));
+    Ok(Json(r))
+}
+
+async fn supprime_nomenclature(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    production::supprimer_nomenclature(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "nomenclature", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn liste_ordres(
+    State(s): State<AppState>,
+    Query(f): Query<production::FiltreOrdres>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(production::lister_ordres(&conn, &f)?))
+}
+
+async fn get_ordre(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(production::lire_ordre(&conn, &id)?))
+}
+
+async fn cree_ordre(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(n): Json<production::NouvelOrdre>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let o = production::creer_ordre(&conn, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "ordre_production", Some(&o.id), Some(&o.numero));
+    Ok((StatusCode::CREATED, Json(o)))
+}
+
+async fn modifie_ordre(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<production::NouvelOrdre>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let o = production::modifier_ordre(&conn, &id, &n)?;
+    journaliser(&conn, &acteur, "modification", "ordre_production", Some(&o.id), Some(&o.numero));
+    Ok(Json(o))
+}
+
+async fn supprime_ordre(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    production::supprimer_ordre(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "ordre_production", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct CorpsStatutOrdre {
+    statut: djigui_core::domain::StatutOrdreProduction,
+}
+
+async fn ordre_statut(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsStatutOrdre>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let o = production::changer_statut(&conn, &id, b.statut)?;
+    journaliser(&conn, &acteur, "modification", "ordre_production", Some(&o.id), Some(b.statut.as_str()));
+    Ok(Json(o))
+}
+
+/// Clôture : c'est elle qui écrit les mouvements de stock, donc elle est
+/// journalisée avec le numéro de l'ordre.
+async fn ordre_cloturer(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(c): Json<production::Cloture>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let o = production::cloturer(&conn, &id, &c, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "cloture", "ordre_production", Some(&o.id), Some(&o.numero));
+    Ok(Json(o))
+}
+
+#[derive(Deserialize)]
+struct CorpsMotif {
+    motif: String,
+}
+
+async fn ordre_annuler(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsMotif>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let o = production::annuler(&conn, &id, &b.motif)?;
+    journaliser(&conn, &acteur, "annulation", "ordre_production", Some(&o.id), Some(&b.motif));
+    Ok(Json(o))
+}
+
+#[derive(Deserialize)]
+struct LotStatutOrdre {
+    ids: Vec<String>,
+    statut: djigui_core::domain::StatutOrdreProduction,
+}
+
+async fn ordres_statut_lot(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<LotStatutOrdre>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let n = production::changer_statut_lot(&conn, &b.ids, b.statut)?;
+    journaliser(&conn, &acteur, "modification", "ordre_production", None, Some(b.statut.as_str()));
+    Ok(Json(serde_json::json!({ "traites": n })))
+}
+
+async fn ordres_supprimer_lot(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<LotIds>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let n = production::supprimer_lot(&conn, &b.ids)?;
+    journaliser(&conn, &acteur, "suppression", "ordre_production", None, None);
     Ok(Json(serde_json::json!({ "traites": n })))
 }
 
@@ -1937,8 +2273,56 @@ async fn transformer_document(
     Ok((StatusCode::CREATED, Json(cible)))
 }
 
+/// Garde-fou de RÔLE MACHINE : refuse tout ce qui touche à la sauvegarde quand
+/// cet ordinateur n'est pas le serveur (mig 0042).
+///
+/// ⚠️ Rappel de l'utilisateur : « seule la machine serveur peut faire ça ».
+/// Le cœur refuse déjà d'EXÉCUTER une sauvegarde depuis un poste secondaire ;
+/// ce garde-fou étend le refus à tout ce qui la PRÉPARE — choisir un dossier,
+/// ajouter ou modifier une destination. Sans lui, un poste client pourrait
+/// configurer des destinations qu'il n'écrirait jamais : l'utilisateur croirait
+/// sa sauvegarde en place alors que rien ne partirait.
+fn exiger_serveur(conn: &rusqlite::Connection, quoi: &str) -> Result<(), ApiError> {
+    let p = djigui_core::modules::sauvegarde::lire_parametres(conn)?;
+    if !p.cette_machine_est_serveur {
+        return Err(ApiError(CoreError::Forbidden(format!(
+            "Cet ordinateur n'est pas le serveur Djigui : {quoi} se fait depuis le poste qui              héberge les données."
+        ))));
+    }
+    Ok(())
+}
+
 /// Garde-fou : exige que l'acteur soit un **Admin** actif. Sinon `Forbidden`.
 fn exiger_admin(conn: &rusqlite::Connection, acteur: &Acteur) -> Result<(), ApiError> {
+    exiger_admin_pour(conn, acteur, "annuler une vente encaissée")
+}
+
+/// Même garde-fou, mais le refus **nomme l'action refusée**. Un message générique
+/// (« accès refusé ») laisse l'utilisateur deviner ce qu'il vient de tenter.
+fn exiger_admin_pour(
+    conn: &rusqlite::Connection,
+    acteur: &Acteur,
+    motif: &str,
+) -> Result<(), ApiError> {
+    use djigui_core::domain::RoleUtilisateur;
+    let id = acteur.0.as_deref().ok_or_else(|| {
+        ApiError(CoreError::Unauthorized("connexion requise pour cette action".into()))
+    })?;
+    let u = utilisateur::lire(conn, id)
+        .map_err(|_| ApiError(CoreError::Unauthorized("utilisateur inconnu".into())))?;
+    if u.role != RoleUtilisateur::Admin || !u.actif {
+        return Err(ApiError(CoreError::Forbidden(format!(
+            "seul un administrateur peut {motif}"
+        ))));
+    }
+    Ok(())
+}
+
+/// L'écran comptable est **réservé**. Aujourd'hui le rôle « comptable » n'existe
+/// pas dans Djigui (rôles Admin/Caissier) : on exige donc l'administrateur, qui
+/// est la personne à qui le commerçant confie ce genre d'accès. Le jour où un
+/// rôle dédié sera créé, c'est ici qu'il s'ajoutera — nulle part ailleurs.
+fn exiger_comptable(conn: &rusqlite::Connection, acteur: &Acteur) -> Result<(), ApiError> {
     use djigui_core::domain::RoleUtilisateur;
     let id = acteur.0.as_deref().ok_or_else(|| {
         ApiError(CoreError::Unauthorized("connexion requise pour cette action".into()))
@@ -1947,7 +2331,7 @@ fn exiger_admin(conn: &rusqlite::Connection, acteur: &Acteur) -> Result<(), ApiE
         .map_err(|_| ApiError(CoreError::Unauthorized("utilisateur inconnu".into())))?;
     if u.role != RoleUtilisateur::Admin || !u.actif {
         return Err(ApiError(CoreError::Forbidden(
-            "seul un administrateur peut annuler une vente encaissée".into(),
+            "l'écran comptable est réservé au comptable (compte administrateur)".into(),
         )));
     }
     Ok(())
@@ -1971,6 +2355,975 @@ async fn annuler_document(
     journaliser(&conn, &acteur, "annulation", "document", Some(&doc.id),
                 Some(&format!("{} — {}", doc.numero, b.motif.trim())));
     Ok(Json(doc))
+}
+
+// ---- Passation et suivi des marchés (migration 0037) -----------------------
+
+async fn liste_marches(
+    State(s): State<AppState>,
+    Query(f): Query<marche::FiltreMarches>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(marche::lister(&conn, &f)?))
+}
+
+async fn get_marche(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(marche::lire(&conn, &id)?))
+}
+
+async fn cree_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(n): Json<marche::NouveauMarche>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let m = marche::creer(&conn, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "marche", Some(&m.id), Some(&m.numero));
+    Ok((StatusCode::CREATED, Json(m)))
+}
+
+async fn modifie_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouveauMarche>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let m = marche::modifier(&conn, &id, &n)?;
+    journaliser(&conn, &acteur, "modification", "marche", Some(&m.id), Some(&m.numero));
+    Ok(Json(m))
+}
+
+async fn supprime_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    marche::supprimer(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "marche", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct CorpsStatut {
+    statut: String,
+}
+
+async fn marche_statut(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsStatut>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let m = marche::changer_statut(&conn, &id, &b.statut)?;
+    journaliser(&conn, &acteur, "modification", "marche", Some(&m.id), Some(&b.statut));
+    Ok(Json(m))
+}
+
+async fn marche_annuler(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsMotif>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let m = marche::annuler(&conn, &id, &b.motif, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "annulation", "marche", Some(&m.id), Some(&b.motif));
+    Ok(Json(m))
+}
+
+#[derive(Deserialize)]
+struct LotStatutMarche {
+    ids: Vec<String>,
+    statut: String,
+}
+
+async fn marches_statut_lot(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<LotStatutMarche>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let n = marche::changer_statut_lot(&conn, &b.ids, &b.statut)?;
+    journaliser(&conn, &acteur, "modification", "marche", None,
+                Some(&format!("{n} marché(s) → {}", b.statut)));
+    Ok(Json(serde_json::json!({ "modifies": n })))
+}
+
+/// Suppression groupée : rend compte des supprimés ET des conservés (marchés
+/// qui ont une histoire). L'écran doit pouvoir le DIRE, pas juste compter.
+async fn marches_supprimer_lot(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<LotIds>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let r = marche::supprimer_lot(&conn, &b.ids)?;
+    journaliser(&conn, &acteur, "suppression", "marche", None,
+                Some(&format!("{} supprimé(s), {} conservé(s)", r.supprimes, r.conserves)));
+    Ok(Json(r))
+}
+
+async fn cree_soumissionnaire(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouveauSoumissionnaire>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::ajouter_soumissionnaire(&conn, &id, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "soumissionnaire", Some(&x.id), Some(&x.nom));
+    Ok((StatusCode::CREATED, Json(x)))
+}
+
+async fn modifie_soumissionnaire(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouveauSoumissionnaire>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::modifier_soumissionnaire(&conn, &id, &n)?;
+    journaliser(&conn, &acteur, "modification", "soumissionnaire", Some(&x.id), Some(&x.nom));
+    Ok(Json(x))
+}
+
+async fn supprime_soumissionnaire(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    marche::supprimer_soumissionnaire(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "soumissionnaire", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// --- Avenants ---------------------------------------------------------------
+
+async fn cree_avenant(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouvelAvenant>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::ajouter_avenant(&conn, &id, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "marche_avenant", Some(&x.id),
+                Some(&format!("avenant n° {} — {}", x.numero, x.objet)));
+    Ok((StatusCode::CREATED, Json(x)))
+}
+
+async fn modifie_avenant(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouvelAvenant>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::modifier_avenant(&conn, &id, &n)?;
+    journaliser(&conn, &acteur, "modification", "marche_avenant", Some(&x.id), Some(&x.objet));
+    Ok(Json(x))
+}
+
+/// L'approbation est l'acte qui engage : elle est tracée nommément.
+async fn avenant_statut(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsStatut>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::statut_avenant(&conn, &id, &b.statut, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "modification", "marche_avenant", Some(&x.id),
+                Some(&format!("avenant n° {} — {}", x.numero, b.statut)));
+    Ok(Json(x))
+}
+
+async fn supprime_avenant(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    marche::supprimer_avenant(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "marche_avenant", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// --- Réceptions -------------------------------------------------------------
+
+async fn cree_reception(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouvelleReception>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::ajouter_reception(&conn, &id, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "marche_reception", Some(&x.id),
+                Some(&format!("réception {} du {}", x.type_reception, x.date_reception)));
+    Ok((StatusCode::CREATED, Json(x)))
+}
+
+async fn modifie_reception(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouvelleReception>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::modifier_reception(&conn, &id, &n)?;
+    journaliser(&conn, &acteur, "modification", "marche_reception", Some(&x.id), None);
+    Ok(Json(x))
+}
+
+#[derive(Deserialize)]
+struct CorpsLevee {
+    #[serde(default)]
+    date: Option<String>,
+}
+
+/// Lever les réserves : c'est ce geste qui libère la retenue de garantie.
+async fn reception_lever_reserves(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsLevee>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::lever_reserves(&conn, &id, b.date.as_deref())?;
+    journaliser(&conn, &acteur, "modification", "marche_reception", Some(&x.id),
+                Some("levée des réserves"));
+    Ok(Json(x))
+}
+
+async fn supprime_reception(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    marche::supprimer_reception(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "marche_reception", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Attribuer : un seul geste, parce que c'est un seul acte dans la réalité.
+async fn attribue_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let m = marche::attribuer(&conn, &id)?;
+    journaliser(&conn, &acteur, "modification", "marche", Some(&m.id),
+                Some(&format!("attribution — {}", m.numero)));
+    Ok(Json(m))
+}
+
+async fn modifie_etape(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+    Json(m): Json<marche::MajEtape>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(marche::modifier_etape(&conn, &id, &m)?))
+}
+
+#[derive(Deserialize)]
+struct CorpsStatutEtape {
+    statut: String,
+    /// Renseigné pour franchir une étape hors de son rang. Tracé nominativement.
+    #[serde(default)]
+    motif_derogation: Option<String>,
+    /// Date réelle de l'acte et ce qui s'est dit : franchir une étape est un
+    /// acte daté, pas un simple clic.
+    #[serde(default)]
+    date_effective: Option<String>,
+    #[serde(default)]
+    observations: Option<String>,
+}
+
+/// Changement de statut d'une étape, **règle d'enchaînement comprise**.
+/// La réponse dit ce que le geste a entraîné ailleurs : rouvrir une étape
+/// franchie remet en cause tout ce qui en découle, l'écran doit l'annoncer.
+async fn etape_statut(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsStatutEtape>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let r = marche::changer_statut_etape_saisie(
+        &conn, &id, &b.statut, acteur.0.as_deref(),
+        &marche::SaisieEtape {
+            date_effective: b.date_effective.clone(),
+            observations: b.observations.clone(),
+            motif_derogation: b.motif_derogation.clone(),
+        })?;
+    let mut detail = b.statut.clone();
+    if let Some(m) = &b.motif_derogation {
+        detail = format!("{detail} — DÉROGATION : {m}");
+    }
+    if !r.etapes_rouvertes.is_empty() {
+        detail = format!("{detail} — a rouvert : {}", r.etapes_rouvertes.join(", "));
+    }
+    journaliser(&conn, &acteur, "modification", "marche_etape", Some(&r.etape.id), Some(&detail));
+    Ok(Json(r))
+}
+
+/// Les échéances de la période, tous calendriers demandés confondus.
+async fn liste_evenements(
+    State(s): State<AppState>,
+    Query(f): Query<calendrier::FiltreCalendrier>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(calendrier::evenements(&conn, &f)?))
+}
+
+/// Les calendriers proposables : seulement ceux dont le module est visible.
+async fn liste_calendriers(
+    State(s): State<AppState>,
+    Query(f): Query<calendrier::FiltreCalendrier>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(calendrier::disponibles(&conn, &f)?))
+}
+
+// --- Activation des modules -------------------------------------------------
+
+async fn liste_modules(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(serde_json::json!({
+        "modules": activation::lister(&conn)?,
+        "formule_installee": activation::formule_installee(&conn),
+    })))
+}
+
+async fn liste_formules() -> impl IntoResponse {
+    Json(activation::formules())
+}
+
+/// Pose les droits selon la formule vendue. **Acte d'installation** : il
+/// remplace l'état de souscription, il ne s'y ajoute pas.
+async fn applique_formule(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<activation::ChoixFormule>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let mods = activation::appliquer_formule(&conn, &c, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "modification", "module", None,
+                Some(&format!("formule « {} » — {} module(s) souscrit(s)",
+                              c.formule, mods.iter().filter(|m| m.souscrit).count())));
+    Ok(Json(mods))
+}
+
+/// Le client masque ou réaffiche un module qu'il a souscrit.
+/// ⚠️ Réutilise le `CorpsActif` déjà défini plus haut : ne pas le redéclarer. Tracé : c'est
+/// utile de savoir qu'un module a été masqué quand l'utilisateur appelle en
+/// disant « mon menu a disparu ».
+async fn module_actif(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(code): Path<String>,
+    Json(b): Json<CorpsActif>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let m = activation::changer_actif(&conn, &code, b.actif)?;
+    journaliser(&conn, &acteur, "modification", "module", Some(&m.code),
+                Some(if b.actif { "affiché" } else { "masqué" }));
+    Ok(Json(m))
+}
+
+/// Le tableau de suivi par phase : où les marchés s'arrêtent.
+async fn marches_par_phase(
+    State(s): State<AppState>,
+    Query(f): Query<marche::FiltreMarches>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(marche::tableau_phases(&conn, &f)?))
+}
+
+/// Export du suivi. Comme les autres exports : le SERVEUR écrit le fichier dans
+/// Téléchargements puis l'ouvre — le WebView2 de Tauri ne sait pas télécharger.
+async fn export_suivi_marches(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    let dossier = dossier_telechargements();
+    let jour = djigui_core::now()[..10].to_string();
+    let chemin = {
+        let conn = s.conn.lock().unwrap();
+        let souhaite = dossier.join(format!("djigui-suivi-marches-{jour}.xlsx"));
+        // Fichier déjà ouvert dans Excel = verrou Windows : on réessaie avec un
+        // suffixe horaire plutôt que d'échouer sous le nez de l'utilisateur.
+        let c = match crate::export_marches::ecrire_suivi(&conn, &souhaite) {
+            Ok(c) => c,
+            Err(_) => {
+                let hhmmss = djigui_core::now()[11..19].replace(':', "");
+                crate::export_marches::ecrire_suivi(
+                    &conn, &dossier.join(format!("djigui-suivi-marches-{jour}-{hhmmss}.xlsx")))?
+            }
+        };
+        journaliser(&conn, &acteur, "export", "marche", None, Some("suivi des marchés (.xlsx)"));
+        c
+    };
+    let chemin_str = chemin.to_string_lossy().to_string();
+    ouvrir_fichier(&chemin_str);
+    Ok(Json(serde_json::json!({ "chemin": chemin_str })))
+}
+
+// --- Incidents de procédure : infructueux et recours ------------------------
+
+async fn cree_incident(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(n): Json<marche::NouvelIncident>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::declarer_incident(&conn, &id, &n, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "marche_incident", Some(&x.id),
+                Some(&format!("{} — {}", x.type_incident, x.motif)));
+    Ok((StatusCode::CREATED, Json(x)))
+}
+
+#[derive(Deserialize)]
+struct CorpsDecision {
+    decision: String,
+}
+
+async fn clot_incident(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsDecision>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::clore_incident(&conn, &id, &b.decision)?;
+    journaliser(&conn, &acteur, "modification", "marche_incident", Some(&x.id),
+                Some(&format!("clos — {}", b.decision)));
+    Ok(Json(x))
+}
+
+async fn supprime_incident(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    marche::supprimer_incident(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "marche_incident", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Aperçu **sans écriture** : Djigui ne recalcule jamais les dates tout seul.
+async fn plan_replanif(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(marche::plan_replanification(&conn, &id)?))
+}
+
+async fn replanif(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let n = marche::replanifier(&conn, &id)?;
+    journaliser(&conn, &acteur, "modification", "marche_etape", Some(&id),
+                Some(&format!("{n} étape(s) replanifiée(s)")));
+    Ok(Json(serde_json::json!({ "replanifiees": n })))
+}
+
+#[derive(Deserialize)]
+struct FiltreTypesMarche {
+    #[serde(default)]
+    actifs_seulement: bool,
+}
+
+async fn liste_types_marche(
+    State(s): State<AppState>,
+    Query(q): Query<FiltreTypesMarche>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(marche::lister_types(&conn, q.actifs_seulement)?))
+}
+
+async fn cree_type_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(t): Json<marche::NouveauType>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::creer_type(&conn, &t, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "marche_type", Some(&x.id), Some(&x.libelle));
+    Ok((StatusCode::CREATED, Json(x)))
+}
+
+async fn modifie_type_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(t): Json<marche::NouveauType>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let x = marche::modifier_type(&conn, &id, &t)?;
+    journaliser(&conn, &acteur, "modification", "marche_type", Some(&x.id), Some(&x.libelle));
+    Ok(Json(x))
+}
+
+async fn supprime_type_marche(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    marche::supprimer_type(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "marche_type", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---- Rapports (§7) ---------------------------------------------------------
+
+async fn rapport_journal_ventes(
+    State(s): State<AppState>,
+    Query(p): Query<rapport::Periode>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::journal(&conn, "vente", &p)?))
+}
+
+async fn rapport_journal_achats(
+    State(s): State<AppState>,
+    Query(p): Query<rapport::Periode>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::journal(&conn, "achat", &p)?))
+}
+
+async fn rapport_marges(
+    State(s): State<AppState>,
+    Query(p): Query<rapport::Periode>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::marges_par_article(&conn, &p)?))
+}
+
+async fn rapport_stock(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::etat_stock(&conn)?))
+}
+
+async fn rapport_encours_clients(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::encours(&conn, "vente")?))
+}
+
+async fn rapport_encours_fournisseurs(
+    State(s): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::encours(&conn, "achat")?))
+}
+
+async fn rapport_numerotation(
+    State(s): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(rapport::continuite_numerotation(&conn)?))
+}
+
+// ---- Prix d'achat estimés (migration 0035) ---------------------------------
+//
+// Un chiffre inventé sans étiquette est plus dangereux qu'une case vide : ces
+// routes posent des prix de démonstration, mais toujours marqués comme tels et
+// toujours réversibles.
+
+async fn prix_apercu(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(prix_estime::apercu(&conn)?))
+}
+
+async fn prix_estimer(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let r = prix_estime::appliquer(&conn)?;
+    journaliser(&conn, &acteur, "modification", "article", None,
+                Some(&format!("{} prix d'achat estimés", r.estimes)));
+    Ok(Json(r))
+}
+
+async fn prix_effacer(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let n = prix_estime::effacer_estimations(&conn)?;
+    journaliser(&conn, &acteur, "modification", "article", None,
+                Some(&format!("{n} estimations effacées")));
+    Ok(Json(serde_json::json!({ "effaces": n })))
+}
+
+async fn prix_a_completer(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(prix_estime::a_completer(&conn)?))
+}
+
+#[derive(Deserialize)]
+struct CorpsPrixReels {
+    prix: Vec<prix_estime::PrixReel>,
+}
+
+async fn prix_reels(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<CorpsPrixReels>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let n = prix_estime::definir_prix_reels(&conn, &b.prix)?;
+    journaliser(&conn, &acteur, "modification", "article", None,
+                Some(&format!("{n} prix d'achat saisis")));
+    Ok(Json(serde_json::json!({ "enregistres": n })))
+}
+
+// ---- Comptabilité — écran du comptable (migration 0034) --------------------
+//
+// Rappel du procédé : Djigui ne décide de rien. Le comptable crée ses comptes,
+// écrit ses règles multicritères, et les applique à tout l'historique déjà en
+// base. Ce qu'aucune règle ne couvre reste dans la corbeille « À ranger ».
+
+#[derive(Deserialize)]
+struct FiltreComptes {
+    #[serde(default)]
+    actifs_seulement: bool,
+}
+
+async fn liste_comptes(
+    State(s): State<AppState>,
+    Query(q): Query<FiltreComptes>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::lister_comptes(&conn, q.actifs_seulement)?))
+}
+
+async fn get_compte(
+    State(s): State<AppState>,
+    Path(numero): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::lire_compte(&conn, &numero)?))
+}
+
+async fn cree_compte(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<comptabilite::NouveauCompte>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let r = comptabilite::creer_compte(&conn, &c, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "compte", Some(&r.numero), Some(&r.libelle));
+    Ok((StatusCode::CREATED, Json(r)))
+}
+
+async fn modifie_compte(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(numero): Path<String>,
+    Json(c): Json<comptabilite::NouveauCompte>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let r = comptabilite::modifier_compte(&conn, &numero, &c)?;
+    journaliser(&conn, &acteur, "modification", "compte", Some(&r.numero), Some(&r.libelle));
+    Ok(Json(r))
+}
+
+async fn supprime_compte(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(numero): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    comptabilite::supprimer_compte(&conn, &numero)?;
+    journaliser(&conn, &acteur, "suppression", "compte", Some(&numero), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Plan OHADA de base — **proposé**, jamais imposé. Les comptes déjà créés par
+/// le comptable ne sont pas touchés.
+async fn installe_plan_ohada(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let n = comptabilite::installer_plan_ohada(&conn, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "plan_comptable", None, Some(&format!("{n} comptes")));
+    Ok(Json(serde_json::json!({ "ajoutes": n })))
+}
+
+async fn liste_regles(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::lister_regles(&conn)?))
+}
+
+async fn cree_regle(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(r): Json<comptabilite::NouvelleRegle>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let g = comptabilite::creer_regle(&conn, &r, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "regle_comptable", Some(&g.id), Some(&g.nom));
+    Ok((StatusCode::CREATED, Json(g)))
+}
+
+async fn modifie_regle(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(r): Json<comptabilite::NouvelleRegle>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let g = comptabilite::modifier_regle(&conn, &id, &r)?;
+    journaliser(&conn, &acteur, "modification", "regle_comptable", Some(&g.id), Some(&g.nom));
+    Ok(Json(g))
+}
+
+async fn supprime_regle(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    comptabilite::supprimer_regle(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "regle_comptable", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn regles_supprimer_lot(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<LotIds>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let n = comptabilite::supprimer_regles(&conn, &b.ids)?;
+    journaliser(&conn, &acteur, "suppression", "regle_comptable", None, Some(&format!("{n} règles")));
+    Ok(Json(serde_json::json!({ "supprimees": n })))
+}
+
+/// La corbeille « À ranger » — recherche multicritère.
+async fn liste_operations(
+    State(s): State<AppState>,
+    Query(f): Query<comptabilite::FiltreOperations>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::lister_operations(&conn, &f)?))
+}
+
+#[derive(Deserialize)]
+struct CorpsRattachement {
+    operations: Vec<comptabilite::RefOperation>,
+}
+
+async fn rattache_operations(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<CorpsRattachement>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let r = comptabilite::rattacher(&conn, &b.operations, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "ecriture", None,
+                Some(&format!("{} écriture(s)", r.creees)));
+    Ok(Json(r))
+}
+
+/// « Ranger tout l'historique » : le geste qu'on fait une fois les règles posées.
+async fn rattache_tout(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(f): Json<comptabilite::FiltreOperations>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let r = comptabilite::rattacher_selon(&conn, &f, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "creation", "ecriture", None,
+                Some(&format!("rattachement en lot : {} écriture(s)", r.creees)));
+    Ok(Json(r))
+}
+
+#[derive(Deserialize)]
+struct FiltreEcritures {
+    #[serde(default)]
+    du: Option<String>,
+    #[serde(default)]
+    au: Option<String>,
+    #[serde(default)]
+    journal: Option<String>,
+    #[serde(default)]
+    incompletes_seulement: bool,
+}
+
+async fn liste_ecritures(
+    State(s): State<AppState>,
+    Query(q): Query<FiltreEcritures>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::lister_ecritures(
+        &conn,
+        q.du.as_deref(),
+        q.au.as_deref(),
+        q.journal.as_deref(),
+        q.incompletes_seulement,
+    )?))
+}
+
+async fn get_ecriture(
+    State(s): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::lire_ecriture(&conn, &id)?))
+}
+
+#[derive(Deserialize)]
+struct CorpsContrepassation {
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    motif: Option<String>,
+}
+
+async fn contrepasse_ecriture(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsContrepassation>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let e = comptabilite::contrepasser(&conn, &id, b.date.as_deref(), b.motif.as_deref(), acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "annulation", "ecriture", Some(&id), Some(&e.libelle));
+    Ok(Json(e))
+}
+
+/// Rejouer après avoir écrit la règle qui manquait — le geste qui suit
+/// naturellement la découverte d'une opération en compte d'attente.
+async fn rejoue_ecriture(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let r = comptabilite::rejouer(&conn, &id, acteur.0.as_deref())?;
+    Ok(Json(r))
+}
+
+async fn rejoue_incompletes(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let r = comptabilite::rejouer_incompletes(&conn, acteur.0.as_deref())?;
+    journaliser(&conn, &acteur, "modification", "ecriture", None,
+                Some(&format!("rejeu : {} écriture(s)", r.creees)));
+    Ok(Json(r))
+}
+
+#[derive(Deserialize)]
+struct CorpsCompte {
+    compte_numero: String,
+}
+
+/// Affectation manuelle d'un compte à une ligne : la sortie de secours quand
+/// aucune règle ne convient. **C'est le comptable qui tranche.**
+async fn affecte_compte_ligne(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(b): Json<CorpsCompte>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    comptabilite::affecter_ligne(&conn, &id, &b.compte_numero)?;
+    journaliser(&conn, &acteur, "modification", "ecriture_ligne", Some(&id), Some(&b.compte_numero));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct PeriodeQuery {
+    #[serde(default)]
+    du: Option<String>,
+    #[serde(default)]
+    au: Option<String>,
+}
+
+async fn get_grand_livre(
+    State(s): State<AppState>,
+    Path(numero): Path<String>,
+    Query(q): Query<PeriodeQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::grand_livre(&conn, &numero, q.du.as_deref(), q.au.as_deref())?))
+}
+
+async fn get_balance(
+    State(s): State<AppState>,
+    Query(q): Query<PeriodeQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(comptabilite::balance(&conn, q.du.as_deref(), q.au.as_deref())?))
+}
+
+#[derive(Deserialize)]
+struct CorpsLettrage {
+    lignes: Vec<String>,
+    #[serde(default)]
+    code: Option<String>,
+}
+
+async fn lettre_lignes(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<CorpsLettrage>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let code = comptabilite::lettrer(&conn, &b.lignes, b.code.as_deref())?;
+    Ok(Json(serde_json::json!({ "code": code })))
+}
+
+async fn delettre_lignes(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(b): Json<CorpsLettrage>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_comptable(&conn, &acteur)?;
+    let n = comptabilite::delettrer(&conn, &b.lignes)?;
+    Ok(Json(serde_json::json!({ "delettrees": n })))
 }
 
 // ---- Moyens de paiement configurables (migration 0018) ---------------------
@@ -2081,4 +3434,547 @@ impl IntoResponse for ApiError {
         };
         (code, Json(serde_json::json!({ "erreur": msg }))).into_response()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Sauvegarde chiffrée (migration 0042)
+// ---------------------------------------------------------------------------
+//
+// ⚠️ Le mot de passe de sauvegarde **n'est jamais stocké** : il transite à
+// chaque appel qui en a besoin, et la base n'en garde qu'une empreinte de
+// vérification. Un mot de passe rangé en base à côté des données qu'il protège
+// ne protégerait rien.
+
+async fn sauvegarde_parametres(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(serde_json::json!({
+        "parametres": sauvegarde::lire_parametres(&conn)?,
+        "destinations": sauvegarde::lister_destinations(&conn)?,
+        "journal": sauvegarde::lister_journal(&conn, 20)?,
+    })))
+}
+
+async fn sauvegarde_modifier(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(m): Json<sauvegarde::MajParametres>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "modifier les réglages de sauvegarde")?;
+    let p = sauvegarde::modifier_parametres(&conn, &m)?;
+    journaliser(&conn, &acteur, "modification", "sauvegarde", None,
+                Some(&format!("réglages — automatique : {}, copies conservées : {}",
+                              if p.activee { "oui" } else { "non" }, p.copies_a_conserver)));
+    Ok(Json(p))
+}
+
+#[derive(Deserialize)]
+struct CorpsMotDePasse {
+    /// `null` ou absent = retirer le mot de passe et revenir à la clé intégrée.
+    mot_de_passe: Option<String>,
+}
+
+async fn sauvegarde_mot_de_passe(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsMotDePasse>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "changer la protection des sauvegardes")?;
+    let p = sauvegarde::definir_mot_de_passe(&conn, c.mot_de_passe.as_deref())?;
+    // On trace le CHANGEMENT, jamais la valeur.
+    journaliser(&conn, &acteur, "modification", "sauvegarde", None,
+                Some(if p.mot_de_passe_defini {
+                    "protection des sauvegardes : mot de passe posé"
+                } else {
+                    "protection des sauvegardes : retour à la clé intégrée"
+                }));
+    Ok(Json(p))
+}
+
+async fn sauvegarde_destinations(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(sauvegarde::lister_destinations(&conn)?))
+}
+
+async fn sauvegarde_ajout_destination(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(d): Json<sauvegarde::NouvelleDestination>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "ajouter un dossier de sauvegarde")?;
+    exiger_serveur(&conn, "la configuration des sauvegardes")?;
+    let cree = sauvegarde::ajouter_destination(&conn, &d)?;
+    journaliser(&conn, &acteur, "creation", "sauvegarde_destination", Some(&cree.id),
+                Some(&format!("{} → {}", cree.libelle, cree.chemin)));
+    Ok((StatusCode::CREATED, Json(cree)))
+}
+
+async fn sauvegarde_maj_destination(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(d): Json<sauvegarde::NouvelleDestination>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "modifier un dossier de sauvegarde")?;
+    exiger_serveur(&conn, "la configuration des sauvegardes")?;
+    let maj = sauvegarde::modifier_destination(&conn, &id, &d)?;
+    journaliser(&conn, &acteur, "modification", "sauvegarde_destination", Some(&id),
+                Some(&format!("{} → {}", maj.libelle, maj.chemin)));
+    Ok(Json(maj))
+}
+
+async fn sauvegarde_suppr_destination(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "retirer un dossier de sauvegarde")?;
+    exiger_serveur(&conn, "la configuration des sauvegardes")?;
+    sauvegarde::supprimer_destination(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "sauvegarde_destination", Some(&id),
+                Some("les copies déjà écrites dans ce dossier sont conservées"));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct CorpsExecuter {
+    #[serde(default)]
+    mot_de_passe: Option<String>,
+    /// `"manuelle"` (bouton) ou `"fermeture"` (arrêt de l'application).
+    #[serde(default = "declencheur_manuel")]
+    declencheur: String,
+}
+
+fn declencheur_manuel() -> String {
+    "manuelle".into()
+}
+
+async fn sauvegarde_executer(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsExecuter>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let travail = s.dossier_travail();
+    let r = sauvegarde::executer(
+        &conn,
+        &s.dossier_documents,
+        &travail,
+        &c.declencheur,
+        c.mot_de_passe.as_deref(),
+    )?;
+    journaliser(&conn, &acteur, "sauvegarde", "sauvegarde", None, Some(&r.message));
+    Ok(Json(r))
+}
+
+async fn sauvegarde_journal(State(s): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    Ok(Json(sauvegarde::lister_journal(&conn, 50)?))
+}
+
+#[derive(Deserialize)]
+struct CorpsArchive {
+    chemin: String,
+    #[serde(default)]
+    mot_de_passe: Option<String>,
+}
+
+/// Ce qu'on peut dire d'un fichier **sans** son mot de passe : sa date, s'il est
+/// protégé, combien de documents il contient. L'écran de restauration s'en sert
+/// pour annoncer ce qui va être remis en place avant de demander confirmation.
+async fn sauvegarde_apercu(
+    Json(c): Json<CorpsArchive>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(sauvegarde::apercu(std::path::Path::new(&c.chemin))?))
+}
+
+/// ⚠️⚠️ Remplace les données en service. Réservé à l'administrateur.
+///
+/// La connexion ouverte pointe encore sur l'ancien fichier après l'opération :
+/// la réponse le dit explicitement, et l'écran impose le redémarrage.
+async fn sauvegarde_restaurer(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsArchive>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "restaurer une sauvegarde")?;
+    // Trace AVANT l'opération : si la restauration réussit, elle emporte le
+    // journal d'audit de la base courante — la ligne écrite après ne survivrait
+    // pas. Celle-ci part avec l'ancienne base, mise de côté et donc consultable.
+    journaliser(&conn, &acteur, "restauration", "sauvegarde", None,
+                Some(&format!("restauration demandée depuis {}", c.chemin)));
+
+    let r = sauvegarde::restaurer(
+        std::path::Path::new(&c.chemin),
+        &s.chemin_base,
+        &s.dossier_documents,
+        c.mot_de_passe.as_deref(),
+    )?;
+    Ok(Json(r))
+}
+
+#[derive(Deserialize)]
+struct CorpsLicence {
+    licence: String,
+}
+
+/// Enregistre la clé de licence remise au client à l'installation.
+///
+/// Elle devient le **secret de chiffrement des sauvegardes** (mig 0042) : propre
+/// à chaque client, donc absente de l'exécutable, et pourtant récupérable —
+/// elle figure sur les documents d'installation et chez SODEVITEL.
+async fn sauvegarde_licence(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsLicence>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "enregistrer la clé de licence")?;
+    let p = sauvegarde::definir_licence(&conn, &c.licence)?;
+    // On trace la SAISIE, en ne gardant que la fin de la clé : de quoi vérifier
+    // plus tard laquelle a été posée, sans l'inscrire en clair dans un journal
+    // que la sauvegarde elle-même emportera.
+    journaliser(&conn, &acteur, "modification", "sauvegarde", None,
+                Some(&format!("licence enregistrée (…{})",
+                              p.licence_fin.clone().unwrap_or_default())));
+    Ok(Json(p))
+}
+
+#[derive(Deserialize)]
+struct QueryChemin {
+    #[serde(default)]
+    chemin: Option<String>,
+}
+
+/// Explorateur de dossiers **de la machine serveur**.
+///
+/// ⚠️ Réservé à l'administrateur : cette route révèle l'arborescence de la
+/// machine sur le réseau local. Elle ne lit aucun fichier, seulement des noms
+/// de dossiers, mais c'est déjà une information à ne pas exposer largement.
+async fn sauvegarde_parcourir(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Query(q): Query<QueryChemin>,
+) -> Result<impl IntoResponse, ApiError> {
+    {
+        let conn = s.conn.lock().unwrap();
+        exiger_admin_pour(&conn, &acteur, "parcourir les dossiers du serveur")?;
+    }
+    Ok(Json(sauvegarde::parcourir(q.chemin.as_deref())?))
+}
+
+/// Endroits probables (Drive, clé USB, Documents), pour éviter d'avoir à taper
+/// un chemin quand on ne sait pas ce qu'est un chemin.
+async fn sauvegarde_suggestions(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    {
+        let conn = s.conn.lock().unwrap();
+        exiger_admin_pour(&conn, &acteur, "consulter les dossiers proposés")?;
+    }
+    Ok(Json(sauvegarde::suggestions()))
+}
+
+/// Ouvre le **vrai sélecteur de dossiers de Windows** sur la machine serveur.
+///
+/// Demande de l'utilisateur : « utilise l'explorateur Windows, c'est plus
+/// simple ». Voir `dossier_natif` pour la raison du choix serveur plutôt que
+/// coquille Tauri.
+///
+/// La boîte est modale : on la lance sur un thread bloquant pour ne pas figer
+/// tout le serveur pendant que l'utilisateur cherche son dossier.
+async fn sauvegarde_choisir_dossier(
+    State(s): State<AppState>,
+    acteur: Acteur,
+) -> Result<impl IntoResponse, ApiError> {
+    {
+        let conn = s.conn.lock().unwrap();
+        exiger_admin_pour(&conn, &acteur, "choisir un dossier de sauvegarde")?;
+        exiger_serveur(&conn, "le choix du dossier de sauvegarde")?;
+    }
+    let choix = tokio::task::spawn_blocking(crate::dossier_natif::choisir)
+        .await
+        .map_err(|e| ApiError(CoreError::Rule(format!("sélecteur interrompu : {e}"))))?
+        .map_err(|e| ApiError(CoreError::Rule(e.to_string())))?;
+    // `chemin: null` = annulation. L'écran ne doit alors rien changer ni rien
+    // afficher : annuler n'est pas un échec.
+    Ok(Json(serde_json::json!({ "chemin": choix })))
+}
+
+// ---------------------------------------------------------------------------
+// Paie & RH — paramètres légaux (migration 0044)
+// ---------------------------------------------------------------------------
+//
+// ⚠️ Réservé à l'administrateur : ces valeurs décident du salaire net de tout
+// le monde et des sommes déclarées à l'administration.
+
+#[derive(Deserialize)]
+struct QueryDate {
+    /// Date d'application des paramètres voulus. Absente = aujourd'hui.
+    ///
+    /// ⚠️ Ce n'est PAS un filtre d'affichage : c'est ce qui permet de retrouver
+    /// les taux d'un mois passé pour réimprimer un bulletin à l'identique.
+    #[serde(default)]
+    date: Option<String>,
+}
+
+async fn paie_lire_parametres(
+    State(s): State<AppState>,
+    Query(q): Query<QueryDate>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    let date = q.date.unwrap_or_else(|| djigui_core::now()[..10].to_string());
+    Ok(Json(paie_parametres::jeu_complet(&conn, &date)?))
+}
+
+async fn paie_nouvelle_periode(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(n): Json<paie_parametres::NouvellePeriode>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "modifier les paramètres de paie")?;
+    let posees = paie_parametres::nouvelle_periode(&conn, &n)?;
+    journaliser(&conn, &acteur, "creation", "paie_parametres", None,
+                Some(&format!("nouvelle période « {} » au {} — {} valeur(s)",
+                              n.table, n.date_debut, posees)));
+    Ok(Json(serde_json::json!({ "lignes_posees": posees })))
+}
+
+#[derive(Deserialize)]
+struct CorpsCorrection {
+    table: String,
+    date_debut: String,
+    lignes: serde_json::Value,
+}
+
+/// Corrige la période EN COURS au lieu d'en ouvrir une nouvelle.
+///
+/// ⚠️ Le geste normal est d'ouvrir une nouvelle période. Celui-ci n'existe que
+/// pour les valeurs installées d'origine — indicatives et non certifiées —
+/// qu'il serait absurde de « fermer » alors qu'elles n'ont jamais servi.
+/// D'où le garde-fou : dès qu'un bulletin existe, on refuse.
+async fn paie_corriger_periode(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsCorrection>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "corriger les paramètres de paie")?;
+
+    // Table absente tant que l'étape « bulletins » n'est pas livrée : dans ce
+    // cas il n'existe évidemment aucun bulletin.
+    let nb_bulletins: i64 = conn
+        .query_row("SELECT COUNT(*) FROM bulletins_paie", [], |r| r.get(0))
+        .unwrap_or(0);
+    if nb_bulletins > 0 {
+        return Err(ApiError(CoreError::Rule(
+            "Des bulletins ont déjà été calculés avec ces valeurs. Pour changer un taux,              ouvrez une NOUVELLE PÉRIODE : corriger celle en cours réécrirait des bulletins              déjà remis aux salariés."
+                .into(),
+        )));
+    }
+    let n = paie_parametres::corriger_periode_courante(&conn, &c.table, &c.date_debut, &c.lignes)?;
+    journaliser(&conn, &acteur, "modification", "paie_parametres", None,
+                Some(&format!("correction de « {} » au {} — {} valeur(s)",
+                              c.table, c.date_debut, n)));
+    Ok(Json(serde_json::json!({ "lignes_posees": n })))
+}
+
+#[derive(Deserialize)]
+struct CorpsVerifie {
+    table: String,
+    date_debut: String,
+}
+
+async fn paie_marquer_verifie(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsVerifie>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "valider les paramètres de paie")?;
+    let n = paie_parametres::marquer_verifie(&conn, &c.table, &c.date_debut)?;
+    // On trace QUI confirme avoir confronté les valeurs au texte en vigueur :
+    // c'est une prise de responsabilité, elle doit laisser une trace.
+    journaliser(&conn, &acteur, "modification", "paie_parametres", None,
+                Some(&format!("« {} » du {} confirmé conforme ({} ligne(s))",
+                              c.table, c.date_debut, n)));
+    Ok(Json(serde_json::json!({ "lignes": n })))
+}
+
+async fn paie_enregistrer_employeur(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(m): Json<paie_parametres::MajEmployeur>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "modifier les paramètres employeur")?;
+    let p = paie_parametres::enregistrer_employeur(&conn, &m)?;
+    journaliser(&conn, &acteur, "modification", "paie_parametres", None,
+                Some("paramètres employeur (accident du travail, IPRES/CSS/IPM, majorations)"));
+    Ok(Json(p))
+}
+
+// ---- Paie & RH : salariés et contrats (migration 0045) ---------------------
+//
+// ⚠️ Réservé à l'administrateur : les salaires ne regardent pas le caissier.
+
+#[derive(Deserialize)]
+struct QueryFiltreEmployes {
+    #[serde(default)]
+    filtre: Option<paie_employe::Filtre>,
+}
+
+async fn paie_liste_employes(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Query(q): Query<QueryFiltreEmployes>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "consulter les salariés")?;
+    Ok(Json(paie_employe::lister(&conn, q.filtre.unwrap_or_default())?))
+}
+
+async fn paie_get_employe(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "consulter un salarié")?;
+    Ok(Json(paie_employe::lire(&conn, &id)?))
+}
+
+async fn paie_cree_employe(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(e): Json<paie_employe::NouvelEmploye>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "enregistrer un salarié")?;
+    let cree = paie_employe::creer(&conn, &e)?;
+    journaliser(&conn, &acteur, "creation", "employe", Some(&cree.id),
+                Some(&format!("{} ({})", cree.nom_complet, cree.matricule)));
+    Ok((StatusCode::CREATED, Json(cree)))
+}
+
+async fn paie_modifie_employe(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(e): Json<paie_employe::NouvelEmploye>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "modifier un salarié")?;
+    let maj = paie_employe::modifier(&conn, &id, &e)?;
+    journaliser(&conn, &acteur, "modification", "employe", Some(&id),
+                Some(&format!("{} ({})", maj.nom_complet, maj.matricule)));
+    Ok(Json(maj))
+}
+
+async fn paie_supprime_employe(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "supprimer un salarié")?;
+    paie_employe::supprimer(&conn, &id)?;
+    journaliser(&conn, &acteur, "suppression", "employe", Some(&id), None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct CorpsDepart {
+    date_sortie: String,
+    motif: String,
+}
+
+async fn paie_depart(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(c): Json<CorpsDepart>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "enregistrer un départ")?;
+    let e = paie_employe::enregistrer_depart(&conn, &id, &c.date_sortie, &c.motif)?;
+    journaliser(&conn, &acteur, "modification", "employe", Some(&id),
+                Some(&format!("départ le {} — {}", c.date_sortie, c.motif)));
+    Ok(Json(e))
+}
+
+async fn paie_reintegrer(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "réintégrer un salarié")?;
+    let e = paie_employe::reintegrer(&conn, &id)?;
+    journaliser(&conn, &acteur, "modification", "employe", Some(&id),
+                Some("réintégration — un nouveau contrat reste à enregistrer"));
+    Ok(Json(e))
+}
+
+async fn paie_liste_contrats(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "consulter les contrats")?;
+    Ok(Json(paie_employe::contrats(&conn, &id)?))
+}
+
+#[derive(Deserialize)]
+struct CorpsDepartLot {
+    ids: Vec<String>,
+    date_sortie: String,
+    motif: String,
+}
+
+async fn paie_depart_lot(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<CorpsDepartLot>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "enregistrer des départs")?;
+    let r = paie_employe::depart_lot(&conn, &c.ids, &c.date_sortie, &c.motif)?;
+    journaliser(&conn, &acteur, "modification", "employe", None, Some(&r.message));
+    Ok(Json(r))
+}
+
+async fn paie_cree_contrat(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Json(c): Json<paie_employe::NouveauContrat>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "enregistrer un contrat")?;
+    let cree = paie_employe::creer_contrat(&conn, &c)?;
+    journaliser(&conn, &acteur, "creation", "contrat", Some(&cree.id),
+                Some(&format!("{} du {} — salaire {}", cree.type_contrat,
+                              cree.date_debut, cree.salaire_base)));
+    Ok((StatusCode::CREATED, Json(cree)))
+}
+
+async fn paie_modifie_contrat(
+    State(s): State<AppState>,
+    acteur: Acteur,
+    Path(id): Path<String>,
+    Json(c): Json<paie_employe::NouveauContrat>,
+) -> Result<impl IntoResponse, ApiError> {
+    let conn = s.conn.lock().unwrap();
+    exiger_admin_pour(&conn, &acteur, "modifier un contrat")?;
+    let maj = paie_employe::modifier_contrat(&conn, &id, &c)?;
+    journaliser(&conn, &acteur, "modification", "contrat", Some(&id), None);
+    Ok(Json(maj))
 }
